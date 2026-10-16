@@ -60,6 +60,15 @@
     T_MIN: 20.0,           // °C, ниже температуры помещений вода не остывает
     T_STAGNANT: 25.0,      // °C, к чему остывает стоячая сетевая вода
 
+    // Здание: тепловая инерция и радиаторы (подобрано так, что при −10 °C и T11 = 75 °C в квартирах 20 °C)
+    T_ROOM_SET: 20.0,      // °C, расчетная температура в квартирах
+    T_OUT_DEFAULT: -10.0,  // °C, наружная температура по умолчанию
+    TAU_ROOM: 1800.0,      // с, постоянная времени здания (в жизни — часы; ускорено для тренажера)
+    RAD_EXP: 1.3,          // показатель степени теплоотдачи радиаторов
+    ROOM_COLD: 18.0,       // °C, ниже — жалобы на холод
+    ROOM_HOT: 24.0,        // °C, выше — жалобы на духоту
+    PUMP_TRIP_S: 3.0,      // с, задержка защиты насоса по низкому давлению на всасе
+
     // Нормативы
     T11_TARGET: 75.0,
     T11_MIN: 70.0,
@@ -79,6 +88,36 @@
   //  4 — выход ПТО, перед V2 (отбор подпитки) элемент 4: V2
   //  5 — обратка теплосети (после V2)
   const NODE_COUNT = 6;
+
+  // Температурные графики (подобраны под модель; при −10 °C: T1 = 95, T11 = 75, T2 ≤ 55)
+  function graphT1(tOut) {        // подача теплосети
+    return Math.min(120, Math.max(70, 95 - 1.333 * (tOut + 10)));
+  }
+  function graphT11(tOut) {       // подача в систему отопления дома
+    return 20 + 55 * Math.pow(Math.max(0, (20 - tOut) / 30), 0.8);
+  }
+  function graphT2max(tOut) {     // наибольшая допустимая обратка в теплосеть
+    return 55 - 0.8 * (tOut + 10);
+  }
+
+  // Номинальная нагрузка дома при −10 °C и параметры здания
+  const Q_NOM = C.G2_NOMINAL * C.C_WATER * C.BUILDING_DT;           // ≈ 488 кВт
+  const UA_BLD = Q_NOM / (C.T_ROOM_SET - C.T_OUT_DEFAULT);          // кВт/К, теплопотери здания
+  const K_RAD = Q_NOM / Math.pow(C.T11_TARGET - C.BUILDING_DT / 2 - C.T_ROOM_SET, C.RAD_EXP);
+  const C_BLD = UA_BLD * C.TAU_ROOM;                                // кДж/К, теплоемкость здания
+
+  /** Внешние условия: погода, теплосеть, неисправности. Меняются уровнями и сценариями. */
+  function defaultEnv() {
+    return {
+      T_out: C.T_OUT_DEFAULT,
+      T1: null,               // null — по графику теплосети; число — фактическая подача (недодача сети)
+      P1: C.P1,
+      P2: C.P2,
+      houseLeak: 0,           // бар/с при 3.5 бар — утечка в системе отопления дома
+      foulRate: 0,            // %/с — скорость засорения грязевика
+      pumpProtection: false   // защита насоса по низкому давлению (останов через 3 с)
+    };
+  }
 
   function kvOf(pct, kvs) {
     return pct < C.CLOSED_PCT ? 0 : kvs * pct / 100;
@@ -115,7 +154,7 @@
   }
 
   function createSimulator() {
-    const sim = { controls: nominalControls(), state: null, out: null };
+    const sim = { controls: nominalControls(), state: null, out: null, env: defaultEnv() };
     sim.state = { time: 0 };
     resetNominal(sim);
     return sim;
@@ -124,6 +163,7 @@
   /** Возврат в штатный расчетный режим с прогревом до установившегося состояния. */
   function resetNominal(sim) {
     sim.controls = nominalControls();
+    sim.env = defaultEnv();
     const time = sim.state ? sim.state.time : 0;
     sim.state = {
       time: time,
@@ -131,6 +171,9 @@
       T11: C.T11_TARGET,
       T21: C.T11_TARGET - C.BUILDING_DT,
       T2: 54.0,
+      T_room: C.T_ROOM_SET,
+      lowPTime: 0, cavTime: 0, noCircTime: 0, dryTopTime: 0,
+      pumpTripped: false,
       nodes: [C.P1, C.P1, C.P1, C.P2, C.P2, C.P2],
       fill: [1, 1, 1, 1, 1, 1],
       strainerAlarmUntil: -1,
@@ -150,7 +193,8 @@
   // ---------------------------------------------------------------------------
   // Первичный (сетевой) контур
   // ---------------------------------------------------------------------------
-  function solvePrimary(c, s, dt) {
+  function solvePrimary(c, s, dt, env) {
+    const P1 = env.P1, P2 = env.P2;
     const kv = [
       kvOf(c.V1, C.KVS_V1),
       strainerKv(c.strainerFouling),
@@ -161,8 +205,8 @@
     const open = kv.map(k => k > 0);
     const nodes = s.nodes.slice();
     const fill = s.fill;
-    nodes[0] = C.P1;
-    nodes[NODE_COUNT - 1] = C.P2;
+    nodes[0] = P1;
+    nodes[NODE_COUNT - 1] = P2;
 
     // Внутренние узлы 1…4 разбиваются закрытой арматурой на отсеки.
     // Дренаж сети — в нижней точке (узел 4, перед V2), воздушник — в верхней (узел 3, вход ПТО).
@@ -182,7 +226,7 @@
     const segInfo = segs.map(seg => {
       const fromP1 = seg[0] === 1 && open[0];
       const fromP2 = seg[seg.length - 1] === 4 && open[4];
-      const src = fromP1 ? C.P1 : (fromP2 ? C.P2 : null);
+      const src = fromP1 ? P1 : (fromP2 ? P2 : null);
       const hasDrain = c.NET_DRAIN && seg.includes(4);
       const hasVent = c.NET_VENT && seg.includes(3);
       let f = seg.reduce((a, n) => a + fill[n], 0) / seg.length;
@@ -232,14 +276,14 @@
       // Последовательная цепь: 1/Kv_eq² = Σ 1/Kv_i²
       const inv = kv.reduce((a, k) => a + 1 / (k * k), 0);
       kvEq = 1 / Math.sqrt(inv);
-      G1 = kvEq * Math.sqrt(C.P1 - C.P2);
+      G1 = kvEq * Math.sqrt(Math.max(0, P1 - P2));
       // Потери на каждом элементе ΔP = (G/Kv)²
-      let p = C.P1;
+      let p = P1;
       for (let i = 0; i < kv.length; i++) {
         p -= (G1 / kv[i]) ** 2;
         nodes[i + 1] = p;
       }
-      nodes[NODE_COUNT - 1] = C.P2;
+      nodes[NODE_COUNT - 1] = P2;
     }
 
     const P_hex_net = G1 > 0 ? (nodes[3] + nodes[4]) / 2 : nodes[3];
@@ -265,6 +309,7 @@
       return { ok: false, level: 'warn', msg: `В грязевике еще ${Math.round(f * 100)} % воды. Дождитесь слива через дренаж (с открытым воздушником быстрее).` };
     }
     sim.controls.strainerFouling = 0;
+    if (sim.env) sim.env.foulRate = 0;   // новая грязь набирается очень медленно
     s.strainerAlarmUntil = -1;
     return { ok: true, level: 'ok', msg: 'Грязевик вскрыт, сетка промыта от окалины, крышка закрыта.' };
   }
@@ -275,6 +320,11 @@
   function step(sim, dt) {
     const c = sim.controls;
     const s = sim.state;
+    const env = sim.env || (sim.env = defaultEnv());
+    const T1 = env.T1 === null ? graphT1(env.T_out) : env.T1;
+
+    // Постепенное засорение грязевика (сценарии уровней)
+    if (env.foulRate > 0) c.strainerFouling = Math.min(90, c.strainerFouling + env.foulRate * dt);
 
     // 0. Ход затворов задвижек: затвор всегда идет к крайнему положению,
     // остановить его посередине нельзя (задвижка — запорная арматура).
@@ -286,7 +336,7 @@
     });
 
     // 1. Сетевой контур
-    const prim = solvePrimary(c, s, dt);
+    const prim = solvePrimary(c, s, dt, env);
     s.nodes = prim.nodes;
     const G1 = prim.G1;
 
@@ -304,6 +354,12 @@
       if (seg4 && seg4.src === null) {
         seg4.nodes.forEach(n => { s.nodes[n] = Math.max(0, s.nodes[n] - 4 * makeupFlow * dt); });
       }
+    }
+    // Утечка в системе отопления дома (сценарии уровней)
+    let leakFlow = 0;
+    if (env.houseLeak > 0 && s.P21 > 0) {
+      leakFlow = env.houseLeak * Math.sqrt(s.P21 / C.P21_DEFAULT);
+      dP21 -= leakFlow;
     }
     let drainFlow = 0;
     if (c.DRAIN && s.P21 > C.DRAIN_P) {
@@ -323,6 +379,15 @@
     }
 
     s.P21 = Math.max(0, s.P21 + dP21 * dt);
+
+    // Защита насоса по низкому давлению на всасе: через PUMP_TRIP_S с останавливает насос
+    if (c.PUMP && s.P21 < C.P21_CAVITATION) s.lowPTime += dt; else s.lowPTime = 0;
+    if (env.pumpProtection && c.PUMP && s.lowPTime >= C.PUMP_TRIP_S) {
+      c.PUMP = false;
+      c.KZR = 0;            // автоматика закрывает КЗР, чтобы не «запарить» ПТО без циркуляции
+      s.pumpTripped = true;
+      s.lowPTime = 0;
+    }
 
     // Насос
     const cavitation = c.PUMP && s.P21 < C.P21_CAVITATION;
@@ -348,13 +413,13 @@
     let Q = 0;
     let T11eq, T2eq;
     if (G1 > 0 && G2 > 0) {
-      Q = Math.max(0, C.HEX_EFF * Math.min(W1, W2) * (C.T1 - s.T21));
-      T2eq = C.T1 - Q / W1;
+      Q = Math.max(0, C.HEX_EFF * Math.min(W1, W2) * (T1 - s.T21));
+      T2eq = T1 - Q / W1;
       T11eq = s.T21 + Q / W2;
     } else if (G1 > 0) {
       // Сетевая вода идет, а домовая стоит: ПТО «запаривается» до температуры сети
-      T11eq = C.T1;
-      T2eq = C.T1 - 2.0;
+      T11eq = T1;
+      T2eq = T1 - 2.0;
     } else {
       // Подача тепла прекращена
       T11eq = s.T21;
@@ -363,18 +428,41 @@
     s.T11 += (dt / C.TAU_T) * (T11eq - s.T11);
     s.T2 += (dt / C.TAU_T) * (T2eq - s.T2);
 
-    // Обратка из дома: при циркуляции следует за (T11 − ΔT_дома),
-    // без циркуляции стоячая вода в стояках медленно остывает к комнатной.
-    const T21target = G2 > 0 ? Math.max(C.T_MIN, s.T11 - C.BUILDING_DT) : C.T_MIN;
-    const tau21 = G2 > 0 ? C.TAU_T21 : C.TAU_HOUSE_COOL;
+    // Радиаторы и здание. Теплоотдача радиаторов Q_rad = K·(Tср − Tвн)^1.3;
+    // при завоздушивании верхние этажи греют хуже.
+    const airFactor = topFloorDry ? 0.6 : (P_top < C.TOP_FLOOR_MIN_P ? 0.85 : 1);
+    const Tmean = G2 > 0 ? (s.T11 + s.T21) / 2 : s.T21;
+    const Q_rad = airFactor * K_RAD * Math.pow(Math.max(0, Tmean - s.T_room), C.RAD_EXP);
+    // Обратка из дома: при циркуляции T21 = T11 − Q_rad/W2, без циркуляции вода в стояках остывает.
+    let T21target, tau21;
+    if (G2 > 0) {
+      T21target = Math.max(Math.min(s.T_room, s.T11), s.T11 - Q_rad / W2);
+      tau21 = C.TAU_T21;
+    } else {
+      T21target = s.T_room;
+      tau21 = C.TAU_HOUSE_COOL;
+    }
     s.T21 += (dt / tau21) * (T21target - s.T21);
-    s.T21 = Math.max(C.T_MIN, s.T21);
+    // Температура в квартирах: приход от радиаторов минус теплопотери через ограждения
+    s.T_room += dt * (Q_rad - UA_BLD * (s.T_room - env.T_out)) / C_BLD;
+
+    // Счетчики длительности опасных режимов (для оценки на уровнях)
+    s.cavTime = cavitation ? s.cavTime + dt : 0;
+    s.noCircTime = (G1 > 1 && G2 === 0) ? s.noCircTime + dt : 0;
+    s.dryTopTime = topFloorDry ? s.dryTopTime + dt : 0;
 
     s.time += dt;
 
     sim.out = {
       time: s.time,
-      T1: C.T1, P1: C.P1, P2: C.P2,
+      T1, P1: env.P1, P2: env.P2,
+      T_out: env.T_out, T_room: s.T_room, Q_rad,
+      T11_target: graphT11(env.T_out),
+      T11_min: graphT11(env.T_out) - 5,
+      T11_max: graphT11(env.T_out) + 5,
+      T2_max: graphT2max(env.T_out),
+      leakFlow, pumpTripped: s.pumpTripped,
+      cavTime: s.cavTime, noCircTime: s.noCircTime, dryTopTime: s.dryTopTime,
       T2: s.T2, T11: s.T11, T21: s.T21,
       G1, G2, W1, W2, Q,
       kv: prim.kv, kvEq: prim.kvEq,
@@ -485,12 +573,20 @@
           : `P на 9 эт. = ${f2(o.P_top)} бар (нужно ≥ ${f2(C.TOP_FLOOR_MIN_P)}), P21 = ${f2(o.P21)} бар`
       });
     }
-    if (o.G1 > 0 && o.T2 > C.T2_MAX) {
+    if (o.pumpTripped && !c.PUMP) {
+      list.push({
+        id: 'pump_trip', level: 'alarm',
+        title: 'АВАРИЯ: Насос остановлен защитой по низкому давлению!',
+        text: 'Давление на всасе упало ниже 1.5 бар — автоматика остановила насос, чтобы спасти его от кавитации, и закрыла КЗР. Циркуляции в доме нет.',
+        detail: `P21 = ${f2(o.P21)} бар`
+      });
+    }
+    if (o.G1 > 0 && o.T2 > o.T2_max) {
       list.push({
         id: 't2_high', level: 'warn',
         title: 'ШТРАФ ОТ ТЕПЛОСЕТИ: Завышение температуры обратки T2!',
-        text: 'Температура обратной сетевой воды превышает график (55 °C). Слишком большой расход сетевой воды — прикройте регулирующий клапан КЗР.',
-        detail: `T2 = ${f1(o.T2)} °C при норме ≤ 55.0 °C`
+        text: `Температура обратной сетевой воды превышает график (${f1(o.T2_max)} °C). Слишком большой расход сетевой воды — прикройте регулирующий клапан КЗР.`,
+        detail: `T2 = ${f1(o.T2)} °C при норме ≤ ${f1(o.T2_max)} °C`
       });
     }
     if (o.dP_strainer > C.STRAINER_DP_WARN) {
@@ -501,15 +597,25 @@
         detail: `ΔP = ${f2(o.dP_strainer)} бар (до ${f2(o.P_before_strainer)} / после ${f2(o.P_after_strainer)})`
       });
     }
-    if (o.T11 < C.T11_MIN || o.T11 > C.T11_MAX) {
-      const under = o.T11 < C.T11_MIN;
+    if (o.T11 < o.T11_min || o.T11 > o.T11_max) {
+      const under = o.T11 < o.T11_min;
       list.push({
         id: 't11_range', level: 'warn',
         title: `ЖАЛОБЫ ЖИЛЬЦОВ: ${under ? 'Недотоп' : 'Перетоп'} здания!`,
-        text: 'Температура подачи в дом отклонилась от расчетных 75 °C. Отрегулируйте клапан КЗР.',
-        detail: `T11 = ${f1(o.T11)} °C, коридор 70…80 °C`
+        text: `Температура подачи в дом отклонилась от графика (${f1(o.T11_target)} °C при ${f1(o.T_out)} °C на улице). Отрегулируйте клапан КЗР.`,
+        detail: `T11 = ${f1(o.T11)} °C, коридор ${f1(o.T11_min)}…${f1(o.T11_max)} °C`
       });
     }
+    if (o.T_room < C.ROOM_COLD || o.T_room > C.ROOM_HOT) {
+      const cold = o.T_room < C.ROOM_COLD;
+      list.push({
+        id: 'room', level: 'warn',
+        title: cold ? 'ЖАЛОБЫ ЖИЛЬЦОВ: В квартирах холодно!' : 'ЖАЛОБЫ ЖИЛЬЦОВ: В квартирах душно!',
+        text: cold ? 'Температура в квартирах ниже нормы: дом получает меньше тепла, чем теряет на улицу.' : 'Температура в квартирах выше нормы: дом перетоплен.',
+        detail: `T в квартирах = ${f1(o.T_room)} °C (норма ${C.ROOM_COLD}…${C.ROOM_HOT} °C), на улице ${f1(o.T_out)} °C`
+      });
+    }
+
     // Состояние сетевого участка (информационные сообщения)
     const minFill = Math.min(o.fill[1], o.fill[2], o.fill[3], o.fill[4]);
     if (minFill < 0.999) {
@@ -565,6 +671,8 @@
     diagnose,
     strainerKv,
     cleanStrainer,
+    defaultEnv,
+    graphT1, graphT11, graphT2max,
     kvOf
   });
 })(typeof window !== 'undefined' ? window : globalThis);

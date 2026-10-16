@@ -333,6 +333,7 @@
   function start(id) {
     lesson = LESSONS.find(l => l.id === id);
     if (!lesson) return;
+    if (window.ITPLevels) window.ITPLevels.exitIfActive();
     closeMenu();
     ctx.seen = new Set();
     lesson.setup();
@@ -546,7 +547,7 @@
   setMode('free');
 
   window.ITPLessons = {
-    tick, onInfo, restart,
+    tick, onInfo, restart, start, exit,
     active: () => !!lesson,
     list: LESSONS
   };

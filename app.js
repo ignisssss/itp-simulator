@@ -103,6 +103,8 @@
       icon: '🏢', title: 'Система отопления дома',
       body: `<p>Стояки и радиаторы 9-этажного дома. Вода приходит с температурой <b>T11</b> (норма 70…80 °C), отдает тепло квартирам
         и возвращается с температурой <b>T21</b> примерно на 30 °C ниже.</p>
+        <p class="mt-2">Чем холоднее на улице, тем больше тепла теряет дом, поэтому по <b>температурному графику</b> растет нужная T11
+        (при −10 °C — 75 °C, при −15 °C — ≈ 82 °C, при −20 °C — ≈ 89 °C). Температура в квартирах меняется медленно — у здания большая тепловая инерция.</p>
         <p class="mt-2"><b>Давления в контуре дома.</b> Насос создает перепад 1.8 бар: 0.5 бар теряется в ПТО, 1.3 бар — в стояках
         и радиаторах (это «ΔP дома» между подачей и обраткой). Статическое давление задает подпитка: верхние радиаторы стоят
         на 27 м выше ИТП, а столб воды такой высоты «съедает» 2.65 бар. Чтобы на 9-м этаже оставался запас ≥ 0.5 бар,
@@ -114,6 +116,7 @@
   function openInfo(key) {
     const it = INFO[key];
     if (!it) return;
+    if (window.ITPLevels && window.ITPLevels.active()) return; // в уровнях справочник недоступен
     if (window.ITPLessons) window.ITPLessons.onInfo(key);
     $('infoIcon').textContent = it.icon;
     $('infoTitle').textContent = it.title;
@@ -147,7 +150,7 @@
     { x: 664, y: 456, w: 88, rows: [['P21', 'P21', 'бар', 2]] },
     { x: 736, y: 376, w: 88, rows: [['T21', 'T21', '°C', 1]] },
     { x: 806, y: 16, w: 120, rows: [['P подача', 'P_house_supply', 'бар', 2]] },
-    { x: 694, y: 188, w: 128, rows: [['P 9 эт.', 'P_top', 'бар', 2], ['ΔP дома', 'dP_house', 'бар', 2]] }
+    { x: 694, y: 188, w: 128, rows: [['P 9 эт.', 'P_top', 'бар', 2], ['ΔP дома', 'dP_house', 'бар', 2], ['T кварт.', 'T_room', '°C', 1]] }
   ];
   const tagEls = {};
 
@@ -182,8 +185,9 @@
 
   function tagState(key, o) {
     switch (key) {
-      case 'T11': return (o.T11 < C.T11_MIN || o.T11 > C.T11_MAX) ? 'warn' : '';
-      case 'T2': return (o.G1 > 0 && o.T2 > C.T2_MAX) ? 'warn' : '';
+      case 'T11': return (o.T11 < o.T11_min || o.T11 > o.T11_max) ? 'warn' : '';
+      case 'T2': return (o.G1 > 0 && o.T2 > o.T2_max) ? 'warn' : '';
+      case 'T_room': return (o.T_room < C.ROOM_COLD || o.T_room > C.ROOM_HOT) ? 'warn' : '';
       case 'P_hex_net': return (sim.controls.V2 < C.CLOSED_PCT && o.P_hex_net > 6.0) ? 'bad' : '';
       case 'P_after_strainer': return o.dP_strainer > C.STRAINER_DP_WARN ? 'warn' : '';
       case 'P21': return (sim.controls.PUMP && o.P21 < C.P21_CAVITATION) ? 'bad' : (o.P21 < 3.0 || o.P21 > 4.0 ? 'warn' : '');
@@ -315,6 +319,7 @@
   }));
   $('pumpBtn').addEventListener('click', () => {
     sim.controls.PUMP = !sim.controls.PUMP;
+    if (sim.controls.PUMP) sim.state.pumpTripped = false;
     log(sim.controls.PUMP ? 'Оператор: насос включен' : 'Оператор: насос выключен', 'op');
     syncControlsUI();
   });
@@ -344,6 +349,7 @@
   });
   $('resetBtn').addEventListener('click', () => {
     if (window.ITPLessons && window.ITPLessons.active()) { window.ITPLessons.restart(); return; }
+    if (window.ITPLevels && window.ITPLevels.inLevel()) { window.ITPLevels.restart(); return; }
     P.resetNominal(sim);
     P.step(sim, 0);
     trend.length = 0;
@@ -364,7 +370,10 @@
   }
   document.querySelectorAll('.speed-btn').forEach(b =>
     b.addEventListener('click', () => { paused = false; setSpeed(Number(b.dataset.speed)); }));
-  $('pauseBtn').addEventListener('click', () => { paused = !paused; setSpeed(speed); });
+  $('pauseBtn').addEventListener('click', () => {
+    if (window.ITPLevels && window.ITPLevels.active()) return; // в уровнях паузы нет
+    paused = !paused; setSpeed(speed);
+  });
 
   // ---------------------------------------------------------------------------
   // Журнал событий
@@ -400,7 +409,7 @@
           <div class="text-sm font-semibold ${a.level === 'alarm' ? 'text-red-300' : a.level === 'warn' ? 'text-amber-200' : a.level === 'info' ? 'text-sky-300' : 'text-green-300'}">
             <span class="${a.level === 'alarm' ? 'blink' : ''}">${ICON[a.level]}</span> ${a.title}
           </div>
-          <div class="text-xs text-slate-300 mt-1 leading-5">${a.text}</div>
+          <div class="alarm-text text-xs text-slate-300 mt-1 leading-5">${a.text}</div>
           <div class="text-[11px] mono text-slate-400 mt-1" data-detail="${a.id}"></div>
         </div>`).join('');
 
@@ -459,10 +468,10 @@
       ctx.fillText(t + '°', 2, y(t) - 2);
     });
     ctx.fillStyle = 'rgba(34,197,94,.08)';
-    ctx.fillRect(0, y(C.T11_MAX), w, y(C.T11_MIN) - y(C.T11_MAX));
+    ctx.fillRect(0, y(sim.out.T11_max), w, y(sim.out.T11_min) - y(sim.out.T11_max));
     ctx.setLineDash([4, 4]);
     ctx.strokeStyle = 'rgba(251,191,36,.5)';
-    ctx.beginPath(); ctx.moveTo(0, y(C.T2_MAX)); ctx.lineTo(w, y(C.T2_MAX)); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(0, y(sim.out.T2_max)); ctx.lineTo(w, y(sim.out.T2_max)); ctx.stroke();
     ctx.setLineDash([]);
 
     const colors = ['#f87171', '#fbbf24', '#60a5fa'];
@@ -487,6 +496,7 @@
     const c = sim.controls;
 
     $('simTime').textContent = fmtTime(o.time);
+    $('tOut').textContent = (o.T_out > 0 ? '+' : o.T_out < 0 ? '−' : '') + Math.abs(o.T_out).toFixed(0) + ' °C';
 
     // Приборы
     for (const key in tagEls) {
@@ -574,8 +584,7 @@
     else { body.setAttribute('stroke', '#64748b'); body.setAttribute('fill', '#111827'); }
 
     // Окна дома — «самочувствие» жильцов по T11 в доме (с учетом циркуляции)
-    const houseT = o.G2 > 0 ? o.T11 : o.T21 + 25;
-    const winColor = houseT < C.T11_MIN ? '#7dd3fc' : houseT > C.T11_MAX ? '#f87171' : '#f5c26b';
+    const winColor = o.T_room < C.ROOM_COLD ? '#7dd3fc' : o.T_room > C.ROOM_HOT ? '#f87171' : '#f5c26b';
     document.querySelectorAll('#houseWindows .win').forEach(w => w.setAttribute('fill', winColor));
 
     // Сводка
@@ -583,6 +592,8 @@
       ['Расход сети G1', fmt(o.G1, 2) + ' т/ч'],
       ['Расход дома G2', fmt(o.G2, 1) + ' т/ч'],
       ['Мощность Q', Math.round(o.Q) + ' кВт'],
+      ['На улице / в квартирах', fmt(o.T_out, 0) + ' / ' + fmt(o.T_room, 1) + ' °C'],
+      ['T11 по графику', fmt(o.T11_target, 1) + ' °C (T2 ≤ ' + fmt(o.T2_max, 1) + ')'],
       ['T11 подача в дом', fmt(o.T11, 1) + ' °C'],
       ['T21 обратка из дома', fmt(o.T21, 1) + ' °C'],
       ['T2 обратка в сеть', fmt(o.T2, 1) + ' °C'],
@@ -611,6 +622,7 @@
         pushTrend();
       }
       if (window.ITPLessons) window.ITPLessons.tick();
+      if (window.ITPLevels) window.ITPLevels.tick();
     }
     render();
   }

@@ -1,0 +1,599 @@
+/*
+ * levels.js — уровни: смены с всплывающими проблемами, без подсказок, с оценкой.
+ *
+ * Уровень = список инцидентов. У инцидента есть момент начала (at, секунды смены),
+ * действие на модель (start/update), момент, когда о нем узнает оператор (reveal),
+ * сообщение (или «тихий» инцидент — только приборы), условие решения (resolved + hold),
+ * норматив времени (norm) и крайний срок (deadline).
+ *
+ * Оценка инцидента: 60 баллов за решение + до 40 за скорость (полные 40 в пределах
+ * норматива, линейно до 0 при трех нормативах). Из среднего вычитаются штрафы за мягкие
+ * ошибки. Критическая авария прекращает смену.
+ * Чтобы добавить или поменять сценарий — правьте массив LEVELS ниже.
+ */
+(function () {
+  'use strict';
+
+  const P = window.ITPPhysics;
+  const C = P.CONST;
+  const app = window.ITPApp;
+  const sim = app.sim;
+  const $ = id => document.getElementById(id);
+  const STORE_KEY = 'itp-levels-v1';
+
+  // ---------------------------------------------------------------------------
+  // Помощники для описания сценариев
+  // ---------------------------------------------------------------------------
+  const o = () => sim.out;
+  const c = () => sim.controls;
+  const near = (v, target, tol) => Math.abs(v - target) <= tol;
+  /** Дом на графике: T11 в пределах ±2.5 °C от графика, обратка не выше нормы. */
+  const onGraph = () => o().G1 > 0 && o().G2 > 0 && near(o().T11, o().T11_target, 2.5) && o().T2 <= o().T2_max + 0.3;
+  /** Давление в доме в норме и подпитка закрыта. */
+  const pressureOk = () => o().P21 >= 3.2 && o().P21 <= 4.0 && c().MAKEUP < 0.5 && !c().DRAIN && !o().reliefOpen;
+  /** Сетевой участок полностью в работе после ремонта. */
+  const sectionNormal = () => Math.min(o().fill[1], o().fill[2], o().fill[3], o().fill[4]) >= 0.999 &&
+    !c().NET_DRAIN && !c().NET_VENT && !c().V1tag && !c().V2tag && c().V1 >= 100 && c().V2 >= 100;
+
+  /** Плавное изменение наружной температуры: ramp(от, до, секунд). */
+  function ramp(from, to, seconds) {
+    return (sim, t) => { sim.env.T_out = from + (to - from) * Math.min(1, t / seconds); };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Уровни
+  // ---------------------------------------------------------------------------
+  const LEVELS = [
+    {
+      id: 'l1', n: 1, title: 'Первая смена', difficulty: 'Лёгкий',
+      intro: 'Обычная зимняя смена, −10 °C. Проблемы будут приходить по одной. Подсказок нет — ориентируйтесь на сообщения и приборы.',
+      setup() {},
+      incidents: [
+        {
+          id: 'cold15', title: 'Похолодание до −15 °C', at: 30,
+          update: ramp(-10, -15, 60),
+          message: { from: 'Диспетчер теплосети', text: 'Ожидается похолодание до −15 °C. Обеспечьте параметры по температурному графику.' },
+          resolved: onGraph, minTime: 90, hold: 30, norm: 180, deadline: 600, lesson: 'regulation',
+          fix: 'Плавно приоткрыть КЗР (≈ 52 %), дождаться T11 ≈ 82 °C по графику, следить, чтобы T2 не превысила норму.'
+        },
+        {
+          id: 'leak', title: 'Утечка в системе отопления', at: 330,
+          start(sim) { sim.env.houseLeak = 0.006; },
+          update(sim, t) { if (t > 150) sim.env.houseLeak = 0; },
+          reveal: t => o().P_top < 0.9 || t > 160,   // внимательный оператор мог подпитать заранее
+          message: { from: 'Жилец, кв. 112 (9 этаж)', text: 'Батареи стали еле теплые, в трубах журчит.' },
+          extra: [{ at: 150, from: 'Сантехник', text: 'Нашли капающий кран на стояке в кв. 45, течь устранена.' }],
+          resolved: () => pressureOk() && o().P_top >= 0.5, hold: 20, norm: 150, deadline: 700, lesson: 'makeup',
+          fix: 'Приоткрыть подпитку на 10–20 %, поднять P21 до ≈ 3.5 бар, закрыть подпитку. Не допустить срабатывания ПК.'
+        },
+        {
+          id: 'foul', title: 'Засор грязевика', at: 700,
+          start(sim) { sim.env.foulRate = 0.35; },
+          update(sim) { if (sim.controls.strainerFouling >= 85) sim.env.foulRate = 0; },
+          reveal: () => o().dP_strainer > 0.6,
+          message: { from: 'Автоматика ИТП', text: 'Перепад давления на грязевике выше уставки 0.6 бар.' },
+          resolved: () => c().strainerFouling < 5 && sectionNormal() && o().G1 > 0, hold: 30, norm: 300, deadline: 1500, lesson: 'strainer',
+          fix: 'Закрыть V1, затем V2, повесить плакаты, открыть дренаж и воздушник, дождаться 0 бар и слива, промыть, закрыть дренаж, снять плакаты, заполнить через V2, закрыть воздушник, открыть V1.'
+        }
+      ]
+    },
+
+    {
+      id: 'l2', n: 2, title: 'Морозная ночь', difficulty: 'Средний',
+      intro: 'Ночная смена. Принимая смену, проверьте приборы: предыдущий оператор мог что-то оставить. Ночью ожидается сильный мороз.',
+      setup() { sim.controls.MAKEUP = 3; },
+      incidents: [
+        {
+          id: 'makeupLeft', title: 'Сменщик оставил подпитку открытой', at: 0, silent: true,
+          resolved: () => pressureOk(), hold: 20, norm: 60, deadline: 400, lesson: 'relief',
+          fix: 'Заметить рост P21/P11, закрыть подпитку. Если давление выше 4 бар — стравить дренажом контура до ≈ 3.5 бар.'
+        },
+        {
+          id: 'cold20', title: 'Мороз до −20 °C', at: 150,
+          update: ramp(-10, -20, 120),
+          message: { from: 'Диспетчер теплосети', text: 'Температура наружного воздуха понижается до −20 °C. Работаем по графику.' },
+          resolved: onGraph, minTime: 150, hold: 30, norm: 240, deadline: 700, lesson: 'regulation',
+          fix: 'Приоткрывать КЗР шагами до ≈ 57 % с выдержкой, T11 ≈ 89 °C, T2 ≤ 63 °C.'
+        },
+        {
+          id: 't1up', title: 'Теплосеть подняла температуру подачи', at: 650,
+          start(sim) { sim.env.T1 = P.graphT1(sim.env.T_out) + 10; },
+          reveal: t => o().T2 > o().T2_max || t > 90,
+          message: { from: 'Диспетчер теплосети', text: 'По вашему вводу температура обратной воды выше графика. Будет выставлен штраф.' },
+          resolved: onGraph, hold: 30, norm: 180, deadline: 600, lesson: 'regulation',
+          fix: 'Сеть дала более горячую воду — тот же расход дает перетоп и горячую обратку. Прикрыть КЗР до возврата на график.'
+        },
+        {
+          id: 'thaw', title: 'Оттепель до −5 °C', at: 1050,
+          start(sim) { sim.env.T1 = null; },
+          update: ramp(-20, -5, 120),
+          message: { from: 'Диспетчер теплосети', text: 'Утром потепление до −5 °C, подача переведена на график.' },
+          resolved: onGraph, minTime: 150, hold: 30, norm: 240, deadline: 700, lesson: 'regulation',
+          fix: 'Прикрыть КЗР до ≈ 43 %: дому нужно меньше тепла, иначе перетоп и штраф за обратку.'
+        }
+      ]
+    },
+
+    {
+      id: 'l3', n: 3, title: 'Беспокойная смена', difficulty: 'Сложный',
+      intro: 'Насос защищен автоматикой по низкому давлению. Проблемы будут накладываться друг на друга, часть из них не сопровождается сообщениями.',
+      setup() { sim.env.pumpProtection = true; },
+      incidents: [
+        {
+          id: 'v2closed', title: 'Закрыта задвижка обратки V2', at: 45, silent: true,
+          start(sim) { sim.controls.V2cmd = 'close'; },
+          resolved: () => c().V2 >= 100 && c().V1 >= 100 && o().G1 > 0, hold: 10, norm: 45, deadline: 300, lesson: 'hexpressure',
+          fix: 'Плавно открыть V2. Закрывать подачу не нужно — это лишний перерыв в отоплении.'
+        },
+        {
+          id: 'bigleak', title: 'Течь на стояке, насос остановлен', at: 260,
+          start(sim) { sim.env.houseLeak = 0.035; },
+          update(sim, t) { if (t > 70) sim.env.houseLeak = 0; },
+          message: { from: 'Жилец, подвал', text: 'В подвале из трубы бежит вода!' },
+          extra: [{ at: 70, from: 'Сантехник', text: 'Перекрыли и заменили участок стояка, течи больше нет.' }],
+          resolved: () => o().pumpRunning && pressureOk() && onGraph(), hold: 30, norm: 300, deadline: 900, lesson: 'pumpstart',
+          fix: 'Насос остановился по защите, автоматика закрыла КЗР. Не пускать насос на пустую систему: дождаться устранения течи, подпитать до ≈ 3.5 бар, закрыть подпитку, включить насос, вернуть КЗР в рабочее положение по графику.'
+        },
+        {
+          id: 'p1drop', title: 'Теплосеть снизила давление подачи', at: 720, silent: true, needsReport: true,
+          start(sim) { sim.env.P1 = 5.6; },
+          resolved: () => onGraph(), hold: 30, norm: 240, deadline: 800, lesson: 'regulation',
+          onReport(sim, lvl) { lvl.schedule(150, () => { sim.env.P1 = C.P1; lvl.toast('Диспетчер теплосети', 'Давление в подающем трубопроводе восстановлено до 6.5 бар.'); lvl.activate('p1back'); }); },
+          fix: 'Падение T11 при исправном ИТП и меньшем перепаде P1−P2. Открыть КЗР больше (≈ 65–70 %) и сообщить диспетчеру теплосети.'
+        },
+        {
+          id: 'p1back', title: 'Давление сети восстановлено', manual: true,
+          resolved: onGraph, hold: 30, norm: 180, deadline: 600, lesson: 'regulation',
+          fix: 'После восстановления давления прежнее открытие КЗР дает перетоп — вернуть КЗР к ≈ 52 %.'
+        },
+        {
+          id: 'cold15b', title: 'Похолодание до −15 °C', at: 1150,
+          update: ramp(-10, -15, 60),
+          message: { from: 'Диспетчер теплосети', text: 'Похолодание до −15 °C.' },
+          resolved: onGraph, minTime: 90, hold: 30, norm: 240, deadline: 900, lesson: 'regulation',
+          fix: 'Приоткрыть КЗР по графику. Если параллельно идет промывка фильтра — сначала быстро закончить ремонт.'
+        },
+        {
+          id: 'foul3', title: 'Засор грязевика', at: 1150,
+          start(sim) { sim.controls.strainerFouling = Math.max(sim.controls.strainerFouling, 70); sim.env.foulRate = 0.2; },
+          update(sim) { if (sim.controls.strainerFouling >= 88) sim.env.foulRate = 0; },
+          reveal: () => o().dP_strainer > 0.6,
+          message: { from: 'Автоматика ИТП', text: 'Перепад давления на грязевике выше уставки.' },
+          resolved: () => c().strainerFouling < 5 && sectionNormal() && o().G1 > 0, hold: 30, norm: 240, deadline: 1500, lesson: 'strainer',
+          fix: 'Промыть грязевик по полной процедуре. В мороз — без задержек: дом остывает, пока ИТП отключен.'
+        }
+      ]
+    }
+  ];
+
+  // Будущие уровни (нужно новое оборудование)
+  const SOON = [
+    { n: 4, title: 'Отказы оборудования', difficulty: 'Очень сложный', short: 'Отказ привода КЗР, резервный насос, прорыв радиатора.' },
+    { n: 5, title: 'Тяжелая смена', difficulty: 'Эксперт', short: 'Мороз −25 °C при недодаче сети, пропуск задвижки, отказ манометра.' }
+  ];
+
+  // ---------------------------------------------------------------------------
+  // Мягкие ошибки и критические аварии
+  // ---------------------------------------------------------------------------
+  const SOFT = {
+    tag_violation: { pts: 10, text: 'Открыта задвижка с плакатом' },
+    net_drain_leak: { pts: 10, text: 'Слив сетевой воды в канализацию' },
+    vent_spray: { pts: 3, after: 8, text: 'Воздушник открыт под давлением дольше 8 с' },
+    relief: { pts: 15, text: 'Срабатывание предохранительного клапана' },
+    cavitation: { pts: 10, text: 'Кавитация насоса (пуск при низком давлении)' },
+    no_circulation: { pts: 10, text: 'Подача тепла без циркуляции в доме' },
+    false_report: { pts: 5, text: 'Ложный вызов диспетчера' }
+  };
+  const RATE = { t2: { per: 10, cap: 20, text: 'Обратка T2 выше графика (−1 за 10 с)' }, room: { per: 20, cap: 20, text: 'Холодно или душно в квартирах (−1 за 20 с)' } };
+
+  function criticalCheck(diag, st) {
+    const out = o();
+    if (out.cavTime > 5) return { title: 'Насос разрушен кавитацией', text: 'Насос больше 5 секунд работал при давлении на всасе ниже 1.5 бар. Пузырьки пара разрушили рабочее колесо — дом без отопления до замены насоса.', lesson: 'pumpstart' };
+    if (out.noCircTime > 20) return { title: 'Перегрев ПТО без циркуляции', text: 'Сетевая вода больше 20 секунд шла в теплообменник при стоящей домовой воде. Вода в ПТО вскипала, на пластинах выпала накипь, уплотнения перегреты.', lesson: 'shutdown' };
+    if (diag.some(a => a.id === 'strainer_pressure')) return { title: 'Грязевик вскрыт под давлением', text: 'Крышку фильтра сорвало струей горячей воды. На объекте — тяжелые ожоги. Вскрывать можно только отключенный, опорожненный и остывший участок.', lesson: 'strainer' };
+    if (st.reliefTime > 20) return { title: 'Длительный сброс через ПК', text: 'Предохранительный клапан больше 20 секунд сбрасывал воду: причина не устранена. Клапан размыт, система теряет воду, верхние этажи завоздушиваются.', lesson: 'relief' };
+    if (out.dryTopTime > 60) return { title: 'Оголение системы отопления', text: 'Больше минуты вода не доходила до верхних этажей. Стояки завоздушены, в мороз возможна разморозка радиаторов.', lesson: 'makeup' };
+    if (st.hexOverTime > 120) return { title: 'Течь уплотнений ПТО', text: 'Теплообменник больше 2 минут стоял под давлением подачи без циркуляции. Уплотнения пластин дали течь.', lesson: 'hexpressure' };
+    return null;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Состояние движка
+  // ---------------------------------------------------------------------------
+  let level = null;
+  let t0 = 0;               // время модели в начале смены
+  let incs = [];            // состояние инцидентов
+  let timers = [];          // отложенные действия {at, fn}
+  let penalties = {};       // id → {pts, text, count}
+  let rateAcc = { t2: 0, room: 0 };
+  let st = {};              // таймеры критических режимов
+  let prevDiag = new Set();
+  let prevControls = null;
+  let timeline = [];
+  let reports = 0;
+  let finished = false;
+
+  const now = () => sim.state.time - t0;
+  const fmt = t => `${String(Math.floor(t / 60)).padStart(2, '0')}:${String(Math.floor(t % 60)).padStart(2, '0')}`;
+
+  function loadStore() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch (e) { return {}; } }
+  function saveStore(d) { try { localStorage.setItem(STORE_KEY, JSON.stringify(d)); } catch (e) { /* без хранилища */ } }
+  let store = loadStore();
+  const unlocked = lv => lv.n === 1 || ((store['l' + (lv.n - 1)] || {}).stars || 0) >= 1;
+
+  function note(kind, text) { timeline.push({ t: now(), kind, text }); }
+
+  // ---------------------------------------------------------------------------
+  // Жизненный цикл
+  // ---------------------------------------------------------------------------
+  function start(id) {
+    const lv = LEVELS.find(l => l.id === id);
+    if (!lv || !unlocked(lv)) return;
+    if (window.ITPLessons && window.ITPLessons.active()) window.ITPLessons.exit();
+    closeMenu();
+    level = lv;
+    P.resetNominal(sim);
+    lv.setup();
+    P.step(sim, 0);
+    t0 = sim.state.time;
+    incs = lv.incidents.map(d => ({ d, at: d.at, state: d.manual ? 'idle' : 'pending', startT: null, revealT: null, actT: null, okSince: null, doneT: null, extrasShown: 0 }));
+    lastT = 0; timers = []; penalties = {}; rateAcc = { t2: 0, room: 0 }; st = { reliefTime: 0, hexOverTime: 0 };
+    prevDiag = new Set(); prevControls = snapControls(); timeline = []; reports = 0; finished = false;
+    $('levelToasts').innerHTML = '';
+    $('levelMessages').innerHTML = '';
+    $('levelPanel').hidden = false;
+    $('levelTitle').textContent = `Уровень ${lv.n} · ${lv.title}`;
+    $('levelIntro').textContent = lv.intro;
+    document.body.classList.add('level-mode');
+    app.clearTrend();
+    app.setPaused(false);
+    app.syncControlsUI();
+    app.log(`Смена: уровень ${lv.n} «${lv.title}»`, 'op');
+    note('op', 'Смена принята');
+    setMode('levels');
+    renderHud();
+  }
+
+  function exit() {
+    level = null;
+    $('levelPanel').hidden = true;
+    $('levelToasts').innerHTML = '';
+    document.body.classList.remove('level-mode');
+    setMode('free');
+    app.setPaused(false);
+  }
+  function exitIfActive() { if (level) exit(); }
+  function restart() { if (level) start(level.id); }
+
+  // API для сценариев
+  const api = {
+    schedule(delay, fn) { timers.push({ at: now() + delay, fn }); },
+    toast(from, text) { toast(from, text); },
+    activate(id) { const i = incs.find(x => x.d.id === id); if (i && i.state === 'idle') { i.state = 'pending'; i.at = now(); } }
+  };
+
+  // ---------------------------------------------------------------------------
+  // Отслеживание действий оператора
+  // ---------------------------------------------------------------------------
+  const CTL_KEYS = ['V1cmd', 'V2cmd', 'KZR', 'PUMP', 'MAKEUP', 'DRAIN', 'NET_DRAIN', 'NET_VENT', 'V1tag', 'V2tag'];
+  function snapControls() { const s = {}; CTL_KEYS.forEach(k => { s[k] = sim.controls[k]; }); s.clean = sim.controls.strainerFouling; return s; }
+  function describe(k, v) {
+    const map = {
+      V1cmd: v === 'open' ? 'V1: открыть' : 'V1: закрыть', V2cmd: v === 'open' ? 'V2: открыть' : 'V2: закрыть',
+      KZR: `КЗР → ${Math.round(v)} %`, PUMP: v ? 'Насос: пуск' : 'Насос: стоп', MAKEUP: `Подпитка → ${Math.round(v)} %`,
+      DRAIN: v ? 'Дренаж дома: открыть' : 'Дренаж дома: закрыть', NET_DRAIN: v ? 'Дренаж сети: открыть' : 'Дренаж сети: закрыть',
+      NET_VENT: v ? 'Воздушник: открыть' : 'Воздушник: закрыть', V1tag: v ? 'Плакат на V1' : 'Плакат с V1 снят', V2tag: v ? 'Плакат на V2' : 'Плакат с V2 снят'
+    };
+    return map[k] || k;
+  }
+  function trackActions() {
+    const cur = snapControls();
+    let acted = false;
+    CTL_KEYS.forEach(k => {
+      if (cur[k] !== prevControls[k]) {
+        // Остановка насоса защитой — не действие оператора
+        if (k === 'PUMP' && !cur[k] && sim.state.pumpTripped) return;
+        acted = true;
+        const last = timeline[timeline.length - 1];
+        const txt = describe(k, cur[k]);
+        if (last && last.kind === 'act' && last.key === k && now() - last.t < 3) { last.text = txt; last.t = now(); }
+        else timeline.push({ t: now(), kind: 'act', key: k, text: txt });
+      }
+    });
+    if (cur.clean < prevControls.clean - 1) { acted = true; note('act', 'Грязевик промыт'); }
+    if (acted) incs.forEach(i => { if (i.state === 'active' && i.actT === null && i.revealT !== null) i.actT = now(); });
+    prevControls = cur;
+  }
+
+  // ---------------------------------------------------------------------------
+  // Главный тик
+  // ---------------------------------------------------------------------------
+  let lastT = 0;
+  function tick() {
+    if (!level || finished) return;
+    const t = now();
+    const dt = Math.max(0, t - lastT);
+    lastT = t;
+    trackActions();
+
+    // отложенные действия
+    timers = timers.filter(tm => { if (t >= tm.at) { tm.fn(); return false; } return true; });
+
+    // инциденты
+    incs.forEach(i => {
+      const d = i.d;
+      if (i.state === 'pending' && t >= i.at) {
+        i.state = 'active'; i.startT = t;
+        if (d.start) d.start(sim);
+        note('inc', `Началось: ${d.title}`);
+      }
+      if (i.state !== 'active' && i.state !== 'done') return;
+      const ti = t - i.startT;
+      if (d.update) d.update(sim, ti);
+      if (i.state === 'done') return;
+      if (i.revealT === null && (d.silent || !d.reveal || d.reveal(ti))) {
+        i.revealT = d.silent ? i.startT : t;
+        if (d.message) { toast(d.message.from, d.message.text); note('msg', `${d.message.from}: ${d.message.text}`); }
+      }
+      (d.extra || []).forEach((x, k) => {
+        if (k >= i.extrasShown && ti >= x.at) { i.extrasShown = k + 1; toast(x.from, x.text); note('msg', `${x.from}: ${x.text}`); }
+      });
+      if (i.revealT === null) return;
+      const ok = ti >= (d.minTime || 0) && d.resolved() && (!d.needsReport || i.reported);
+      if (ok) {
+        if (i.okSince === null) i.okSince = t;
+        if (t - i.okSince >= d.hold) { i.state = 'done'; i.doneT = i.okSince; note('ok', `Решено: ${d.title}`); app.log(`✔ Решено: ${d.title}`, 'ok'); }
+      } else i.okSince = null;
+      if (i.state === 'active' && t - i.revealT > d.deadline) { i.state = 'failed'; note('err', `Не решено в срок: ${d.title}`); app.log(`✖ Не решено в срок: ${d.title}`, 'alarm'); }
+    });
+
+    // ошибки и штрафы
+    const diag = P.diagnose(sim);
+    const ids = new Set(diag.map(a => a.id));
+    Object.keys(SOFT).forEach(id => {
+      if (id === 'false_report') return;
+      const after = SOFT[id].after || 0;
+      if (after) {
+        // штраф только если состояние держится дольше after секунд (один раз за эпизод)
+        st.sustain = st.sustain || {};
+        if (ids.has(id)) {
+          st.sustain[id] = (st.sustain[id] || 0) + dt;
+          if (st.sustain[id] >= after && !st.sustain[id + '_hit'] && !excused(id)) { st.sustain[id + '_hit'] = true; addPenalty(id); }
+        } else { st.sustain[id] = 0; st.sustain[id + '_hit'] = false; }
+      } else if (ids.has(id) && !prevDiag.has(id) && !excused(id)) addPenalty(id);
+    });
+    prevDiag = ids;
+    if (ids.has('t2_high')) rateAcc.t2 += dt;
+    if (ids.has('room')) rateAcc.room += dt;
+    st.reliefTime = o().reliefOpen ? st.reliefTime + dt : 0;
+    st.hexOverTime = ids.has('hex_overpressure') ? st.hexOverTime + dt : 0;
+
+    const crit = criticalCheck(diag, st);
+    if (crit) { fail(crit); return; }
+
+    // изменения, сделанные сценарием в этом тике, — не действия оператора
+    prevControls = snapControls();
+    renderHud();
+    // конец смены: все инциденты закрыты
+    if (incs.every(i => i.state === 'done' || i.state === 'failed' || i.state === 'idle') && timers.length === 0) {
+      if (!st.endAt) st.endAt = t + 20;
+      if (t >= st.endAt) finish();
+    } else st.endAt = null;
+  }
+
+  // Ошибки, которые «подстроил» сам сценарий, не штрафуются (например, оставленная сменщиком подпитка до первого действия)
+  function excused(id) {
+    if (id === 'relief') return incs.some(i => i.d.id === 'makeupLeft' && i.state === 'active' && i.actT === null);
+    if (id === 'cavitation' || id === 'no_circulation') return sim.state.pumpTripped && !sim.controls.PUMP;
+    return false;
+  }
+
+  function addPenalty(id) {
+    const p = penalties[id] || (penalties[id] = { pts: SOFT[id].pts, text: SOFT[id].text, count: 0 });
+    p.count += 1;
+    note('err', `Ошибка: ${SOFT[id].text} (−${SOFT[id].pts})`);
+    app.log(`Штраф: ${SOFT[id].text}`, 'warn');
+  }
+
+  function report() {
+    if (!level || finished) return;
+    reports += 1;
+    const target = incs.find(i => i.d.needsReport && i.state === 'active' && !i.reported);
+    note('act', 'Сообщение диспетчеру теплосети');
+    if (target) {
+      target.reported = true;
+      if (target.actT === null) target.actT = now();
+      toast('Диспетчер теплосети', 'Принято. Разбираемся с режимом сети, восстановим в течение нескольких минут.');
+      if (target.d.onReport) target.d.onReport(sim, api);
+    } else {
+      addPenalty('false_report');
+      toast('Диспетчер теплосети', 'С нашей стороны параметры в норме. Проверьте оборудование ИТП.');
+    }
+  }
+
+  // ---------------------------------------------------------------------------
+  // Оценка
+  // ---------------------------------------------------------------------------
+  function incidentScore(i) {
+    if (i.state !== 'done') return { total: 0, speed: 0, took: null };
+    const took = Math.max(0, i.doneT - i.revealT);
+    const n = i.d.norm;
+    const speed = took <= n ? 40 : Math.max(0, 40 * (3 * n - took) / (2 * n));
+    return { total: Math.round(60 + speed), speed: Math.round(speed), took };
+  }
+
+  function computeResult() {
+    const rows = incs.filter(i => i.state !== 'idle').map(i => ({ i, s: incidentScore(i) }));
+    const avg = rows.length ? rows.reduce((a, r) => a + r.s.total, 0) / rows.length : 0;
+    const pen = [];
+    Object.values(penalties).forEach(p => pen.push({ text: `${p.text} × ${p.count}`, pts: p.pts * p.count }));
+    const t2 = Math.min(RATE.t2.cap, Math.floor(rateAcc.t2 / RATE.t2.per));
+    const room = Math.min(RATE.room.cap, Math.floor(rateAcc.room / RATE.room.per));
+    if (t2) pen.push({ text: RATE.t2.text, pts: t2 });
+    if (room) pen.push({ text: RATE.room.text, pts: room });
+    const totalPen = pen.reduce((a, p) => a + p.pts, 0);
+    const score = Math.max(0, Math.min(100, Math.round(avg - totalPen)));
+    const stars = score >= 90 ? 3 : score >= 75 ? 2 : score >= 60 ? 1 : 0;
+    return { rows, pen, score, stars, avg: Math.round(avg) };
+  }
+
+  function finish() {
+    finished = true;
+    app.setPaused(true);
+    const r = computeResult();
+    const prev = store[level.id] || {};
+    if (!prev.best || r.score > prev.best) store[level.id] = { best: r.score, stars: Math.max(r.stars, prev.stars || 0) };
+    else store[level.id] = { best: prev.best, stars: Math.max(r.stars, prev.stars || 0) };
+    saveStore(store);
+    app.log(`Смена окончена: ${r.score} баллов`, r.stars ? 'ok' : 'warn');
+    showResult(r, null);
+  }
+
+  function fail(crit) {
+    finished = true;
+    app.setPaused(true);
+    note('err', `АВАРИЯ: ${crit.title}`);
+    app.log(`✖ Смена провалена: ${crit.title}`, 'alarm');
+    showResult(computeResult(), crit);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Интерфейс
+  // ---------------------------------------------------------------------------
+  function toast(from, text) {
+    const box = document.createElement('div');
+    box.className = 'level-toast panel p-3 shadow-2xl border-amber-600';
+    box.innerHTML = `<div class="flex items-center gap-2"><span class="text-[11px] mono text-amber-300">${fmt(now())}</span>
+      <span class="text-xs font-semibold text-amber-200">📨 ${from}</span>
+      <button class="ml-auto text-slate-400 hover:text-white text-xs border border-slate-600 rounded px-2" aria-label="Принято">Принято</button></div>
+      <div class="text-sm text-slate-100 mt-1 leading-5">${text}</div>`;
+    box.querySelector('button').addEventListener('click', () => box.remove());
+    $('levelToasts').prepend(box);
+    const item = document.createElement('li');
+    item.innerHTML = `<span class="mono text-slate-500">${fmt(now())}</span> <span class="text-amber-200">${from}:</span> ${text}`;
+    $('levelMessages').prepend(item);
+    app.log(`📨 ${from}: ${text}`, 'warn');
+  }
+
+  function renderHud() {
+    if (!level) return;
+    const t = now();
+    $('levelClock').textContent = fmt(t);
+    const open = incs.filter(i => i.state === 'active' && i.revealT !== null).length;
+    const done = incs.filter(i => i.state === 'done').length;
+    const failed = incs.filter(i => i.state === 'failed').length;
+    $('levelStatus').textContent = `Решено: ${done} · не решено в срок: ${failed} · сообщений в работе: ${open}`;
+  }
+
+  function showResult(r, crit) {
+    const lessonsList = (window.ITPLessons && window.ITPLessons.list) || [];
+    const lessonTitle = id => (lessonsList.find(l => l.id === id) || {}).title || id;
+    const rows = r.rows.map(({ i, s }) => {
+      const state = i.state === 'done' ? `<span class="text-green-300">решено</span>` : i.state === 'failed' ? `<span class="text-red-300">не в срок</span>` : i.revealT === null ? '<span class="text-slate-500">не началось</span>' : '<span class="text-amber-300">не решено</span>';
+      return `<tr><td>${i.d.title}</td><td class="mono">${i.revealT === null ? '—' : fmt(i.revealT)}</td>
+        <td class="mono">${i.actT === null ? '—' : '+' + Math.round(i.actT - i.revealT) + ' с'}</td>
+        <td class="mono">${s.took === null ? '—' : Math.round(s.took) + ' с'}</td><td class="mono">${i.d.norm} с</td>
+        <td>${state}</td><td class="mono text-right">${s.total}</td></tr>`;
+    }).join('');
+    const pens = r.pen.length ? `<ul class="list-disc pl-5 text-sm text-amber-200">${r.pen.map(p => `<li>${p.text}: −${p.pts}</li>`).join('')}</ul>` : '<p class="text-sm text-green-300">Штрафов нет.</p>';
+    const tl = timeline.slice(-30).map(e => {
+      const col = { act: 'text-sky-300', msg: 'text-amber-200', err: 'text-red-300', ok: 'text-green-300', inc: 'text-slate-400', op: 'text-slate-400' }[e.kind] || 'text-slate-300';
+      return `<div class="${col}"><span class="text-slate-500">${fmt(e.t)}</span> ${e.text}</div>`;
+    }).join('');
+    const failedInc = incs.filter(i => i.state === 'failed' || (crit && i.state === 'active'));
+    const fixes = failedInc.length ? `<h3 class="panel-title mt-4 mb-1">Как нужно было действовать</h3>
+      <ul class="text-sm text-slate-300 space-y-1">${failedInc.map(i => `<li><b class="text-slate-100">${i.d.title}:</b> ${i.d.fix}
+      <button class="text-sky-300 underline text-xs ml-1" data-go-lesson="${i.d.lesson}">урок «${lessonTitle(i.d.lesson)}»</button></li>`).join('')}</ul>` : '';
+    const stars = '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars);
+    const head = crit
+      ? `<div class="text-2xl">🔴</div><div><div class="panel-title">Смена провалена — критическая авария</div><h2 class="text-lg font-semibold text-red-300 mt-1">${crit.title}</h2></div>`
+      : `<div class="text-2xl">${r.stars ? '🏁' : '⚠️'}</div><div><div class="panel-title">Разбор смены · уровень ${level.n}</div>
+         <h2 class="text-lg font-semibold mt-1 ${r.stars ? 'text-green-300' : 'text-amber-300'}">${r.score} баллов <span class="text-amber-300 ml-2">${stars}</span></h2>
+         <div class="text-xs text-slate-400">${r.stars ? 'Уровень пройден' : 'Нужно 60 баллов, чтобы пройти уровень'} · среднее по инцидентам ${r.avg}, штрафы −${r.pen.reduce((a, p) => a + p.pts, 0)}</div></div>`;
+    $('levelModalBody').innerHTML = `
+      <div class="flex items-start gap-3">${head}</div>
+      ${crit ? `<p class="mt-3 text-sm text-slate-200 leading-6">${crit.text}</p>
+        <p class="mt-2 text-sm"><button class="text-sky-300 underline" data-go-lesson="${crit.lesson}">Повторить урок «${lessonTitle(crit.lesson)}»</button></p>` : ''}
+      <h3 class="panel-title mt-4 mb-1">Инциденты</h3>
+      <div class="overflow-x-auto"><table class="w-full text-xs result-table">
+        <tr><th>Проблема</th><th>Узнали</th><th>Реакция</th><th>Решили за</th><th>Норматив</th><th>Итог</th><th class="text-right">Баллы</th></tr>${rows}</table></div>
+      <h3 class="panel-title mt-4 mb-1">Штрафы</h3>${pens}
+      ${fixes}
+      <h3 class="panel-title mt-4 mb-1">Хронология</h3>
+      <div class="mono text-[11px] leading-5 max-h-48 overflow-y-auto bg-[#04070c] border border-slate-800 rounded px-2 py-1">${tl}</div>
+      <div class="mt-4 flex flex-wrap gap-2">
+        <button class="px-3 py-1.5 rounded text-sm font-semibold bg-sky-700 hover:bg-sky-600 text-white" data-act="restart">⟲ Переиграть уровень</button>
+        ${!crit && r.stars && LEVELS.find(l => l.n === level.n + 1) ? '<button class="px-3 py-1.5 rounded text-sm font-semibold border border-green-600 text-green-200" data-act="next">Следующий уровень →</button>' : ''}
+        <button class="px-3 py-1.5 rounded text-sm border border-slate-600 text-slate-200" data-act="menu">К списку уровней</button>
+        <button class="px-3 py-1.5 rounded text-sm border border-slate-600 text-slate-200" data-act="exit">Свободный режим</button>
+      </div>`;
+    const m = $('levelModal');
+    m.hidden = false;
+    m.querySelectorAll('[data-act]').forEach(b => b.addEventListener('click', () => {
+      m.hidden = true;
+      const a = b.dataset.act;
+      const lv = level;
+      if (a === 'restart') start(lv.id);
+      else if (a === 'next') start(LEVELS.find(l => l.n === lv.n + 1).id);
+      else if (a === 'menu') { exit(); openMenu(); }
+      else exit();
+    }));
+    m.querySelectorAll('[data-go-lesson]').forEach(b => b.addEventListener('click', () => {
+      m.hidden = true; exit();
+      if (window.ITPLessons) window.ITPLessons.start(b.dataset.goLesson);
+    }));
+  }
+
+  // Меню уровней
+  function renderMenu() {
+    store = loadStore();
+    const cards = LEVELS.map(lv => {
+      const rec = store[lv.id] || {};
+      const open = unlocked(lv);
+      const stars = rec.stars ? '★'.repeat(rec.stars) + '☆'.repeat(3 - rec.stars) : '☆☆☆';
+      return `<button ${open ? `data-level="${lv.id}"` : 'disabled'} class="text-left p-3 rounded border ${open ? 'border-slate-700 bg-slate-900 hover:border-amber-500' : 'border-slate-800 bg-slate-950 opacity-50 cursor-not-allowed'}">
+        <div class="flex items-center gap-2">
+          <span class="mono text-[11px] text-slate-500">${String(lv.n).padStart(2, '0')}</span>
+          <span class="font-semibold text-slate-100 text-sm">${lv.title}</span>
+          <span class="ml-auto text-amber-300 text-sm">${stars}</span>
+        </div>
+        <div class="text-[11px] text-slate-400 mt-1">${lv.difficulty} · ${lv.incidents.filter(i => !i.manual).length} проблем${rec.best ? ` · лучший результат ${rec.best}` : ''}</div>
+        <div class="text-xs text-slate-400 mt-1 leading-5">${open ? lv.intro : '🔒 Пройдите предыдущий уровень хотя бы на одну звезду.'}</div>
+      </button>`;
+    }).join('');
+    const soon = SOON.map(l => `<div class="p-3 rounded border border-dashed border-slate-800 opacity-60">
+      <div class="flex items-center gap-2"><span class="mono text-[11px] text-slate-500">${String(l.n).padStart(2, '0')}</span><span class="font-semibold text-slate-300 text-sm">${l.title}</span>
+      <span class="ml-auto text-[11px] text-slate-500 border border-slate-700 rounded px-1.5 py-0.5">в разработке</span></div>
+      <div class="text-[11px] text-slate-500 mt-1">${l.difficulty}</div><div class="text-xs text-slate-500 mt-1">${l.short}</div></div>`).join('');
+    $('levelList').innerHTML = cards + soon;
+    document.querySelectorAll('[data-level]').forEach(b => b.addEventListener('click', () => start(b.dataset.level)));
+  }
+  function openMenu() { renderMenu(); $('levelMenu').hidden = false; }
+  function closeMenu() { $('levelMenu').hidden = true; }
+
+  function setMode(mode) {
+    document.querySelectorAll('[data-mode]').forEach(b => {
+      const on = b.dataset.mode === mode;
+      b.classList.toggle('bg-sky-800', on);
+      b.classList.toggle('border-sky-500', on);
+      b.classList.toggle('text-white', on);
+    });
+  }
+
+  $('levelReport').addEventListener('click', report);
+  $('levelRestart').addEventListener('click', restart);
+  $('levelExit').addEventListener('click', exit);
+  $('levelMenuClose').addEventListener('click', closeMenu);
+  $('levelMenu').addEventListener('click', e => { if (e.target.id === 'levelMenu') closeMenu(); });
+  document.querySelector('[data-mode="levels"]').addEventListener('click', () => { if (!level) openMenu(); });
+  document.querySelector('[data-mode="free"]').addEventListener('click', exitIfActive);
+  document.querySelector('[data-mode="lesson"]').addEventListener('click', exitIfActive);
+
+  window.ITPLevels = {
+    tick, report, restart, exitIfActive,
+    active: () => !!level && !finished,
+    inLevel: () => !!level,
+    list: LEVELS,
+    _debug: () => ({ incs, penalties, rateAcc, st, timeline, t: now() })
+  };
+})();
