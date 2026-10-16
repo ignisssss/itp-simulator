@@ -70,6 +70,8 @@
     .alarm-card.alarm { border-color: var(--alarm); background: rgba(239,68,68,.10); }
     .alarm-card.warn  { border-color: var(--warn);  background: rgba(245,158,11,.08); }
     .alarm-card.ok    { border-color: var(--ok);    background: rgba(34,197,94,.08); }
+    .alarm-card.info  { border-color: #38bdf8;      background: rgba(56,189,248,.08); }
+    .pipe { transition: stroke .6s, opacity .6s; }
   </style>
 </head>
 <body class="text-slate-200 min-h-screen">
@@ -127,9 +129,15 @@
 
           <!-- ========== ТРУБЫ (цвет задается из app.js по температуре) ========== -->
           <!-- Первичный: подача -->
-          <path id="pipeP1" class="pipe" d="M20 90 H440"/>
+          <path id="pipeP1a" class="pipe" d="M20 90 H116"/>
+          <path id="pipeP1b" class="pipe" d="M144 90 H316"/>
+          <path id="pipeP1c" class="pipe" d="M344 90 H440"/>
           <!-- Первичный: обратка -->
-          <path id="pipeP2" class="pipe" d="M440 430 H20"/>
+          <path id="pipeP2a" class="pipe" d="M440 430 H234"/>
+          <path id="pipeP2b" class="pipe" d="M206 430 H20"/>
+          <!-- Дренаж и воздушник сетевого участка -->
+          <path id="pipeNetDr" class="pipe-thin" d="M300 430 V478"/>
+          <path id="pipeVent" class="pipe-thin" d="M410 90 V56"/>
           <!-- Вторичный: подача в дом -->
           <path id="pipeS1" class="pipe" d="M540 90 H900 V150"/>
           <!-- Вторичный: обратка из дома -->
@@ -144,6 +152,8 @@
           <!-- Анимация потока -->
           <path id="flowP1" class="flow" d="M20 90 H440"/>
           <path id="flowP2" class="flow" d="M440 430 H20"/>
+          <path id="flowNetDr" class="flow" style="stroke-width:2" d="M300 430 V478"/>
+          <path id="flowVent" class="flow" style="stroke-width:2" d="M410 90 V46"/>
           <path id="flowS2" class="flow" d="M900 370 V430 H540"/>
           <path id="flowS1" class="flow" d="M540 90 H900 V150"/>
           <path id="flowMk" class="flow" style="stroke-width:2" d="M380 430 V500 H790 V430"/>
@@ -273,6 +283,23 @@
             <text x="905" y="362" text-anchor="middle" class="lbl-s">радиаторы · H = 27 м</text>
           </g>
 
+          <!-- ========== Дренаж сети ========== -->
+          <g class="node" data-info="netdrain">
+            <rect class="hl" x="282" y="436" width="96" height="60" rx="4"/>
+            <path id="vNDR" class="valve-body valve-closed" d="M292 443 L308 443 L292 461 L308 461 Z"/>
+            <path d="M288 480 L312 480 L304 492 L296 492 Z" fill="none" stroke="#9fb3c8" stroke-width="1.5"/>
+            <text x="316" y="470" class="lbl-s">Дренаж</text>
+            <text x="316" y="482" class="lbl-s">сети</text>
+          </g>
+
+          <!-- ========== Воздушник сети ========== -->
+          <g class="node" data-info="netdrain">
+            <rect class="hl" x="396" y="36" width="44" height="50" rx="4"/>
+            <path id="vNVT" class="valve-body valve-closed" d="M402 63 L418 63 L402 81 L418 81 Z"/>
+            <path d="M405 52 L410 44 L415 52" fill="none" stroke="#9fb3c8" stroke-width="1.5"/>
+            <text x="420" y="50" class="lbl-s">Возд.</text>
+          </g>
+
           <!-- Показания приборов (rect + text) добавляются из app.js -->
           <g id="tags"></g>
         </svg>
@@ -331,14 +358,18 @@
             </div>
           </div>
 
-          <div class="ctl" data-ctl="strainerFouling">
+          <div id="strainerRow">
             <div class="flex items-center gap-2 mb-1">
               <span class="text-sm font-semibold">Гр</span>
-              <span class="text-xs text-slate-400">Засорить грязевик</span>
+              <span class="text-xs text-slate-400">Грязевик: засор сетки</span>
               <button class="qbtn ml-auto" data-info="strainer">?</button>
-              <span class="mono text-sm w-12 text-right" data-val>0%</span>
+              <span id="foulVal" class="mono text-sm w-12 text-right">0%</span>
             </div>
-            <input type="range" min="0" max="90" step="1" value="0" class="danger">
+            <div class="h-1.5 bg-slate-800 rounded overflow-hidden mb-2"><div id="foulBar" class="h-full" style="width:0%;background:#a16207"></div></div>
+            <div class="flex gap-2">
+              <button id="foulBtn" class="flex-1 py-1.5 rounded text-xs font-semibold border border-amber-700/70 text-amber-200 bg-slate-800 hover:bg-amber-900/30">Засорить +10%</button>
+              <button id="cleanBtn" class="flex-1 py-1.5 rounded text-xs font-semibold border border-sky-600/70 text-sky-200 bg-slate-800 hover:bg-sky-900/30">Вскрыть и промыть</button>
+            </div>
           </div>
 
           <div class="ctl" data-ctl="KZR">
@@ -396,6 +427,30 @@
               <button id="drainBtn" class="py-2 rounded text-sm font-semibold border"></button>
             </div>
           </div>
+        </div>
+      </div>
+
+      <!-- Ремонт сетевого участка -->
+      <div class="panel p-3">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="panel-title">Ремонт сетевого участка</div>
+          <button class="qbtn ml-auto" data-info="netdrain">?</button>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="flex flex-col gap-1">
+            <span class="text-xs text-slate-400">Дренаж сети</span>
+            <button id="netDrainBtn" class="py-2 rounded text-sm font-semibold border"></button>
+          </div>
+          <div class="flex flex-col gap-1">
+            <span class="text-xs text-slate-400">Воздушник</span>
+            <button id="netVentBtn" class="py-2 rounded text-sm font-semibold border"></button>
+          </div>
+        </div>
+        <div class="mt-3 h-1.5 bg-slate-800 rounded overflow-hidden"><div id="netFillBar" class="h-full bg-sky-500" style="width:100%"></div></div>
+        <div id="netFillTxt" class="mono text-[11px] text-slate-400 mt-1"></div>
+        <div class="text-[11px] text-slate-500 mt-2 leading-4">
+          Слив: закрыть V1, затем V2 → открыть дренаж и воздушник → дождаться 0 бар и 0 % → промыть грязевик.<br>
+          Заполнение: закрыть дренаж, воздушник открыт → открыть V2 → когда участок полон, закрыть воздушник → открыть V1.
         </div>
       </div>
 

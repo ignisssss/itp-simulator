@@ -27,7 +27,11 @@
     KVS_KZR: 16,
     KV_HEX: 25,            // ПТО со стороны сети
     CLOSED_PCT: 0.5,       // открытие < 0.5 % считается «закрыто»
-    GATE_TRAVEL_S: 8.0,    // с, полный ход затвора задвижки V1/V2
+    GATE_TRAVEL_S: 8.0,
+    K_NET_DRAIN: 1.2,      // 1/с, сброс давления отсеченного участка через дренаж/воздушник
+    EMPTY_RATE: 0.12,      // 1/с, опорожнение участка (с воздушником; без него в 10 раз медленнее)
+    FILL_RATE: 0.2,        // 1/с, заполнение участка из теплосети (с воздушником)
+    FILL_NO_VENT_CAP: 0.9, // без воздушника заполняется только 90 % объема — воздушная пробка    // с, полный ход затвора задвижки V1/V2
 
     // Вторичный контур
     PUMP_HEAD: 1.8,        // бар, перепад, создаваемый насосом
@@ -102,7 +106,9 @@
       V2cmd: 'open',
       PUMP: true,
       MAKEUP: 0,
-      DRAIN: false
+      DRAIN: false,
+      NET_DRAIN: false,      // дренаж сетевого участка (нижняя точка, перед V2)
+      NET_VENT: false        // воздушник сетевого участка (верхняя точка, вход ПТО)
     };
   }
 
@@ -124,6 +130,8 @@
       T21: C.T11_TARGET - C.BUILDING_DT,
       T2: 54.0,
       nodes: [C.P1, C.P1, C.P1, C.P2, C.P2, C.P2],
+      fill: [1, 1, 1, 1, 1, 1],
+      strainerAlarmUntil: -1,
       reliefOpen: false
     };
     settle(sim, 180);
@@ -140,7 +148,7 @@
   // ---------------------------------------------------------------------------
   // Первичный (сетевой) контур
   // ---------------------------------------------------------------------------
-  function solvePrimary(c, prevNodes) {
+  function solvePrimary(c, s, dt) {
     const kv = [
       kvOf(c.V1, C.KVS_V1),
       strainerKv(c.strainerFouling),
@@ -148,13 +156,77 @@
       C.KV_HEX,
       kvOf(c.V2, C.KVS_V2)
     ];
-    const nodes = prevNodes.slice();
+    const open = kv.map(k => k > 0);
+    const nodes = s.nodes.slice();
+    const fill = s.fill;
     nodes[0] = C.P1;
     nodes[NODE_COUNT - 1] = C.P2;
 
+    // Внутренние узлы 1…4 разбиваются закрытой арматурой на отсеки.
+    // Дренаж сети — в нижней точке (узел 4, перед V2), воздушник — в верхней (узел 3, вход ПТО).
+    const segs = [];
+    let cur = [1];
+    for (let i = 1; i <= 3; i++) {
+      if (open[i]) cur.push(i + 1);
+      else { segs.push(cur); cur = [i + 1]; }
+    }
+    segs.push(cur);
+
+    let allFull = true;
+    let drainLeak = false;   // дренаж открыт на участке, соединенном с теплосетью
+    let ventSpray = false;   // воздушник открыт на участке под давлением сети
+    let netDrainFlow = 0;
+    let netVentFlow = 0;
+    const segInfo = segs.map(seg => {
+      const fromP1 = seg[0] === 1 && open[0];
+      const fromP2 = seg[seg.length - 1] === 4 && open[4];
+      const src = fromP1 ? C.P1 : (fromP2 ? C.P2 : null);
+      const hasDrain = c.NET_DRAIN && seg.includes(4);
+      const hasVent = c.NET_VENT && seg.includes(3);
+      let f = seg.reduce((a, n) => a + fill[n], 0) / seg.length;
+      let p = seg.reduce((a, n) => Math.max(a, nodes[n]), 0);
+      let state;
+
+      if (src !== null) {
+        // Участок соединен с теплосетью: он заполняется, затем выходит на давление сети.
+        if (hasDrain) {
+          drainLeak = true;
+          netDrainFlow = 1;
+          state = f >= 0.999 ? 'leak' : 'leak_filling';
+        } else if (f < 0.999) {
+          const cap = hasVent ? 1 : C.FILL_NO_VENT_CAP;   // без воздушника воздух запирает остаток объема
+          if (f < cap) f = Math.min(cap, f + (hasVent ? C.FILL_RATE : C.FILL_RATE * 0.5) * dt);
+          if (hasVent) netVentFlow = Math.max(netVentFlow, 0.3);
+          state = (!hasVent && f >= cap - 1e-6) ? 'airlock' : 'filling';
+        } else {
+          state = 'full';
+        }
+        if (f >= 0.999) f = 1;
+        p = src * Math.pow(f, 8);
+        if (f >= 1 && hasVent) { ventSpray = true; netVentFlow = 1; }
+      } else {
+        // Отсеченный участок: давление заперто, пока его не сбросить дренажом или воздушником.
+        if (hasDrain || hasVent) {
+          if (p > 0) {
+            p = Math.max(0, p - (C.K_NET_DRAIN * p + 0.05) * dt);
+            if (hasDrain) netDrainFlow = Math.max(netDrainFlow, 0.8);
+            if (hasVent) netVentFlow = Math.max(netVentFlow, 0.8);
+          }
+          if (hasDrain && p <= 0 && f > 0) {
+            f = Math.max(0, f - (hasVent ? C.EMPTY_RATE : C.EMPTY_RATE * 0.1) * dt);
+            netDrainFlow = Math.max(netDrainFlow, 0.5);
+          }
+        }
+        state = f <= 0.001 ? 'empty' : (hasDrain && p <= 0 ? 'draining' : (p > 0.05 ? 'trapped' : 'isolated'));
+      }
+      seg.forEach(n => { fill[n] = f; nodes[n] = p; });
+      if (f < 0.999) allFull = false;
+      return { nodes: seg, src, fill: f, p, hasDrain, hasVent, state };
+    });
+
     let G1 = 0;
     let kvEq = 0;
-    if (kv.every(k => k > 0)) {
+    if (open.every(Boolean) && allFull) {
       // Последовательная цепь: 1/Kv_eq² = Σ 1/Kv_i²
       const inv = kv.reduce((a, k) => a + 1 / (k * k), 0);
       kvEq = 1 / Math.sqrt(inv);
@@ -166,17 +238,33 @@
         nodes[i + 1] = p;
       }
       nodes[NODE_COUNT - 1] = C.P2;
-    } else {
-      // Расхода нет: каждый узел получает давление того источника,
-      // с которым он соединен открытыми элементами. Отсеченные с двух
-      // сторон участки сохраняют прежнее (запертое) давление.
-      for (let i = 0; i < kv.length && kv[i] > 0; i++) nodes[i + 1] = C.P1;
-      for (let i = kv.length - 1; i >= 0 && kv[i] > 0; i--) nodes[i] = C.P2;
-      nodes[0] = C.P1;
     }
 
     const P_hex_net = G1 > 0 ? (nodes[3] + nodes[4]) / 2 : nodes[3];
-    return { kv, kvEq, G1, nodes, P_after_strainer: nodes[2], P_hex_net };
+    return {
+      kv, kvEq, G1, nodes, P_after_strainer: nodes[2], P_hex_net,
+      segs: segInfo, drainLeak, ventSpray, netDrainFlow, netVentFlow
+    };
+  }
+
+  /**
+   * Промывка сетки грязевика. Разрешена только на отключенном и опорожненном участке.
+   * Возвращает { ok, level, msg } для журнала.
+   */
+  function cleanStrainer(sim) {
+    const s = sim.state;
+    const p = s.nodes[2];
+    const f = s.fill[2];
+    if (p >= 0.1) {
+      s.strainerAlarmUntil = s.time + 10;
+      return { ok: false, level: 'alarm', msg: `Попытка вскрыть грязевик под давлением ${p.toFixed(2)} бар! Крышка не снята.` };
+    }
+    if (f > 0.1) {
+      return { ok: false, level: 'warn', msg: `В грязевике еще ${Math.round(f * 100)} % воды. Дождитесь слива через дренаж (с открытым воздушником быстрее).` };
+    }
+    sim.controls.strainerFouling = 0;
+    s.strainerAlarmUntil = -1;
+    return { ok: true, level: 'ok', msg: 'Грязевик вскрыт, сетка промыта от окалины, крышка закрыта.' };
   }
 
   // ---------------------------------------------------------------------------
@@ -196,7 +284,7 @@
     });
 
     // 1. Сетевой контур
-    const prim = solvePrimary(c, s.nodes);
+    const prim = solvePrimary(c, s, dt);
     s.nodes = prim.nodes;
     const G1 = prim.G1;
 
@@ -283,6 +371,10 @@
       G1, G2, W1, W2, Q,
       kv: prim.kv, kvEq: prim.kvEq,
       nodes: s.nodes.slice(),
+      fill: s.fill.slice(),
+      segs: prim.segs,
+      drainLeak: prim.drainLeak, ventSpray: prim.ventSpray,
+      netDrainFlow: prim.netDrainFlow, netVentFlow: prim.netVentFlow,
       P_after_strainer: prim.P_after_strainer,
       P_before_strainer: s.nodes[1],
       dP_strainer: s.nodes[1] - prim.P_after_strainer, // показания манометров до/после грязевика
@@ -307,6 +399,32 @@
     const c = sim.controls;
     const o = sim.out;
     const list = [];
+    const s = sim.state;
+
+    if (s.time < s.strainerAlarmUntil) {
+      list.push({
+        id: 'strainer_pressure', level: 'alarm',
+        title: 'АВАРИЯ: Попытка вскрыть грязевик под давлением!',
+        text: 'Крышку фильтра открывают только на отключенном и опорожненном участке: закройте V1, затем V2, откройте дренаж и воздушник, дождитесь 0 бар на манометрах до и после грязевика. Иначе крышку сорвет струей воды 95 °C.',
+        detail: `P в грязевике = ${f2(o.nodes[2])} бар`
+      });
+    }
+    if (o.drainLeak) {
+      list.push({
+        id: 'net_drain_leak', level: 'warn',
+        title: 'ШТРАФ ОТ ТЕПЛОСЕТИ: Сброс сетевой воды в канализацию!',
+        text: 'Дренаж открыт на участке, который соединен с теплосетью через открытую задвижку. Сетевая вода уходит в канализацию — это утечка теплоносителя. Сначала отсеките участок задвижками V1 и V2.',
+        detail: `V1 = ${Math.round(c.V1)} %, V2 = ${Math.round(c.V2)} %`
+      });
+    }
+    if (o.ventSpray) {
+      list.push({
+        id: 'vent_spray', level: 'warn',
+        title: 'ПРЕДУПРЕЖДЕНИЕ: Воздушник открыт под давлением!',
+        text: 'Из воздушника бьет горячая вода. Воздушник открывают на отключенном участке (при сливе) или при заполнении, пока не пойдет вода без воздуха, — затем закрывают.',
+        detail: `P в ПТО (сеть) = ${f2(o.P_hex_net)} бар`
+      });
+    }
 
     if (!isOpen(c.V2) && isOpen(c.V1) && isOpen(c.KZR)) {
       list.push({
@@ -375,7 +493,42 @@
         detail: `T11 = ${f1(o.T11)} °C, коридор 70…80 °C`
       });
     }
-    if (list.length === 0) {
+    // Состояние сетевого участка (информационные сообщения)
+    const minFill = Math.min(o.fill[1], o.fill[2], o.fill[3], o.fill[4]);
+    if (minFill < 0.999) {
+      const segs = o.segs;
+      const empty = segs.every(g => g.state === 'empty');
+      const draining = segs.find(g => g.state === 'draining');
+      const airlock = segs.find(g => g.state === 'airlock');
+      const filling = segs.find(g => g.state === 'filling' || g.state === 'leak_filling');
+      let title, text;
+      if (empty) {
+        title = 'Сетевой участок опорожнен';
+        text = 'Давление 0 бар, воды нет. Можно вскрывать и промывать грязевик. После ремонта закройте дренаж и заполните участок: откройте воздушник, затем плавно V2.';
+      } else if (airlock) {
+        title = 'Воздушная пробка при заполнении';
+        text = 'Воздуху некуда выйти, участок заполнился только на 90 %. Откройте воздушник, а когда пойдет вода — закройте его.';
+      } else if (filling) {
+        title = 'Идет заполнение сетевого участка';
+        text = filling.hasVent ? 'Воздух выходит через воздушник. Когда участок заполнится, закройте воздушник.' : 'Без воздушника воздух сожмется и запрет часть объема. Откройте воздушник.';
+      } else if (draining) {
+        title = 'Идет слив сетевого участка';
+        text = draining.hasVent ? 'Воздух входит через воздушник, вода быстро уходит в дренаж.' : 'Без воздушника вода уходит очень медленно — внутрь не поступает воздух. Откройте воздушник.';
+      } else {
+        title = 'Сетевой участок частично опорожнен';
+        text = 'Часть участка отсечена закрытой арматурой. Откройте КЗР, чтобы слить или заполнить весь участок.';
+      }
+      list.push({ id: 'net_section', level: 'info', title, text, detail: `Заполнение: ${Math.round(minFill * 100)} %, P до/после грязевика ${f2(o.nodes[1])}/${f2(o.nodes[2])} бар` });
+    } else if (o.segs.some(g => g.state === 'trapped') && o.G1 === 0) {
+      list.push({
+        id: 'net_trapped', level: 'info',
+        title: 'Давление заперто в отсеченном участке',
+        text: 'Задвижки закрыты, но внутри осталась вода под давлением. Перед вскрытием арматуры сбросьте давление дренажом сети.',
+        detail: `P до/после грязевика ${f2(o.nodes[1])}/${f2(o.nodes[2])} бар, P в ПТО ${f2(o.P_hex_net)} бар`
+      });
+    }
+
+    if (!list.some(a => a.level === 'alarm' || a.level === 'warn')) {
       list.push({
         id: 'ok', level: 'ok',
         title: 'НОРМА',
@@ -394,6 +547,7 @@
     step,
     diagnose,
     strainerKv,
+    cleanStrainer,
     kvOf
   });
 })(typeof window !== 'undefined' ? window : globalThis);

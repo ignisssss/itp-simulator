@@ -32,12 +32,25 @@
         <p class="mt-2">Порядок отключения ИТП: <b>сначала закрыть подачу V1, затем обратку V2</b>. Включение — в обратном порядке:
         сначала V2, затем V1. Если закрыть только обратку, ПТО окажется под полным давлением подачи (6.5 бар).</p>`
     },
+    netdrain: {
+      icon: '🪣', title: 'Дренаж и воздушник сетевого участка',
+      body: `<p>Участок между вводными задвижками V1 и V2 (грязевик, КЗР, ПТО) нельзя ремонтировать, пока в нем есть вода под
+        давлением. Закрытые задвижки только <b>отсекают</b> участок — давление и горячая вода остаются внутри.</p>
+        <p class="mt-2"><b>Дренаж</b> стоит в нижней точке (перед V2): через него сбрасывают давление и сливают воду.
+        <b>Воздушник</b> — в верхней точке (вход ПТО): при сливе он впускает воздух, иначе вода уходит очень медленно;
+        при заполнении выпускает воздух, иначе образуется воздушная пробка.</p>
+        <p class="mt-2">Если после закрытия V1 и V2 давление на манометрах не падает до нуля при открытом дренаже — одна из задвижек
+        пропускает, вскрывать нельзя. Дренаж при открытой задвижке — это слив сетевой воды в канализацию и штраф.</p>
+        <p class="mt-2">Если КЗР закрыт, грязевик отсечен от дренажа и останется под давлением — перед сливом откройте КЗР.</p>`
+    },
     strainer: {
       icon: '🧲', title: 'Грязевик (сетчатый фильтр)',
       body: `<p>Ловит ржавчину, окалину и песок из теплосети, спасая <b>узкие каналы пластин ПТО</b> и <b>седло регулирующего клапана КЗР</b>.</p>
         <p class="mt-2">Диагностируется по <b>двум манометрам — до и после</b> фильтра. Чистый грязевик теряет сотые доли бара;
         перепад больше 0.6 бар означает, что сетка забита и ее пора промывать.</p>
-        <p class="mt-2">Засоренный фильтр «съедает» располагаемый напор: даже полностью открытый КЗР не сможет пропустить нужный расход.</p>`
+        <p class="mt-2">Засоренный фильтр «съедает» располагаемый напор: даже полностью открытый КЗР не сможет пропустить нужный расход.</p>
+        <p class="mt-2"><b>Промывка:</b> закрыть V1, затем V2 → открыть дренаж и воздушник сети → дождаться 0 бар и полного слива →
+        «Вскрыть и промыть» → закрыть дренаж, заполнить участок через V2 с открытым воздушником → закрыть воздушник → открыть V1.</p>`
     },
     kzr: {
       icon: '🎛️', title: 'Клапан КЗР с электроприводом',
@@ -250,6 +263,12 @@
     });
   });
 
+  function toggleBtn(el, on, onText) {
+    el.textContent = on ? onText : 'ЗАКРЫТ';
+    el.className = 'py-2 rounded text-sm font-semibold border ' +
+      (on ? 'bg-amber-700/40 border-amber-500 text-amber-200' : 'bg-slate-800 border-slate-600 text-slate-400');
+  }
+
   function syncControlsUI() {
     ctlRows.forEach(row => {
       const key = row.dataset.ctl;
@@ -261,6 +280,8 @@
     pb.textContent = sim.controls.PUMP ? '● ВКЛЮЧЕН' : '○ ВЫКЛЮЧЕН';
     pb.className = 'py-2 rounded text-sm font-semibold border ' +
       (sim.controls.PUMP ? 'bg-green-700/40 border-green-500 text-green-200' : 'bg-slate-800 border-slate-600 text-slate-400');
+    toggleBtn($('netDrainBtn'), sim.controls.NET_DRAIN, '▼ ОТКРЫТ');
+    toggleBtn($('netVentBtn'), sim.controls.NET_VENT, '▲ ОТКРЫТ');
     const db = $('drainBtn');
     db.textContent = sim.controls.DRAIN ? '▼ ОТКРЫТ' : 'ЗАКРЫТ';
     db.className = 'py-2 rounded text-sm font-semibold border ' +
@@ -287,6 +308,25 @@
     sim.controls.DRAIN = !sim.controls.DRAIN;
     log(sim.controls.DRAIN ? 'Оператор: открыт дренаж' : 'Оператор: дренаж закрыт', 'op');
     syncControlsUI();
+  });
+  $('netDrainBtn').addEventListener('click', () => {
+    sim.controls.NET_DRAIN = !sim.controls.NET_DRAIN;
+    log(sim.controls.NET_DRAIN ? 'Оператор: открыт дренаж сети' : 'Оператор: дренаж сети закрыт', 'op');
+    syncControlsUI();
+  });
+  $('netVentBtn').addEventListener('click', () => {
+    sim.controls.NET_VENT = !sim.controls.NET_VENT;
+    log(sim.controls.NET_VENT ? 'Оператор: открыт воздушник' : 'Оператор: воздушник закрыт', 'op');
+    syncControlsUI();
+  });
+  $('foulBtn').addEventListener('click', () => {
+    sim.controls.strainerFouling = Math.min(90, sim.controls.strainerFouling + 10);
+    log(`Инструктор: грязевик засорен до ${Math.round(sim.controls.strainerFouling)} %`, 'op');
+  });
+  $('cleanBtn').addEventListener('click', () => {
+    const r = P.cleanStrainer(sim);
+    log(r.msg, r.level);
+    render();
   });
   $('resetBtn').addEventListener('click', () => {
     P.resetNominal(sim);
@@ -318,7 +358,7 @@
     const s = Math.floor(t);
     return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
   }
-  const LOG_COLORS = { alarm: 'text-red-400', warn: 'text-amber-300', ok: 'text-green-400', op: 'text-sky-300', clear: 'text-slate-500' };
+  const LOG_COLORS = { alarm: 'text-red-400', warn: 'text-amber-300', ok: 'text-green-400', op: 'text-sky-300', info: 'text-sky-300', clear: 'text-slate-500' };
   function log(msg, kind) {
     const div = document.createElement('div');
     div.className = LOG_COLORS[kind] || 'text-slate-300';
@@ -331,7 +371,7 @@
   // ---------------------------------------------------------------------------
   // Табло аварий
   // ---------------------------------------------------------------------------
-  const ICON = { alarm: '🔴', warn: '🟡', ok: '🟢' };
+  const ICON = { alarm: '🔴', warn: '🟡', ok: '🟢', info: '🔵' };
   let lastSignature = '';
   let activeIds = new Map(); // id -> заголовок
 
@@ -342,7 +382,7 @@
       lastSignature = signature;
       $('alarms').innerHTML = list.map(a => `
         <div class="alarm-card ${a.level} px-3 py-2">
-          <div class="text-sm font-semibold ${a.level === 'alarm' ? 'text-red-300' : a.level === 'warn' ? 'text-amber-200' : 'text-green-300'}">
+          <div class="text-sm font-semibold ${a.level === 'alarm' ? 'text-red-300' : a.level === 'warn' ? 'text-amber-200' : a.level === 'info' ? 'text-sky-300' : 'text-green-300'}">
             <span class="${a.level === 'alarm' ? 'blink' : ''}">${ICON[a.level]}</span> ${a.title}
           </div>
           <div class="text-xs text-slate-300 mt-1 leading-5">${a.text}</div>
@@ -443,19 +483,33 @@
     $('txtKZR').textContent = Math.round(c.KZR) + '%';
 
     // Цвета труб по температуре
-    $('pipeP1').style.stroke = tempColor(o.T1);
-    $('pipeP2').style.stroke = tempColor(o.T2);
+    // Сетевой участок: пустые трубы — серые, частично заполненные — полупрозрачные
+    const EMPTY = '#273244';
+    const secT = c.V1 >= C.CLOSED_PCT ? o.T1 : o.T2;
+    const fillPipe = (id, n, t) => {
+      const f = o.fill[n];
+      const el = $(id);
+      el.style.stroke = f < 0.05 ? EMPTY : tempColor(t);
+      el.style.opacity = (0.3 + 0.7 * f).toFixed(2);
+    };
+    $('pipeP1a').style.stroke = tempColor(o.T1);
+    fillPipe('pipeP1b', 1, secT);
+    fillPipe('pipeP1c', 3, secT);
+    fillPipe('pipeP2a', 4, o.T2);
+    $('pipeP2b').style.stroke = tempColor(o.T2);
+    $('pipeNetDr').style.stroke = c.NET_DRAIN ? '#f59e0b' : '#3b4a60';
+    $('pipeVent').style.stroke = c.NET_VENT ? '#38bdf8' : '#3b4a60';
     $('pipeS1').style.stroke = tempColor(o.T11);
     $('pipeS2').style.stroke = tempColor(o.T21);
     $('pipeMk').style.stroke = tempColor(o.T2);
 
     // Каналы ПТО: сеть сверху (T1) вниз (T2), дом снизу (T21) вверх (T11)
-    $('gpTop').setAttribute('stop-color', tempColor(o.T1));
-    $('gpBot').setAttribute('stop-color', tempColor(o.T2));
+    $('gpTop').setAttribute('stop-color', o.fill[3] < 0.05 ? EMPTY : tempColor(secT));
+    $('gpBot').setAttribute('stop-color', o.fill[4] < 0.05 ? EMPTY : tempColor(o.T2));
     $('gsTop').setAttribute('stop-color', tempColor(o.T11));
     $('gsBot').setAttribute('stop-color', tempColor(o.T21));
-    $('hexPrimTop').style.stroke = tempColor(o.T1);
-    $('hexPrimBot').style.stroke = tempColor(o.T2);
+    $('hexPrimTop').style.stroke = o.fill[3] < 0.05 ? EMPTY : tempColor(secT);
+    $('hexPrimBot').style.stroke = o.fill[4] < 0.05 ? EMPTY : tempColor(o.T2);
     $('hexSecTop').style.stroke = tempColor(o.T11);
     $('hexSecBot').style.stroke = tempColor(o.T21);
 
@@ -469,6 +523,17 @@
     setFlow('flowMk', o.makeupFlow, 60);
     setFlow('flowDr', o.drainFlow, 30);
     setFlow('flowRv', o.reliefFlow, 30);
+    setFlow('flowNetDr', o.netDrainFlow, 30);
+    setFlow('flowVent', o.netVentFlow, 30);
+    setValve('vNDR', c.NET_DRAIN ? 100 : 0);
+    setValve('vNVT', c.NET_VENT ? 100 : 0);
+
+    // Грязевик и заполнение сетевого участка на пульте
+    $('foulVal').textContent = Math.round(c.strainerFouling) + '%';
+    $('foulBar').style.width = (c.strainerFouling / 90 * 100).toFixed(0) + '%';
+    const minFill = Math.min(o.fill[1], o.fill[2], o.fill[3], o.fill[4]);
+    $('netFillBar').style.width = (minFill * 100).toFixed(0) + '%';
+    $('netFillTxt').textContent = `Заполнение участка ${Math.round(minFill * 100)} % · P грязевик ${fmt(o.nodes[2], 2)} бар · P ПТО ${fmt(o.P_hex_net, 2)} бар`;
     $('pipeRv').style.stroke = o.reliefOpen ? '#ef4444' : '#3b4a60';
     $('vRV').style.fill = o.reliefOpen ? '#ef4444' : '#1c2a3d';
     $('pipeDr').style.stroke = c.DRAIN ? '#f59e0b' : '#3b4a60';
