@@ -29,6 +29,8 @@
         поток в узкой щели срывает и размывает кромку затвора, после чего задвижка перестает держать.</p>
         <p class="mt-2">В тренажере задвижка управляется кнопкой «Открыть / Закрыть»: затвор за ~8 с проходит от одного крайнего
         положения до другого, остановить его посередине нельзя. Команду можно развернуть на ходу.</p>
+        <p class="mt-2">Перед ремонтом на закрытые задвижки вешают плакат <b>«Не открывать — работают люди»</b> (кнопка «Плакат»),
+        а дренажи на отключенном участке оставляют открытыми, чтобы пропуск задвижки не поднял давление.</p>
         <p class="mt-2">Порядок отключения ИТП: <b>сначала закрыть подачу V1, затем обратку V2</b>. Включение — в обратном порядке:
         сначала V2, затем V1. Если закрыть только обратку, ПТО окажется под полным давлением подачи (6.5 бар).</p>`
     },
@@ -248,6 +250,12 @@
       const bar = row.querySelector('.gate-bar');
       bar.style.width = pos.toFixed(1) + '%';
       bar.style.background = moving ? '#f59e0b' : (pos >= 100 ? '#22c55e' : '#ef4444');
+      const tag = row.querySelector('.tag-btn');
+      const tagged = sim.controls[k + 'tag'];
+      tag.textContent = tagged ? '🔒 Плакат' : 'Плакат';
+      tag.className = 'tag-btn px-2 py-1.5 rounded text-xs border ' +
+        (tagged ? 'bg-red-800/50 border-red-500 text-red-100' : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-red-500');
+      $('tag' + k).toggleAttribute('hidden', !tagged);
       row.querySelector('.gate-state').textContent = moving
         ? (opening ? 'открывается… ' : 'закрывается… ') + Math.round(pos) + '%'
         : (pos >= 100 ? 'ОТКРЫТА · 100%' : 'ЗАКРЫТА · 0%');
@@ -256,6 +264,11 @@
 
   gateRows.forEach(row => {
     const k = row.dataset.gate;
+    row.querySelector('.tag-btn').addEventListener('click', () => {
+      sim.controls[k + 'tag'] = !sim.controls[k + 'tag'];
+      log(sim.controls[k + 'tag'] ? `Оператор: на ${k} вывешен плакат «Не открывать — работают люди»` : `Оператор: плакат с ${k} снят`, 'op');
+      renderGates();
+    });
     row.querySelector('.gate-btn').addEventListener('click', () => {
       const open = sim.controls[k + 'cmd'] !== 'open';
       sim.controls[k + 'cmd'] = open ? 'open' : 'close';
