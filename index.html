@@ -40,7 +40,7 @@
     .valve-moving { fill: #f59e0b; animation: pulse .45s ease-in-out infinite alternate; }
     @keyframes pulse { to { opacity: .3; } }
     .flow.thin { stroke-width: 1.6; stroke-dasharray: 5 15; }
-    @media (prefers-reduced-motion: reduce) { .flow, .valve-moving, #pumpRotor.spin, .blink { animation: none !important; } }
+    @media (prefers-reduced-motion: reduce) { .flow, .valve-moving, #pumpRotor.spin, #pump2Rotor.spin, .blink { animation: none !important; } }
     .lbl { fill: #9fb3c8; font-size: 12px; }
     .lbl-s { fill: #6b7f99; font-size: 10px; }
     .tag-box { fill: #04070c; stroke: #2a3a52; stroke-width: 1; }
@@ -49,8 +49,9 @@
     .tag-val.bad { fill: #ff6b6b; }
     .tag-val.warn { fill: #fbbf24; }
 
-    #pumpRotor { transform-box: fill-box; transform-origin: center; }
-    #pumpRotor.spin { animation: spin .6s linear infinite; }
+    #pumpRotor, #pump2Rotor { transform-box: fill-box; transform-origin: center; }
+    #pumpRotor.spin, #pump2Rotor.spin { animation: spin .6s linear infinite; }
+    .tbtn { padding: .45rem .5rem; border-radius: .25rem; font-size: .8rem; font-weight: 600; border: 1px solid; }
     @keyframes spin { to { transform: rotate(-360deg); } }
 
     .blink { animation: blink 1s steps(2, start) infinite; }
@@ -284,7 +285,7 @@
             <rect class="hl" x="306" y="20" width="60" height="92" rx="4"/>
             <line x1="330" y1="90" x2="330" y2="66" stroke="#9fb3c8" stroke-width="2"/>
             <rect x="316" y="44" width="28" height="22" rx="2" fill="#1c2a3d" stroke="#9fb3c8" stroke-width="1.5"/>
-            <text x="330" y="60" text-anchor="middle" style="fill:#e2f3ff;font-size:12px;font-weight:700">M</text>
+            <text id="txtKZRmode" x="330" y="60" text-anchor="middle" style="fill:#e2f3ff;font-size:12px;font-weight:700">M</text>
             <path id="vKZR" class="valve-body valve-part" d="M316 80 L344 100 L344 80 L316 100 Z"/>
             <text x="330" y="36" text-anchor="middle" class="lbl">КЗР</text>
             <text id="txtKZR" x="352" y="60" class="tag-val" style="font-size:12px">48%</text>
@@ -317,15 +318,28 @@
             <line x1="8" y1="-7" x2="8" y2="7" stroke="#9fb3c8" stroke-width="2"/>
           </g>
 
-          <!-- ========== Насос ========== -->
+          <!-- ========== Насосы Н1 (рабочий) и Н2 (резервный) с кранами ========== -->
+          <path id="pipeH2" class="pipe" style="stroke-width:6" d="M700 430 V392 H580 V430"/>
+          <path id="flowH2" class="flow" style="stroke-width:2" d="M700 430 V392 H580 V430"/>
+          <circle cx="580" cy="430" r="3.5" fill="#9fb3c8"/>
+          <circle cx="700" cy="430" r="3.5" fill="#9fb3c8"/>
           <g class="node" data-info="pump">
-            <rect class="hl" x="612" y="402" width="56" height="56" rx="6"/>
-            <circle id="pumpBody" cx="640" cy="430" r="21" fill="#0f2a1a" stroke="#22c55e" stroke-width="2.5"/>
+            <rect class="hl" x="566" y="370" width="146" height="84" rx="6"/>
+            <!-- Н1 -->
+            <circle id="pumpBody" cx="636" cy="430" r="18" fill="#0f2a1a" stroke="#22c55e" stroke-width="2.5"/>
             <g id="pumpRotor">
-              <path d="M640 430 L640 414 M640 430 L654 438 M640 430 L626 438" stroke="#e2f3ff" stroke-width="2.5" stroke-linecap="round"/>
-              <circle cx="640" cy="430" r="3" fill="#e2f3ff"/>
+              <path d="M636 430 L636 416 M636 430 L648 437 M636 430 L624 437" stroke="#e2f3ff" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="636" cy="430" r="3" fill="#e2f3ff"/>
             </g>
-            <text x="640" y="400" text-anchor="middle" class="lbl">Насос</text>
+            <text x="602" y="423" text-anchor="middle" class="lbl-s">Н1</text>
+            <path id="vISO1" class="valve-body valve-open" d="M672 424 L688 436 L688 424 L672 436 Z"/>
+            <!-- Н2 -->
+            <circle id="pump2Body" cx="636" cy="392" r="14" fill="#111827" stroke="#64748b" stroke-width="2.2"/>
+            <g id="pump2Rotor">
+              <path d="M636 392 L636 381 M636 392 L645 397 M636 392 L627 397" stroke="#e2f3ff" stroke-width="2" stroke-linecap="round"/>
+            </g>
+            <text x="636" y="374" text-anchor="middle" class="lbl-s">Н2 резерв</text>
+            <path id="vISO2" class="valve-body valve-open" d="M672 386 L688 398 L688 386 L672 398 Z"/>
           </g>
 
           <!-- ========== Предохранительный клапан ========== -->
@@ -345,6 +359,33 @@
             <path id="vDR" class="valve-body valve-closed" d="M852 446 L868 446 L852 464 L868 464 Z"/>
             <path d="M848 480 L872 480 L864 492 L856 492 Z" fill="none" stroke="#9fb3c8" stroke-width="1.5"/>
             <text x="878" y="460" class="lbl-s">Дренаж</text>
+          </g>
+
+          <!-- ========== Краны дома, спуск стояков, воздушники ========== -->
+          <g class="node" data-info="house">
+            <rect class="hl" x="884" y="104" width="44" height="32" rx="4"/>
+            <path id="vHS" class="valve-body valve-open" d="M892 112 L908 112 L892 128 L908 128 Z"/>
+            <text x="912" y="124" class="lbl-s">Кд1</text>
+          </g>
+          <g class="node" data-info="house">
+            <rect class="hl" x="884" y="390" width="44" height="34" rx="4"/>
+            <path id="vHR" class="valve-body valve-open" d="M892 398 L908 398 L892 414 L908 414 Z"/>
+            <text x="912" y="414" class="lbl-s">Кд2</text>
+          </g>
+          <path id="pipeHD" class="pipe-thin" style="stroke-width:3" d="M900 382 H952 V420"/>
+          <path id="flowHD" class="flow" style="stroke-width:2" d="M900 382 H952 V420"/>
+          <g class="node" data-info="house">
+            <rect class="hl" x="924" y="374" width="56" height="62" rx="4"/>
+            <path id="vHD" class="valve-body valve-closed" d="M926 376 L940 388 L940 376 L926 388 Z"/>
+            <path d="M942 420 L962 420 L956 430 L948 430 Z" fill="none" stroke="#9fb3c8" stroke-width="1.3"/>
+            <text x="966" y="402" class="lbl-s">спуск</text>
+          </g>
+          <path id="pipeHV" class="pipe-thin" style="stroke-width:3" d="M962 150 V122"/>
+          <path id="flowHV" class="flow" style="stroke-width:2" d="M962 150 V114"/>
+          <g class="node" data-info="house">
+            <rect class="hl" x="944" y="104" width="40" height="44" rx="4"/>
+            <path id="vHV" class="valve-body valve-closed" d="M956 126 L968 126 L956 140 L968 140 Z"/>
+            <path d="M957 118 L962 110 L967 118" fill="none" stroke="#9fb3c8" stroke-width="1.3"/>
           </g>
 
           <!-- ========== Здание ========== -->
@@ -448,7 +489,7 @@
             </div>
           </div>
 
-          <div class="ctl" data-ctl="KZR">
+          <div class="ctl" data-ctl="KZRcmd">
             <div class="flex items-center gap-2 mb-1">
               <span class="text-sm font-semibold">КЗР</span>
               <span class="text-xs text-slate-400">Регулирующий клапан</span>
@@ -459,6 +500,10 @@
               <button class="kzr-step px-2 text-xs rounded border border-slate-700" data-step="-1">−1</button>
               <input type="range" min="0" max="100" step="1" value="48">
               <button class="kzr-step px-2 text-xs rounded border border-slate-700" data-step="1">+1</button>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <span id="kzrPos" class="mono text-[11px] text-slate-400"></span>
+              <button id="kzrManualBtn" data-toggle="KZR_MANUAL" data-on="✋ Ручной (штурвал)" data-off="Авто (привод)" data-tone="amber" data-label="Режим КЗР" class="tbtn ml-auto"></button>
             </div>
           </div>
 
@@ -488,23 +533,46 @@
             <input type="range" min="0" max="100" step="1" value="0">
           </div>
 
-          <div class="grid grid-cols-2 gap-2 pt-1">
-            <div class="flex flex-col gap-1">
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-slate-400">Насос отопления</span>
-                <button class="qbtn ml-auto" data-info="pump">?</button>
-              </div>
-              <button id="pumpBtn" class="py-2 rounded text-sm font-semibold border"></button>
+          <div class="flex flex-col gap-2 pt-1">
+            <div class="flex items-center gap-2">
+              <span class="text-xs text-slate-400">Циркуляционные насосы</span>
+              <button class="qbtn ml-auto" data-info="pump">?</button>
             </div>
-            <div class="flex flex-col gap-1">
-              <div class="flex items-center gap-2">
-                <span class="text-xs text-slate-400">Сброс в дренаж</span>
-                <button class="qbtn ml-auto" data-info="drain">?</button>
-              </div>
-              <button id="drainBtn" class="py-2 rounded text-sm font-semibold border"></button>
+            <div class="grid grid-cols-[2.2rem_1fr_1fr] gap-2 items-center">
+              <span class="text-sm font-semibold">Н1</span>
+              <button id="pumpBtn" data-toggle="PUMP" data-on="● В РАБОТЕ" data-off="○ СТОП" data-tone="green" data-label="Насос Н1" class="tbtn"></button>
+              <button id="iso1Btn" data-toggle="PUMP1_ISO" data-on="Краны открыты" data-off="Краны закрыты" data-tone="slate" data-inverse="1" data-label="Краны Н1" class="tbtn"></button>
+              <span class="text-sm font-semibold">Н2</span>
+              <button id="pump2Btn" data-toggle="PUMP2" data-on="● В РАБОТЕ" data-off="○ СТОП" data-tone="green" data-label="Насос Н2" class="tbtn"></button>
+              <button id="iso2Btn" data-toggle="PUMP2_ISO" data-on="Краны открыты" data-off="Краны закрыты" data-tone="slate" data-inverse="1" data-label="Краны Н2" class="tbtn"></button>
+            </div>
+            <div class="flex items-center gap-2 mt-1">
+              <span class="text-xs text-slate-400">Сброс в дренаж (ИТП)</span>
+              <button class="qbtn" data-info="drain">?</button>
+              <button id="drainBtn" data-toggle="DRAIN" data-on="▼ ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Дренаж ИТП" class="tbtn ml-auto w-32"></button>
             </div>
           </div>
         </div>
+      </div>
+
+      <!-- Система отопления дома -->
+      <div class="panel p-3">
+        <div class="flex items-center gap-2 mb-2">
+          <div class="panel-title">Система отопления дома</div>
+          <button class="qbtn ml-auto" data-info="house">?</button>
+        </div>
+        <div class="grid grid-cols-2 gap-2">
+          <div class="flex flex-col gap-1"><span class="text-xs text-slate-400">Кран подачи Кд1</span>
+            <button id="houseSupBtn" data-toggle="HOUSE_SUP" data-on="Открыт" data-off="▼ ЗАКРЫТ" data-tone="slate" data-inverse="1" data-label="Кран подачи дома Кд1" class="tbtn"></button></div>
+          <div class="flex flex-col gap-1"><span class="text-xs text-slate-400">Кран обратки Кд2</span>
+            <button id="houseRetBtn" data-toggle="HOUSE_RET" data-on="Открыт" data-off="▼ ЗАКРЫТ" data-tone="slate" data-inverse="1" data-label="Кран обратки дома Кд2" class="tbtn"></button></div>
+          <div class="flex flex-col gap-1"><span class="text-xs text-slate-400">Спуск стояков</span>
+            <button id="houseDrainBtn" data-toggle="HOUSE_DRAIN" data-on="▼ ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Спуск стояков" class="tbtn"></button></div>
+          <div class="flex flex-col gap-1"><span class="text-xs text-slate-400">Воздушники 9 эт.</span>
+            <button id="houseVentBtn" data-toggle="HOUSE_VENT" data-on="▲ ОТКРЫТЫ" data-off="ЗАКРЫТЫ" data-tone="amber" data-label="Воздушники 9 этажа" class="tbtn"></button></div>
+        </div>
+        <div class="mt-3 h-1.5 bg-slate-800 rounded overflow-hidden"><div id="houseFillBar" class="h-full bg-sky-500" style="width:100%"></div></div>
+        <div id="houseFillTxt" class="mono text-[11px] text-slate-400 mt-1"></div>
       </div>
 
       <!-- Ремонт сетевого участка -->
@@ -516,11 +584,11 @@
         <div class="grid grid-cols-2 gap-2">
           <div class="flex flex-col gap-1">
             <span class="text-xs text-slate-400">Дренаж сети</span>
-            <button id="netDrainBtn" class="py-2 rounded text-sm font-semibold border"></button>
+            <button id="netDrainBtn" data-toggle="NET_DRAIN" data-on="▼ ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Дренаж сети" class="tbtn"></button>
           </div>
           <div class="flex flex-col gap-1">
             <span class="text-xs text-slate-400">Воздушник</span>
-            <button id="netVentBtn" class="py-2 rounded text-sm font-semibold border"></button>
+            <button id="netVentBtn" data-toggle="NET_VENT" data-on="▲ ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Воздушник сети" class="tbtn"></button>
           </div>
         </div>
         <div class="mt-3 h-1.5 bg-slate-800 rounded overflow-hidden"><div id="netFillBar" class="h-full bg-sky-500" style="width:100%"></div></div>

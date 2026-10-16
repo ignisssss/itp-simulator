@@ -163,14 +163,105 @@
           fix: 'Промыть грязевик по полной процедуре. В мороз — без задержек: дом остывает, пока ИТП отключен.'
         }
       ]
+    },
+
+    {
+      id: 'l4', n: 4, title: 'Отказы оборудования', difficulty: 'Очень сложный',
+      intro: 'Смена, в которой отказывает оборудование. Пользуйтесь резервом: ручным режимом КЗР, резервным насосом Н2, отсекающими кранами дома.',
+      setup() {},
+      incidents: [
+        {
+          id: 'kzrfail', title: 'Отказ привода КЗР при похолодании', at: 40,
+          start(sim) { sim.env.kzrFail = true; },
+          update: ramp(-10, -15, 60),
+          message: { from: 'Автоматика ИТП', text: 'Привод КЗР: потеря обратной связи. Регулятор не отрабатывает задание.' },
+          extra: [{ at: 8, from: 'Диспетчер теплосети', text: 'Похолодание до −15 °C, работаем по графику.' }],
+          resolved: () => c().KZR_MANUAL && onGraph(), minTime: 90, hold: 30, norm: 240, deadline: 800, lesson: 'regulation',
+          fix: 'Перевести КЗР в ручной режим и штурвалом открыть до ≈ 52 % (штурвал медленнее привода), выйти на график −15 °C.'
+        },
+        {
+          id: 'pump1', title: 'Авария рабочего насоса Н1', at: 420,
+          start(sim) { sim.env.pump1Fail = true; },
+          message: { from: 'Автоматика ИТП', text: 'Насос Н1: авария электродвигателя. Перепад на насосе отсутствует.' },
+          resolved: () => o().p2Running && o().G2 > 0 && !c().PUMP && !c().PUMP1_ISO, hold: 20, norm: 90, deadline: 600, lesson: 'pumpstart',
+          onDone(sim, lvl) { lvl.toast('Слесарь', 'Н1 отсечен, забираем в мастерскую.'); },
+          fix: 'Сразу пустить резервный Н2 (циркуляция нужна в течение 30 с, иначе ПТО «запарится»), затем остановить Н1 и закрыть его краны для ремонта.'
+        },
+        {
+          id: 'burst', title: 'Прорыв радиатора в квартире', at: 820,
+          start(sim) { sim.env.burst = 0.12; },
+          update(sim, t, inst, lvl) {
+            // сантехник меняет радиатор, когда дом отсечен и давление в нем сброшено (30 с)
+            if (sim.env.burst > 0 && !sim.controls.HOUSE_SUP && !sim.controls.HOUSE_RET && sim.out.P_house < 0.1) {
+              inst.repairT = (inst.repairT || 0) + lvl.dt;
+              if (inst.repairT > 30) { sim.env.burst = 0; lvl.toast('Сантехник', 'Радиатор в кв. 37 заменен. Систему можно заполнять.'); }
+            } else if (sim.env.burst > 0) inst.repairT = 0;
+          },
+          message: { from: 'Жилец, кв. 37 (3 этаж)', text: 'Прорвало радиатор! Кипяток на полу, заливает соседей снизу!' },
+          resolved: () => sim.env.burst === 0 && o().houseOpen && o().houseFill >= 0.999 && o().pumpRunning && pressureOk() &&
+            !c().HOUSE_VENT && !c().HOUSE_DRAIN && onGraph(),
+          hold: 30, norm: 600, deadline: 1500, lesson: 'makeup',
+          fix: 'Остановить подачу воды в квартиру: закрыть краны дома Кд1 и Кд2, открыть спуск стояков и воздушники. Пока циркуляции нет — прекратить подачу тепла в ПТО (закрыть V1 или КЗР) и остановить насос. После замены радиатора: закрыть спуск, открыть Кд2, подпитать с открытыми воздушниками, закрыть воздушники, поднять давление до ≈ 3.5 бар, открыть Кд1, пустить насос, вернуть тепло.'
+        }
+      ]
+    },
+
+    {
+      id: 'l5', n: 5, title: 'Тяжёлая смена', difficulty: 'Эксперт',
+      intro: 'Сильный мороз, перебои в сети и скрытые неисправности. Не все проблемы видны сразу, не всем приборам можно верить. Насос защищен автоматикой.',
+      setup() { sim.env.pumpProtection = true; },
+      incidents: [
+        {
+          id: 'under', title: 'Мороз −25 °C, сеть недодает температуру', at: 30,
+          start(sim) { sim.env.T1 = 100; },
+          update: ramp(-10, -25, 120),
+          message: { from: 'Диспетчер теплосети', text: 'Мороз до −25 °C. Авария на магистрали: подача будет около 100 °C вместо графика. Обеспечьте максимум, что возможно.' },
+          resolved: () => c().KZR >= 85 && o().G2 > 0 && o().T2 <= o().T2_max + 1.5, minTime: 120, hold: 30, norm: 180, deadline: 700, lesson: 'regulation',
+          onDone(sim, lvl) {
+            lvl.schedule(240, () => { sim.env.T1 = null; lvl.toast('Диспетчер теплосети', 'Магистраль восстановлена, подача по графику.'); lvl.activate('restore'); });
+          },
+          fix: 'При недодаче сети по графику прогреть дом нельзя: открыть КЗР почти полностью (85–100 %), следя, чтобы обратка не ушла заметно выше нормы.'
+        },
+        {
+          id: 'restore', title: 'Сеть вернулась на график', manual: true,
+          resolved: onGraph, hold: 30, norm: 240, deadline: 700, lesson: 'regulation',
+          fix: 'Сеть снова дает горячую воду — прикрыть КЗР до графика, иначе перетоп и штраф за обратку.'
+        },
+        {
+          id: 'foul5', title: 'Засор грязевика в мороз', at: 760,
+          start(sim) { sim.controls.strainerFouling = Math.max(sim.controls.strainerFouling, 72); sim.env.foulRate = 0.25; sim.env.v1Passing = 0.06; },
+          update(sim) { if (sim.controls.strainerFouling >= 88) sim.env.foulRate = 0; },
+          reveal: () => o().dP_strainer > 0.6,
+          message: { from: 'Автоматика ИТП', text: 'Перепад давления на грязевике выше уставки.' },
+          resolved: () => c().strainerFouling < 5 && sectionNormal() && o().G1 > 0, hold: 30, norm: 360, deadline: 1500, lesson: 'strainer',
+          fix: 'Промыть грязевик по полной процедуре. Если давление на слитом участке не падает до нуля — вскрывать нельзя.'
+        },
+        {
+          id: 'v1pass', title: 'Задвижка V1 пропускает', at: 760, optional: true, needsReport: true,
+          reveal: () => c().V1cmd === 'close' && c().V1 <= 0 && c().NET_DRAIN && o().v1Leak && o().nodes[2] > 0.1,
+          onReport(sim, lvl) {
+            lvl.schedule(60, () => { sim.env.v1Passing = 0; lvl.toast('Диспетчер теплосети', 'Закрыли задвижку в тепловой камере. По окончании работ откроем, V1 после ремонта на замену.'); });
+          },
+          resolved: () => sim.env.v1Passing === 0, hold: 5, norm: 120, deadline: 900, lesson: 'strainer',
+          fix: 'Давление на отключенном и открытом в дренаж участке не падает до нуля — значит, V1 пропускает. Вскрывать нельзя. Держать дренаж открытым и сообщить диспетчеру теплосети, чтобы отключили ввод в тепловой камере.'
+        },
+        {
+          id: 'stuck', title: 'Отказ манометра P21 и утечка', at: 1400,
+          start(sim) { sim.env.p21Stuck = Math.round(sim.out.P21 * 100) / 100; sim.env.houseLeak = 0.005; },
+          update(sim, t) { if (t > 220) sim.env.houseLeak = 0; },
+          reveal: t => o().P_top < 0.6 || t > 260,
+          message: { from: 'Жилец, кв. 108 (9 этаж)', text: 'Батареи наверху холодные, в трубах журчит, а у соседей снизу тепло.' },
+          extra: [{ at: 220, from: 'Сантехник', text: 'Нашли и устранили течь на стояке в подвале.' }],
+          resolved: () => pressureOk() && o().P_top >= 0.5, hold: 20, norm: 240, deadline: 900, lesson: 'makeup',
+          onDone(sim, lvl) { sim.env.p21Stuck = null; lvl.toast('Метролог', 'Манометр P21 на всасе был неисправен — заменен.'); },
+          fix: 'Манометр P21 «застыл». Давление на всасе можно оценить по P11 − 1.8 бар и по давлению на 9 этаже. Подпитать по этим приборам до ≈ 3.5 бар.'
+        }
+      ]
     }
   ];
 
-  // Будущие уровни (нужно новое оборудование)
-  const SOON = [
-    { n: 4, title: 'Отказы оборудования', difficulty: 'Очень сложный', short: 'Отказ привода КЗР, резервный насос, прорыв радиатора.' },
-    { n: 5, title: 'Тяжелая смена', difficulty: 'Эксперт', short: 'Мороз −25 °C при недодаче сети, пропуск задвижки, отказ манометра.' }
-  ];
+  // Будущие уровни
+  const SOON = [];
 
   // ---------------------------------------------------------------------------
   // Мягкие ошибки и критические аварии
@@ -181,15 +272,18 @@
     vent_spray: { pts: 3, after: 8, text: 'Воздушник открыт под давлением дольше 8 с' },
     relief: { pts: 15, text: 'Срабатывание предохранительного клапана' },
     cavitation: { pts: 10, text: 'Кавитация насоса (пуск при низком давлении)' },
-    no_circulation: { pts: 10, text: 'Подача тепла без циркуляции в доме' },
-    false_report: { pts: 5, text: 'Ложный вызов диспетчера' }
+    no_circulation: { pts: 10, after: 10, text: 'Подача тепла без циркуляции в доме дольше 10 с' },
+    false_report: { pts: 5, text: 'Ложный вызов диспетчера' },
+    pump_deadhead: { pts: 8, after: 10, text: 'Насос работал на закрытую арматуру дольше 10 с' },
+    house_vent_spray: { pts: 3, after: 8, text: 'Вода из воздушников 9 этажа дольше 8 с' }
   };
-  const RATE = { t2: { per: 10, cap: 20, text: 'Обратка T2 выше графика (−1 за 10 с)' }, room: { per: 20, cap: 20, text: 'Холодно или душно в квартирах (−1 за 20 с)' } };
+  const RATE = { t2: { per: 10, cap: 20, text: 'Обратка T2 выше графика (−1 за 10 с)' }, room: { per: 20, cap: 20, text: 'Холодно или душно в квартирах при T11 вне графика (−1 за 20 с)' }, flood: { per: 5, cap: 30, text: 'Залив квартиры (−1 за 5 с)' } };
 
   function criticalCheck(diag, st) {
     const out = o();
     if (out.cavTime > 5) return { title: 'Насос разрушен кавитацией', text: 'Насос больше 5 секунд работал при давлении на всасе ниже 1.5 бар. Пузырьки пара разрушили рабочее колесо — дом без отопления до замены насоса.', lesson: 'pumpstart' };
-    if (out.noCircTime > 20) return { title: 'Перегрев ПТО без циркуляции', text: 'Сетевая вода больше 20 секунд шла в теплообменник при стоящей домовой воде. Вода в ПТО вскипала, на пластинах выпала накипь, уплотнения перегреты.', lesson: 'shutdown' };
+    if (out.floodTime > 240) return { title: 'Затоплены квартиры', text: 'Больше 4 минут вода из системы отопления заливала квартиры. Ущерб жильцам, отключение подъезда, разбирательство. При прорыве первым делом отсекают дом (или стояк) и сбрасывают давление.', lesson: 'makeup' };
+    if (out.noCircTime > 30) return { title: 'Перегрев ПТО без циркуляции', text: 'Сетевая вода больше 30 секунд шла в теплообменник при стоящей домовой воде. Вода в ПТО вскипала, на пластинах выпала накипь, уплотнения перегреты.', lesson: 'shutdown' };
     if (diag.some(a => a.id === 'strainer_pressure')) return { title: 'Грязевик вскрыт под давлением', text: 'Крышку фильтра сорвало струей горячей воды. На объекте — тяжелые ожоги. Вскрывать можно только отключенный, опорожненный и остывший участок.', lesson: 'strainer' };
     if (st.reliefTime > 20) return { title: 'Длительный сброс через ПК', text: 'Предохранительный клапан больше 20 секунд сбрасывал воду: причина не устранена. Клапан размыт, система теряет воду, верхние этажи завоздушиваются.', lesson: 'relief' };
     if (out.dryTopTime > 60) return { title: 'Оголение системы отопления', text: 'Больше минуты вода не доходила до верхних этажей. Стояки завоздушены, в мороз возможна разморозка радиаторов.', lesson: 'makeup' };
@@ -236,7 +330,7 @@
     lv.setup();
     P.step(sim, 0);
     t0 = sim.state.time;
-    incs = lv.incidents.map(d => ({ d, at: d.at, state: d.manual ? 'idle' : 'pending', startT: null, revealT: null, actT: null, okSince: null, doneT: null, extrasShown: 0 }));
+    incs = lv.incidents.map(d => ({ d, at: d.at, state: d.manual ? 'idle' : 'pending', startT: null, repairT: 0, revealT: null, actT: null, okSince: null, doneT: null, extrasShown: 0 }));
     lastT = 0; timers = []; penalties = {}; rateAcc = { t2: 0, room: 0 }; st = { reliefTime: 0, hexOverTime: 0 };
     prevDiag = new Set(); prevControls = snapControls(); timeline = []; reports = 0; finished = false;
     $('levelToasts').innerHTML = '';
@@ -269,18 +363,25 @@
   const api = {
     schedule(delay, fn) { timers.push({ at: now() + delay, fn }); },
     toast(from, text) { toast(from, text); },
+    get dt() { return lastDt; },
     activate(id) { const i = incs.find(x => x.d.id === id); if (i && i.state === 'idle') { i.state = 'pending'; i.at = now(); } }
   };
 
   // ---------------------------------------------------------------------------
   // Отслеживание действий оператора
   // ---------------------------------------------------------------------------
-  const CTL_KEYS = ['V1cmd', 'V2cmd', 'KZR', 'PUMP', 'MAKEUP', 'DRAIN', 'NET_DRAIN', 'NET_VENT', 'V1tag', 'V2tag'];
+  const CTL_KEYS = ['V1cmd', 'V2cmd', 'KZRcmd', 'KZR_MANUAL', 'PUMP', 'PUMP2', 'PUMP1_ISO', 'PUMP2_ISO', 'MAKEUP', 'DRAIN',
+    'NET_DRAIN', 'NET_VENT', 'V1tag', 'V2tag', 'HOUSE_SUP', 'HOUSE_RET', 'HOUSE_DRAIN', 'HOUSE_VENT'];
   function snapControls() { const s = {}; CTL_KEYS.forEach(k => { s[k] = sim.controls[k]; }); s.clean = sim.controls.strainerFouling; return s; }
   function describe(k, v) {
     const map = {
       V1cmd: v === 'open' ? 'V1: открыть' : 'V1: закрыть', V2cmd: v === 'open' ? 'V2: открыть' : 'V2: закрыть',
-      KZR: `КЗР → ${Math.round(v)} %`, PUMP: v ? 'Насос: пуск' : 'Насос: стоп', MAKEUP: `Подпитка → ${Math.round(v)} %`,
+      KZRcmd: `КЗР → ${Math.round(v)} %`, KZR_MANUAL: v ? 'КЗР: ручной режим' : 'КЗР: автомат',
+      PUMP: v ? 'Н1: пуск' : 'Н1: стоп', PUMP2: v ? 'Н2: пуск' : 'Н2: стоп',
+      PUMP1_ISO: v ? 'Краны Н1: открыть' : 'Краны Н1: закрыть', PUMP2_ISO: v ? 'Краны Н2: открыть' : 'Краны Н2: закрыть',
+      HOUSE_SUP: v ? 'Кд1: открыть' : 'Кд1: закрыть', HOUSE_RET: v ? 'Кд2: открыть' : 'Кд2: закрыть',
+      HOUSE_DRAIN: v ? 'Спуск стояков: открыть' : 'Спуск стояков: закрыть', HOUSE_VENT: v ? 'Воздушники 9 эт.: открыть' : 'Воздушники 9 эт.: закрыть',
+      MAKEUP: `Подпитка → ${Math.round(v)} %`,
       DRAIN: v ? 'Дренаж дома: открыть' : 'Дренаж дома: закрыть', NET_DRAIN: v ? 'Дренаж сети: открыть' : 'Дренаж сети: закрыть',
       NET_VENT: v ? 'Воздушник: открыть' : 'Воздушник: закрыть', V1tag: v ? 'Плакат на V1' : 'Плакат с V1 снят', V2tag: v ? 'Плакат на V2' : 'Плакат с V2 снят'
     };
@@ -292,7 +393,7 @@
     CTL_KEYS.forEach(k => {
       if (cur[k] !== prevControls[k]) {
         // Остановка насоса защитой — не действие оператора
-        if (k === 'PUMP' && !cur[k] && sim.state.pumpTripped) return;
+        if ((k === 'PUMP' || k === 'PUMP2') && !cur[k] && sim.state.pumpTripped) return;
         acted = true;
         const last = timeline[timeline.length - 1];
         const txt = describe(k, cur[k]);
@@ -309,11 +410,13 @@
   // Главный тик
   // ---------------------------------------------------------------------------
   let lastT = 0;
+  let lastDt = 0;
   function tick() {
     if (!level || finished) return;
     const t = now();
     const dt = Math.max(0, t - lastT);
     lastT = t;
+    lastDt = dt;
     trackActions();
 
     // отложенные действия
@@ -329,7 +432,7 @@
       }
       if (i.state !== 'active' && i.state !== 'done') return;
       const ti = t - i.startT;
-      if (d.update) d.update(sim, ti);
+      if (d.update) d.update(sim, ti, i, api);
       if (i.state === 'done') return;
       if (i.revealT === null && (d.silent || !d.reveal || d.reveal(ti))) {
         i.revealT = d.silent ? i.startT : t;
@@ -342,7 +445,10 @@
       const ok = ti >= (d.minTime || 0) && d.resolved() && (!d.needsReport || i.reported);
       if (ok) {
         if (i.okSince === null) i.okSince = t;
-        if (t - i.okSince >= d.hold) { i.state = 'done'; i.doneT = i.okSince; note('ok', `Решено: ${d.title}`); app.log(`✔ Решено: ${d.title}`, 'ok'); }
+        if (t - i.okSince >= d.hold) {
+          i.state = 'done'; i.doneT = i.okSince; note('ok', `Решено: ${d.title}`); app.log(`✔ Решено: ${d.title}`, 'ok');
+          if (d.onDone) d.onDone(sim, api);
+        }
       } else i.okSince = null;
       if (i.state === 'active' && t - i.revealT > d.deadline) { i.state = 'failed'; note('err', `Не решено в срок: ${d.title}`); app.log(`✖ Не решено в срок: ${d.title}`, 'alarm'); }
     });
@@ -363,8 +469,12 @@
       } else if (ids.has(id) && !prevDiag.has(id) && !excused(id)) addPenalty(id);
     });
     prevDiag = ids;
-    if (ids.has('t2_high')) rateAcc.t2 += dt;
-    if (ids.has('room')) rateAcc.room += dt;
+    // Пока сеть недодает температуру, дом прогреть нельзя — за холод и обратку не штрафуем
+    const netShort = sim.env.T1 !== null && sim.env.T1 < P.graphT1(sim.env.T_out) - 5;
+    if (ids.has('t2_high') && !netShort) rateAcc.t2 += dt;
+    // Холод в квартирах штрафуем, только когда и сам ИТП не держит график (здание инерционно, догоняет само)
+    if (ids.has('room') && ids.has('t11_range') && !netShort) rateAcc.room += dt;
+    if (ids.has('flood')) rateAcc.flood = (rateAcc.flood || 0) + dt;
     st.reliefTime = o().reliefOpen ? st.reliefTime + dt : 0;
     st.hexOverTime = ids.has('hex_overpressure') ? st.hexOverTime + dt : 0;
 
@@ -375,7 +485,7 @@
     prevControls = snapControls();
     renderHud();
     // конец смены: все инциденты закрыты
-    if (incs.every(i => i.state === 'done' || i.state === 'failed' || i.state === 'idle') && timers.length === 0) {
+    if (incs.every(i => i.state === 'done' || i.state === 'failed' || i.state === 'idle' || (i.d.optional && i.revealT === null)) && timers.length === 0) {
       if (!st.endAt) st.endAt = t + 20;
       if (t >= st.endAt) finish();
     } else st.endAt = null;
@@ -398,7 +508,7 @@
   function report() {
     if (!level || finished) return;
     reports += 1;
-    const target = incs.find(i => i.d.needsReport && i.state === 'active' && !i.reported);
+    const target = incs.find(i => i.d.needsReport && i.state === 'active' && !i.reported && i.revealT !== null);
     note('act', 'Сообщение диспетчеру теплосети');
     if (target) {
       target.reported = true;
@@ -423,7 +533,7 @@
   }
 
   function computeResult() {
-    const rows = incs.filter(i => i.state !== 'idle').map(i => ({ i, s: incidentScore(i) }));
+    const rows = incs.filter(i => i.state !== 'idle' && !(i.d.optional && i.revealT === null)).map(i => ({ i, s: incidentScore(i) }));
     const avg = rows.length ? rows.reduce((a, r) => a + r.s.total, 0) / rows.length : 0;
     const pen = [];
     Object.values(penalties).forEach(p => pen.push({ text: `${p.text} × ${p.count}`, pts: p.pts * p.count }));
@@ -431,6 +541,8 @@
     const room = Math.min(RATE.room.cap, Math.floor(rateAcc.room / RATE.room.per));
     if (t2) pen.push({ text: RATE.t2.text, pts: t2 });
     if (room) pen.push({ text: RATE.room.text, pts: room });
+    const flood = Math.min(RATE.flood.cap, Math.floor((rateAcc.flood || 0) / RATE.flood.per));
+    if (flood) pen.push({ text: RATE.flood.text, pts: flood });
     const totalPen = pen.reduce((a, p) => a + p.pts, 0);
     const score = Math.max(0, Math.min(100, Math.round(avg - totalPen)));
     const stars = score >= 90 ? 3 : score >= 75 ? 2 : score >= 60 ? 1 : 0;

@@ -60,7 +60,9 @@
         <p class="mt-2">Больше открыт → больше расход G1 → выше T11 в доме, но и выше температура обратки T2 (штраф теплосети).
         Меньше открыт → недотоп.</p>
         <p class="mt-2">В реальном ИТП им управляет погодный контроллер по датчику наружного воздуха и T11. Здесь вы — контроллер:
-        рабочая зона около 45…50 %.</p>`
+        рабочая зона около 45…50 %.</p>
+        <p class="mt-2">Положение клапана меняет <b>электропривод</b> (буква M на схеме). Если привод отказал (✕), клапан стоит в последнем положении —
+        тогда включают <b>ручной режим</b> (Р) и крутят клапан штурвалом. Штурвалом клапан движется медленнее.</p>`
     },
     hex: {
       icon: '♨️', title: 'ПТО — пластинчатый теплообменник',
@@ -73,12 +75,24 @@
         <p class="mt-2">Число в центре — текущая тепловая мощность <b>Q, кВт</b>. Если домовая вода не циркулирует, пластины
         перегреваются до температуры сети и обрастают накипью.</p>`
     },
+    house: {
+      icon: '🚿', title: 'Краны дома, спуск стояков и воздушники',
+      body: `<p><b>Кд1 и Кд2</b> — отсекающие краны на подаче в дом и на обратке из дома. Ими дом отделяют от ИТП, например при
+        прорыве радиатора или ремонте стояков. Пока хотя бы один кран открыт, давление в доме и в ИТП общее; циркуляция идет только при обоих открытых.</p>
+        <p class="mt-2"><b>Спуск стояков</b> сбрасывает давление и сливает воду из дома в канализацию. <b>Воздушники 9 этажа</b> при сливе впускают воздух
+        (без них вода уходит в 10 раз медленнее), а при заполнении выпускают его (иначе воздушная пробка — заполнится только 90 %).</p>
+        <p class="mt-2">Заполняют дом снизу подпиткой через открытый кран обратки, с открытыми воздушниками; когда из них пошла вода — закрывают
+        и поднимают давление до ≈ 3.5 бар. Насос пускают только в полностью заполненную систему.</p>`
+    },
     pump: {
-      icon: '🌀', title: 'Циркуляционный насос',
+      icon: '🌀', title: 'Циркуляционные насосы Н1 и Н2',
       body: `<p>Крутит воду по стоякам и радиаторам дома. Важно: насос <b>не создает статического давления, а только перепад</b>
         (здесь 1.8 бар): P11 = P21 + 1.8.</p>
         <p class="mt-2">Если давление на всасе P21 упадет ниже 1.5 бар — начнется <b>кавитация</b>: вода вскипает на лопатках колеса и
-        разрушает его, циркуляция срывается.</p>`
+        разрушает его, циркуляция срывается.</p>
+        <p class="mt-2">Насосы стоят парой: <b>Н1 — рабочий, Н2 — резервный</b>. У каждого — краны до и после (на схеме один значок),
+        чтобы снять насос в ремонт, не сливая систему. При аварии рабочего: пустить резервный, остановить и отсечь кранами неисправный.
+        Насос, работающий на закрытые краны, гоняет воду «сам в себе» — она греется, уплотнения изнашиваются.</p>`
     },
     makeup: {
       icon: '💧', title: 'Линия подпитки',
@@ -147,10 +161,10 @@
     { x: 22, y: 362, w: 94, rows: [['T2', 'T2', '°C', 1], ['P2', 'P2', 'бар', 2]] },
     { x: 560, y: 16, w: 100, rows: [['T11', 'T11', '°C', 1], ['G2', 'G2', 'т/ч', 1]] },
     { x: 532, y: 456, w: 88, rows: [['P11', 'P11', 'бар', 2]] },
-    { x: 664, y: 456, w: 88, rows: [['P21', 'P21', 'бар', 2]] },
+    { x: 664, y: 456, w: 88, rows: [['P21', 'P21_disp', 'бар', 2]] },
     { x: 736, y: 376, w: 88, rows: [['T21', 'T21', '°C', 1]] },
     { x: 806, y: 16, w: 120, rows: [['P подача', 'P_house_supply', 'бар', 2]] },
-    { x: 694, y: 188, w: 128, rows: [['P 9 эт.', 'P_top', 'бар', 2], ['ΔP дома', 'dP_house', 'бар', 2], ['T кварт.', 'T_room', '°C', 1]] }
+    { x: 694, y: 188, w: 128, rows: [['P 9 эт.', 'P_top', 'бар', 2], ['ΔP дома', 'dP_house', 'бар', 2], ['P низ дома', 'P_house', 'бар', 2], ['T кварт.', 'T_room', '°C', 1]] }
   ];
   const tagEls = {};
 
@@ -190,7 +204,7 @@
       case 'T_room': return (o.T_room < C.ROOM_COLD || o.T_room > C.ROOM_HOT) ? 'warn' : '';
       case 'P_hex_net': return (sim.controls.V2 < C.CLOSED_PCT && o.P_hex_net > 6.0) ? 'bad' : '';
       case 'P_after_strainer': return o.dP_strainer > C.STRAINER_DP_WARN ? 'warn' : '';
-      case 'P21': return (sim.controls.PUMP && o.P21 < C.P21_CAVITATION) ? 'bad' : (o.P21 < 3.0 || o.P21 > 4.0 ? 'warn' : '');
+      case 'P21_disp': return (sim.controls.PUMP && o.P21 < C.P21_CAVITATION) ? 'bad' : (o.P21 < 3.0 || o.P21 > 4.0 ? 'warn' : '');
       case 'P11': return o.reliefOpen ? 'bad' : '';
       case 'P_top': return o.P_top < C.TOP_FLOOR_MIN_P ? (o.topFloorDry ? 'bad' : 'warn') : '';
       case 'dP_house': return (sim.controls.PUMP && o.dP_house < 0.1) ? 'warn' : '';
@@ -294,17 +308,34 @@
       row.querySelector('input').value = val;
       row.querySelector('[data-val]').textContent = Math.round(val) + '%';
     });
-    const pb = $('pumpBtn');
-    pb.textContent = sim.controls.PUMP ? '● ВКЛЮЧЕН' : '○ ВЫКЛЮЧЕН';
-    pb.className = 'py-2 rounded text-sm font-semibold border ' +
-      (sim.controls.PUMP ? 'bg-green-700/40 border-green-500 text-green-200' : 'bg-slate-800 border-slate-600 text-slate-400');
-    toggleBtn($('netDrainBtn'), sim.controls.NET_DRAIN, '▼ ОТКРЫТ');
-    toggleBtn($('netVentBtn'), sim.controls.NET_VENT, '▲ ОТКРЫТ');
-    const db = $('drainBtn');
-    db.textContent = sim.controls.DRAIN ? '▼ ОТКРЫТ' : 'ЗАКРЫТ';
-    db.className = 'py-2 rounded text-sm font-semibold border ' +
-      (sim.controls.DRAIN ? 'bg-amber-700/40 border-amber-500 text-amber-200' : 'bg-slate-800 border-slate-600 text-slate-400');
+    renderToggles();
   }
+
+  // Переключатели: <button data-toggle="КЛЮЧ" data-on="…" data-off="…" data-tone="green|amber|slate" data-inverse="1">
+  const TONES = {
+    green: 'bg-green-700/40 border-green-500 text-green-200',
+    amber: 'bg-amber-700/40 border-amber-500 text-amber-200',
+    red: 'bg-red-800/50 border-red-500 text-red-100',
+    off: 'bg-slate-800 border-slate-600 text-slate-400'
+  };
+  const toggleEls = Array.from(document.querySelectorAll('[data-toggle]'));
+  function renderToggles() {
+    toggleEls.forEach(b => {
+      const on = !!sim.controls[b.dataset.toggle];
+      b.textContent = on ? b.dataset.on : b.dataset.off;
+      // «Инверсные» (краны, нормально открытые): закрытое состояние подсвечивается красным
+      const tone = b.dataset.inverse ? (on ? 'off' : 'red') : (on ? b.dataset.tone : 'off');
+      b.className = b.className.replace(/\b(bg|border|text)-[a-z]+-[0-9]+(\/[0-9]+)?\b/g, '').trim() + ' ' + TONES[tone];
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  toggleEls.forEach(b => b.addEventListener('click', () => {
+    const k = b.dataset.toggle;
+    sim.controls[k] = !sim.controls[k];
+    if ((k === 'PUMP' || k === 'PUMP2') && sim.controls[k]) sim.state.pumpTripped = false;
+    log(`Оператор: ${b.dataset.label} — ${(sim.controls[k] ? b.dataset.on : b.dataset.off).replace(/[●○▼▲✋]\s?/g, '').toLowerCase()}`, 'op');
+    renderToggles();
+  }));
 
   ctlRows.forEach(row => {
     const key = row.dataset.ctl;
@@ -314,30 +345,9 @@
     });
   });
   document.querySelectorAll('.kzr-step').forEach(b => b.addEventListener('click', () => {
-    sim.controls.KZR = Math.min(100, Math.max(0, sim.controls.KZR + Number(b.dataset.step)));
+    sim.controls.KZRcmd = Math.min(100, Math.max(0, sim.controls.KZRcmd + Number(b.dataset.step)));
     syncControlsUI();
   }));
-  $('pumpBtn').addEventListener('click', () => {
-    sim.controls.PUMP = !sim.controls.PUMP;
-    if (sim.controls.PUMP) sim.state.pumpTripped = false;
-    log(sim.controls.PUMP ? 'Оператор: насос включен' : 'Оператор: насос выключен', 'op');
-    syncControlsUI();
-  });
-  $('drainBtn').addEventListener('click', () => {
-    sim.controls.DRAIN = !sim.controls.DRAIN;
-    log(sim.controls.DRAIN ? 'Оператор: открыт дренаж' : 'Оператор: дренаж закрыт', 'op');
-    syncControlsUI();
-  });
-  $('netDrainBtn').addEventListener('click', () => {
-    sim.controls.NET_DRAIN = !sim.controls.NET_DRAIN;
-    log(sim.controls.NET_DRAIN ? 'Оператор: открыт дренаж сети' : 'Оператор: дренаж сети закрыт', 'op');
-    syncControlsUI();
-  });
-  $('netVentBtn').addEventListener('click', () => {
-    sim.controls.NET_VENT = !sim.controls.NET_VENT;
-    log(sim.controls.NET_VENT ? 'Оператор: открыт воздушник' : 'Оператор: воздушник закрыт', 'op');
-    syncControlsUI();
-  });
   $('foulBtn').addEventListener('click', () => {
     sim.controls.strainerFouling = Math.min(90, sim.controls.strainerFouling + 10);
     log(`Инструктор: грязевик засорен до ${Math.round(sim.controls.strainerFouling)} %`, 'op');
@@ -506,6 +516,12 @@
     }
     $('txtQ').textContent = Math.round(o.Q);
     $('txtKZR').textContent = Math.round(c.KZR) + '%';
+    const mode = $('txtKZRmode');
+    if (c.KZR_MANUAL) { mode.textContent = 'Р'; mode.style.fill = '#fbbf24'; }
+    else if (o.kzrFail) { mode.textContent = '✕'; mode.style.fill = '#ef4444'; }
+    else { mode.textContent = 'M'; mode.style.fill = '#e2f3ff'; }
+    $('kzrPos').textContent = `положение ${Math.round(c.KZR)} %` + (o.kzrFail && !c.KZR_MANUAL ? ' · привод не отвечает' : c.KZR_MANUAL ? ' · штурвал' : '');
+    renderToggles();
 
     // Цвета труб по температуре
     // Сетевой участок: пустые трубы — серые, частично заполненные — полупрозрачные
@@ -575,16 +591,37 @@
     setValve('vDR', c.DRAIN ? 100 : 0);
     $('strainerDirt').setAttribute('width', (30 * c.strainerFouling / 90).toFixed(1));
 
-    // Насос
-    const rotor = $('pumpRotor');
-    rotor.classList.toggle('spin', o.pumpRunning);
-    const body = $('pumpBody');
-    if (o.cavitation) { body.setAttribute('stroke', '#ef4444'); body.setAttribute('fill', '#3a1010'); }
-    else if (o.pumpRunning) { body.setAttribute('stroke', '#22c55e'); body.setAttribute('fill', '#0f2a1a'); }
-    else { body.setAttribute('stroke', '#64748b'); body.setAttribute('fill', '#111827'); }
+    // Насосы
+    const env = sim.env;
+    [['pumpBody', 'pumpRotor', c.PUMP, env.pump1Fail, o.p1Running], ['pump2Body', 'pump2Rotor', c.PUMP2, env.pump2Fail, o.p2Running]].forEach(([b, r, on, fail, run]) => {
+      $(r).classList.toggle('spin', !!run);
+      const body = $(b);
+      if (on && fail) { body.setAttribute('stroke', '#ef4444'); body.setAttribute('fill', '#3a1010'); }
+      else if (on && o.cavitation) { body.setAttribute('stroke', '#ef4444'); body.setAttribute('fill', '#3a1010'); }
+      else if (run) { body.setAttribute('stroke', '#22c55e'); body.setAttribute('fill', '#0f2a1a'); }
+      else if (on) { body.setAttribute('stroke', '#f59e0b'); body.setAttribute('fill', '#2a1d08'); }
+      else { body.setAttribute('stroke', '#64748b'); body.setAttribute('fill', '#111827'); }
+    });
+    setValve('vISO1', c.PUMP1_ISO ? 100 : 0);
+    setValve('vISO2', c.PUMP2_ISO ? 100 : 0);
+    $('pipeH2').style.stroke = tempColor(o.T21);
+    setFlow('flowH2', o.p2Running && o.G2 > 0 ? o.G2 : 0, 4);
+
+    // Дом: краны, спуск, воздушники, заполнение
+    setValve('vHS', c.HOUSE_SUP ? 100 : 0);
+    setValve('vHR', c.HOUSE_RET ? 100 : 0);
+    setValve('vHD', c.HOUSE_DRAIN ? 100 : 0);
+    setValve('vHV', c.HOUSE_VENT ? 100 : 0);
+    $('pipeHD').style.stroke = c.HOUSE_DRAIN ? '#f59e0b' : '#3b4a60';
+    $('pipeHV').style.stroke = c.HOUSE_VENT ? '#38bdf8' : '#3b4a60';
+    setFlow('flowHD', o.houseDrainFlow > 0 || (c.HOUSE_DRAIN && o.houseFill > 0 && o.P_house <= 0.01) ? 0.6 : 0, 30);
+    setFlow('flowHV', c.HOUSE_VENT && (o.houseFilling || o.P_house > 0.05 || (c.HOUSE_DRAIN && o.houseFill > 0)) ? 0.5 : 0, 30);
+    $('houseFillBar').style.width = (o.houseFill * 100).toFixed(0) + '%';
+    $('houseFillTxt').textContent = `Заполнение дома ${Math.round(o.houseFill * 100)} % · P внизу дома ${fmt(o.P_house, 2)} бар` +
+      (o.floodFlow > 0 ? ' · ТЕЧЬ В КВАРТИРУ' : '');
 
     // Окна дома — «самочувствие» жильцов по T11 в доме (с учетом циркуляции)
-    const winColor = o.T_room < C.ROOM_COLD ? '#7dd3fc' : o.T_room > C.ROOM_HOT ? '#f87171' : '#f5c26b';
+    const winColor = o.houseFill < 0.999 ? '#334155' : o.T_room < C.ROOM_COLD ? '#7dd3fc' : o.T_room > C.ROOM_HOT ? '#f87171' : '#f5c26b';
     document.querySelectorAll('#houseWindows .win').forEach(w => w.setAttribute('fill', winColor));
 
     // Сводка
@@ -598,8 +635,9 @@
       ['T21 обратка из дома', fmt(o.T21, 1) + ' °C'],
       ['T2 обратка в сеть', fmt(o.T2, 1) + ' °C'],
       ['ΔP грязевика', fmt(o.dP_strainer, 2) + ' бар'],
-      ['P21 всас / P11 нагнет.', fmt(o.P21, 2) + ' / ' + fmt(o.P11, 2)],
-      ['ΔP насоса', fmt(o.dP_pump, 2) + ' бар'],
+      ['КЗР задание / положение', Math.round(c.KZRcmd) + ' / ' + Math.round(c.KZR) + ' %' + (c.KZR_MANUAL ? ' (ручн.)' : '')],
+      ['P21 всас / P11 нагнет.', fmt(o.P21_disp, 2) + ' / ' + fmt(o.P11, 2)],
+      ['ΔP насоса (P11 − P21)', fmt(o.P11 - o.P21_disp, 2) + ' бар'],
       ['ΔP в ПТО (дом)', fmt(o.dP_hex_sec, 2) + ' бар'],
       ['P подача / обратка дома', fmt(o.P_house_supply, 2) + ' / ' + fmt(o.P_house_return, 2)],
       ['ΔP стояков дома', fmt(o.dP_house, 2) + ' бар'],

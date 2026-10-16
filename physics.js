@@ -68,6 +68,11 @@
     ROOM_COLD: 18.0,       // °C, ниже — жалобы на холод
     ROOM_HOT: 24.0,        // °C, выше — жалобы на духоту
     PUMP_TRIP_S: 3.0,      // с, задержка защиты насоса по низкому давлению на всасе
+    KZR_RATE: 6.0,         // %/с, скорость электропривода КЗР
+    KZR_MANUAL_RATE: 1.5,  // %/с, ручной штурвал КЗР
+    K_HOUSE_DRAIN: 0.15,   // 1/с, слив системы отопления дома через спускники стояков
+    HOUSE_EMPTY_RATE: 0.04,// 1/с, опорожнение дома при открытых воздушниках (без них — в 10 раз медленнее)
+    HOUSE_FILL_K: 0.03,    // заполнение дома: доля объема на 1 бар/с подпитки
 
     // Нормативы
     T11_TARGET: 75.0,
@@ -115,7 +120,13 @@
       P2: C.P2,
       houseLeak: 0,           // бар/с при 3.5 бар — утечка в системе отопления дома
       foulRate: 0,            // %/с — скорость засорения грязевика
-      pumpProtection: false   // защита насоса по низкому давлению (останов через 3 с)
+      pumpProtection: false,  // защита насоса по низкому давлению (останов через 3 с)
+      kzrFail: false,         // отказ электропривода КЗР
+      pump1Fail: false,       // авария насоса Н1
+      pump2Fail: false,       // авария насоса Н2
+      burst: 0,               // бар/с при 3.5 бар — прорыв радиатора (вода в квартиру)
+      v1Passing: 0,           // 1/с — закрытая V1 пропускает воду из теплосети
+      p21Stuck: null          // число — манометр P21 «залип» на этом значении
     };
   }
 
@@ -140,10 +151,19 @@
       V1: 100,               // фактическое положение затвора, %
       V1cmd: 'open',         // команда оператора: 'open' | 'close'
       strainerFouling: 0,
-      KZR: C.NOMINAL_KZR,
+      KZR: C.NOMINAL_KZR,    // фактическое положение КЗР, %
+      KZRcmd: C.NOMINAL_KZR, // задание КЗР (с пульта или штурвалом в ручном режиме)
+      KZR_MANUAL: false,     // ручной режим КЗР (штурвал, привод отключен)
       V2: 100,
       V2cmd: 'open',
-      PUMP: true,
+      PUMP: true,            // насос Н1 (рабочий)
+      PUMP2: false,          // насос Н2 (резервный)
+      PUMP1_ISO: true,       // краны до/после Н1 открыты
+      PUMP2_ISO: true,       // краны до/после Н2 открыты
+      HOUSE_SUP: true,       // кран на подаче в дом
+      HOUSE_RET: true,       // кран на обратке из дома
+      HOUSE_DRAIN: false,    // спуск воды из системы отопления дома (спускники стояков)
+      HOUSE_VENT: false,     // воздушники верхнего этажа
       MAKEUP: 0,
       DRAIN: false,
       NET_DRAIN: false,      // дренаж сетевого участка (нижняя точка, перед V2)
@@ -174,12 +194,19 @@
       T_room: C.T_ROOM_SET,
       lowPTime: 0, cavTime: 0, noCircTime: 0, dryTopTime: 0,
       pumpTripped: false,
+      houseFill: 1, P_house: C.P21_DEFAULT, houseConnPrev: true, floodTime: 0, floodVolume: 0,
       nodes: [C.P1, C.P1, C.P1, C.P2, C.P2, C.P2],
       fill: [1, 1, 1, 1, 1, 1],
       strainerAlarmUntil: -1,
       reliefOpen: false
     };
     settle(sim, 180);
+  }
+
+  /** Установить КЗР сразу (задание и положение) — для сценариев и уроков. */
+  function setKZR(sim, v) {
+    sim.controls.KZR = v;
+    sim.controls.KZRcmd = v;
   }
 
   /** Прогнать модель вперед без продвижения часов симуляции (для установления режима). */
@@ -223,6 +250,7 @@
     let ventSpray = false;   // воздушник открыт на участке под давлением сети
     let netDrainFlow = 0;
     let netVentFlow = 0;
+    let v1Leak = false;
     const segInfo = segs.map(seg => {
       const fromP1 = seg[0] === 1 && open[0];
       const fromP2 = seg[seg.length - 1] === 4 && open[4];
@@ -251,6 +279,12 @@
         p = src * Math.pow(f, 8);
         if (f >= 1 && hasVent) { ventSpray = true; netVentFlow = 1; }
       } else {
+        // Закрытая V1 пропускает: вода из теплосети просачивается в отсеченный участок
+        if (env.v1Passing > 0 && seg[0] === 1 && !open[0]) {
+          p += env.v1Passing * (P1 - p) * dt;
+          if (f < 1) f = Math.min(1, f + env.v1Passing * 2 * dt);
+          v1Leak = true;
+        }
         // Отсеченный участок: давление заперто, пока его не сбросить дренажом или воздушником.
         if (hasDrain || hasVent) {
           if (p > 0) {
@@ -289,7 +323,7 @@
     const P_hex_net = G1 > 0 ? (nodes[3] + nodes[4]) / 2 : nodes[3];
     return {
       kv, kvEq, G1, nodes, P_after_strainer: nodes[2], P_hex_net,
-      segs: segInfo, drainLeak, ventSpray, netDrainFlow, netVentFlow
+      segs: segInfo, drainLeak, ventSpray, netDrainFlow, netVentFlow, v1Leak
     };
   }
 
@@ -335,12 +369,29 @@
       c[k] = Math.abs(d) <= travel ? target : c[k] + Math.sign(d) * travel;
     });
 
+    // КЗР: привод (или штурвал в ручном режиме) ведет клапан к заданию. При отказе привода клапан стоит.
+    if (c.KZRcmd === undefined) c.KZRcmd = c.KZR;
+    if (!env.kzrFail || c.KZR_MANUAL) {
+      const rate = (c.KZR_MANUAL ? C.KZR_MANUAL_RATE : C.KZR_RATE) * dt;
+      const d = c.KZRcmd - c.KZR;
+      c.KZR = Math.abs(d) <= rate ? c.KZRcmd : c.KZR + Math.sign(d) * rate;
+    }
+
     // 1. Сетевой контур
     const prim = solvePrimary(c, s, dt, env);
     s.nodes = prim.nodes;
     const G1 = prim.G1;
 
     // 2. Внутренний контур: статическое давление P21
+    // Краны дома: хотя бы один открыт — давления ИТП и дома общие; оба открыты — возможна циркуляция.
+    const houseConn = c.HOUSE_SUP || c.HOUSE_RET;
+    const houseOpen = c.HOUSE_SUP && c.HOUSE_RET;
+    if (houseConn && !s.houseConnPrev) {
+      // объем дома много больше объема трубопроводов ИТП — давление определяет дом
+      s.P21 = s.houseFill >= 0.999 ? 0.9 * s.P_house + 0.1 * s.P21 : 0;
+    }
+    s.houseConnPrev = houseConn;
+
     // Подпитка берется из сетевой обратки до задвижки V2 (узел 4) через обратный клапан.
     const makeupSource = s.nodes[4];
     let dP21 = 0;
@@ -355,11 +406,37 @@
         seg4.nodes.forEach(n => { s.nodes[n] = Math.max(0, s.nodes[n] - 4 * makeupFlow * dt); });
       }
     }
-    // Утечка в системе отопления дома (сценарии уровней)
-    let leakFlow = 0;
-    if (env.houseLeak > 0 && s.P21 > 0) {
-      leakFlow = env.houseLeak * Math.sqrt(s.P21 / C.P21_DEFAULT);
-      dP21 -= leakFlow;
+
+    // Расход воды из дома: утечка, прорыв радиатора, спуск стояков
+    const Pb = houseConn ? s.P21 : s.P_house;            // давление внизу дома
+    let leakFlow = 0, floodFlow = 0, houseDrainFlow = 0;
+    if (Pb > 0) {
+      const k = Math.sqrt(Pb / C.P21_DEFAULT);
+      leakFlow = env.houseLeak * k;
+      floodFlow = env.burst * k;
+      if (c.HOUSE_DRAIN) houseDrainFlow = C.K_HOUSE_DRAIN * Pb + 0.02;
+    }
+    let houseVentRelief = 0;
+    if (!houseConn && c.HOUSE_VENT && s.P_house > 0) houseVentRelief = C.K_HOUSE_DRAIN * s.P_house + 0.02;
+    const houseOut = leakFlow + floodFlow + houseDrainFlow;
+    if (houseConn) dP21 -= houseOut;
+    else s.P_house = Math.max(0, s.P_house - (houseOut + houseVentRelief) * dt);
+    // Давление внизу ноль, а вода продолжает уходить — дом опорожняется
+    const PbNow = houseConn ? s.P21 + dP21 * dt : s.P_house;
+    const outlets = c.HOUSE_DRAIN || env.houseLeak > 0 || env.burst > 0;
+    if (PbNow <= 0.01 && outlets && s.houseFill > 0) {
+      const rate = C.HOUSE_EMPTY_RATE * (c.HOUSE_VENT ? 1 : 0.1) * (c.HOUSE_DRAIN ? 1 : 0.5);
+      s.houseFill = Math.max(0, s.houseFill - rate * dt);
+      if (env.burst > 0) floodFlow = Math.max(floodFlow, 0.02);
+    }
+    // Заполнение дома подпиткой: пока дом не полон, давление не растет
+    let houseFilling = false;
+    if (houseConn && s.houseFill < 0.999) {
+      const cap = c.HOUSE_VENT ? 1 : C.FILL_NO_VENT_CAP;   // без воздушников — воздушная пробка
+      if (s.houseFill < cap) s.houseFill = Math.min(cap, s.houseFill + makeupFlow * C.HOUSE_FILL_K * dt);
+      if (s.houseFill >= 0.999) s.houseFill = 1;
+      houseFilling = makeupFlow > 0;
+      if (s.houseFill < 0.999) { dP21 = 0; s.P21 = 0; }
     }
     let drainFlow = 0;
     if (c.DRAIN && s.P21 > C.DRAIN_P) {
@@ -367,8 +444,14 @@
       dP21 -= drainFlow;
     }
 
+    // Насосы Н1 (рабочий) и Н2 (резервный), каждый со своими кранами
+    const p1Avail = c.PUMP && !env.pump1Fail;
+    const p2Avail = c.PUMP2 && !env.pump2Fail;
+    const p1Flow = p1Avail && c.PUMP1_ISO;
+    const p2Flow = p2Avail && c.PUMP2_ISO;
+
     // Предохранительный клапан на подаче в дом (с гистерезисом)
-    const headBefore = (c.PUMP && s.P21 >= C.P21_CAVITATION) ? C.PUMP_HEAD : 0;
+    const headBefore = ((p1Flow || p2Flow) && s.P21 >= C.P21_CAVITATION) ? C.PUMP_HEAD : 0;
     const P11before = s.P21 + headBefore;
     if (P11before > C.RELIEF_SET) s.reliefOpen = true;
     else if (P11before < C.RELIEF_RESEAT) s.reliefOpen = false;
@@ -379,33 +462,44 @@
     }
 
     s.P21 = Math.max(0, s.P21 + dP21 * dt);
+    if (houseConn) s.P_house = s.P21;
 
-    // Защита насоса по низкому давлению на всасе: через PUMP_TRIP_S с останавливает насос
-    if (c.PUMP && s.P21 < C.P21_CAVITATION) s.lowPTime += dt; else s.lowPTime = 0;
-    if (env.pumpProtection && c.PUMP && s.lowPTime >= C.PUMP_TRIP_S) {
+    // Защита насосов по низкому давлению на всасе: через PUMP_TRIP_S с останавливает оба насоса
+    if ((p1Flow || p2Flow) && s.P21 < C.P21_CAVITATION) s.lowPTime += dt; else s.lowPTime = 0;
+    if (env.pumpProtection && (p1Flow || p2Flow) && s.lowPTime >= C.PUMP_TRIP_S) {
       c.PUMP = false;
-      c.KZR = 0;            // автоматика закрывает КЗР, чтобы не «запарить» ПТО без циркуляции
+      c.PUMP2 = false;
+      // автоматика закрывает КЗР, чтобы не «запарить» ПТО без циркуляции (если привод исправен)
+      if (!env.kzrFail && !c.KZR_MANUAL) c.KZRcmd = 0;
       s.pumpTripped = true;
       s.lowPTime = 0;
     }
 
-    // Насос
-    const cavitation = c.PUMP && s.P21 < C.P21_CAVITATION;
-    const pumpRunning = c.PUMP && !cavitation;
+    // Насосы
+    const q1 = c.PUMP && !env.pump1Fail && c.PUMP1_ISO;
+    const q2 = c.PUMP2 && !env.pump2Fail && c.PUMP2_ISO;
+    const cavitation = (q1 || q2) && s.P21 < C.P21_CAVITATION;
+    const pumpsOn = (q1 || q2) && !cavitation;
+    const houseFull = s.houseFill >= 0.999;
+    const pumpRunning = pumpsOn && houseOpen && houseFull;      // есть циркуляция через дом
+    const deadhead = (c.PUMP && !env.pump1Fail && !c.PUMP1_ISO) || (c.PUMP2 && !env.pump2Fail && !c.PUMP2_ISO) ||
+      (pumpsOn && (!houseOpen || !houseFull));
     const G2 = pumpRunning ? C.G2_NOMINAL : 0;
-    const P11 = s.P21 + (pumpRunning ? C.PUMP_HEAD : 0);
+    const P11 = s.P21 + (pumpsOn ? C.PUMP_HEAD : 0);
 
     // Давления по контуру дома. Напор насоса тратится на ПТО (0.5 бар) и на стояки (1.3 бар).
     const dP_hex_sec = pumpRunning ? C.HEX_SEC_DP : 0;
-    const P_house_supply = P11 - dP_hex_sec;           // подача в дом на выходе ИТП (1-й этаж)
-    const P_house_return = s.P21;                       // обратка из дома перед насосом
+    const P_house_supply = houseConn ? (pumpRunning ? P11 - dP_hex_sec : s.P21) : s.P_house; // подача в дом (1-й этаж)
+    const P_house_return = houseConn ? s.P21 : s.P_house;                                     // обратка из дома
     const dP_house = P_house_supply - P_house_return;   // располагаемый перепад на вводе в дом
     const P_hydro = C.HOUSE_HEIGHT_M * C.BAR_PER_M;     // гидростатика столба 27 м
-    // Верх стояков — середина пути по системе: среднее подачи и обратки минус столб воды
-    // Отрицательное значение означает, что столб воды не доходит до 9-го этажа (стояки опорожнились).
-    const P_top_raw = (P_house_supply + P_house_return) / 2 - P_hydro;
+    // Верх стояков — середина пути по системе: среднее подачи и обратки минус столб воды.
+    // Отрицательное значение — вода не доходит до 9-го этажа (стояки опорожнились).
+    const P_top_raw = houseFull ? (P_house_supply + P_house_return) / 2 - P_hydro : -1;
     const P_top = Math.max(0, P_top_raw);
     const topFloorDry = P_top_raw < 0;
+    s.floodTime = floodFlow > 0 ? s.floodTime + dt : s.floodTime;
+    s.floodVolume += floodFlow * dt;
 
     // 3. Теплообмен с инерцией (явный Эйлер)
     const W1 = G1 * C.C_WATER;
@@ -449,7 +543,7 @@
     // Счетчики длительности опасных режимов (для оценки на уровнях)
     s.cavTime = cavitation ? s.cavTime + dt : 0;
     s.noCircTime = (G1 > 1 && G2 === 0) ? s.noCircTime + dt : 0;
-    s.dryTopTime = topFloorDry ? s.dryTopTime + dt : 0;
+    s.dryTopTime = (topFloorDry && houseFull && houseOpen) ? s.dryTopTime + dt : 0;
 
     s.time += dt;
 
@@ -462,6 +556,11 @@
       T11_max: graphT11(env.T_out) + 5,
       T2_max: graphT2max(env.T_out),
       leakFlow, pumpTripped: s.pumpTripped,
+      P21_disp: env.p21Stuck === null || env.p21Stuck === undefined ? s.P21 : env.p21Stuck,
+      p1Running: q1 && pumpsOn, p2Running: q2 && pumpsOn, deadhead,
+      houseFill: s.houseFill, houseConn, houseOpen, P_house: houseConn ? s.P21 : s.P_house,
+      floodFlow, floodTime: s.floodTime, houseDrainFlow, houseFilling, v1Leak: prim.v1Leak,
+      kzrFail: env.kzrFail, KZRcmd: c.KZRcmd,
       cavTime: s.cavTime, noCircTime: s.noCircTime, dryTopTime: s.dryTopTime,
       T2: s.T2, T11: s.T11, T21: s.T21,
       G1, G2, W1, W2, Q,
@@ -539,19 +638,19 @@
         detail: `P в ПТО (сеть) = ${f2(o.P_hex_net)} бар`
       });
     }
-    if (c.PUMP && o.P21 < C.P21_CAVITATION) {
+    if (o.cavTime > 0) {
       list.push({
         id: 'cavitation', level: 'alarm',
         title: 'АВАРИЯ: Кавитация на всасе насоса!',
         text: 'Давление на всасе ниже 1.5 бар! Вода вскипает на лопатках рабочего колеса, разрушая насос. Срочно откройте кран подпитки до 3.5 бар или выключите насос!',
-        detail: `P21 = ${f2(o.P21)} бар`
+        detail: `P21 = ${f2(o.P21_disp)} бар`
       });
     }
-    if (!c.PUMP && o.G1 > 1.0) {
+    if (o.G2 === 0 && o.G1 > 1.0) {
       list.push({
         id: 'no_circulation', level: 'alarm',
         title: 'АВАРИЯ: Подача теплоносителя без циркуляции отопления!',
-        text: 'Насос отопления выключен, но сетевая вода идет в ПТО! Вторичный контур в теплообменнике перегревается до 95 °C, интенсивно выпадает накипь, а дом остывает.',
+        text: 'Циркуляции в доме нет (насос выключен, остановлен или дом отсечен), а сетевая вода идет в ПТО! Вторичный контур в теплообменнике перегревается до 95 °C, выпадает накипь, а дом остывает.',
         detail: `G1 = ${f1(o.G1)} т/ч, T11 = ${f1(o.T11)} °C`
       });
     }
@@ -560,7 +659,7 @@
         id: 'relief', level: 'alarm',
         title: 'АВАРИЯ: Сработал предохранительный клапан (> 6.0 бар)!',
         text: 'Превышено допустимое давление во внутреннем контуре! Закройте кран подпитки.',
-        detail: `P11 = ${f2(o.P11)} бар, P21 = ${f2(o.P21)} бар`
+        detail: `P11 = ${f2(o.P11)} бар, P21 = ${f2(o.P21_disp)} бар`
       });
     }
     if (o.P_top < C.TOP_FLOOR_MIN_P) {
@@ -569,8 +668,56 @@
         title: 'ПРЕДУПРЕЖДЕНИЕ: Завоздушивание верхних этажей!',
         text: 'Давления в контуре не хватает, чтобы держать воду до 9-го этажа с запасом. В верхних радиаторах скапливается воздух, они перестают греть. Поднимите статическое давление подпиткой до 3.5 бар.',
         detail: o.topFloorDry
-          ? `Вода не доходит до 9-го этажа: верхние стояки пустые. P21 = ${f2(o.P21)} бар`
-          : `P на 9 эт. = ${f2(o.P_top)} бар (нужно ≥ ${f2(C.TOP_FLOOR_MIN_P)}), P21 = ${f2(o.P21)} бар`
+          ? `Вода не доходит до 9-го этажа: верхние стояки пустые. P21 = ${f2(o.P21_disp)} бар`
+          : `P на 9 эт. = ${f2(o.P_top)} бар (нужно ≥ ${f2(C.TOP_FLOOR_MIN_P)}), P21 = ${f2(o.P21_disp)} бар`
+      });
+    }
+    if ((c.PUMP && sim.env.pump1Fail) || (c.PUMP2 && sim.env.pump2Fail)) {
+      list.push({
+        id: 'pump_fault', level: 'alarm',
+        title: `АВАРИЯ: Насос ${c.PUMP && sim.env.pump1Fail ? 'Н1' : 'Н2'} — отказ электродвигателя!`,
+        text: 'Насос включен, но не создает перепад. Нужно перейти на исправный насос, а неисправный отсечь кранами для ремонта.',
+        detail: `P11 − P21 = ${f2(o.P11 - o.P21)} бар`
+      });
+    }
+    if (sim.env.kzrFail && !c.KZR_MANUAL) {
+      list.push({
+        id: 'kzr_fault', level: 'alarm',
+        title: 'АВАРИЯ: Привод КЗР — нет обратной связи!',
+        text: 'Электропривод регулирующего клапана не отрабатывает команды. Клапан стоит в последнем положении. Переведите КЗР в ручной режим и регулируйте штурвалом.',
+        detail: `Положение КЗР ${Math.round(c.KZR)} %, задание ${Math.round(c.KZRcmd)} %`
+      });
+    }
+    if (o.floodFlow > 0) {
+      list.push({
+        id: 'flood', level: 'alarm',
+        title: 'АВАРИЯ: Течь в квартире — заливает!',
+        text: 'Вода из системы отопления уходит в квартиру. Остановите поступление воды: отсеките дом кранами и сбросьте давление в доме.',
+        detail: `P внизу дома = ${f2(o.P_house)} бар`
+      });
+    }
+    if (o.deadhead) {
+      list.push({
+        id: 'pump_deadhead', level: 'warn',
+        title: 'ПРЕДУПРЕЖДЕНИЕ: Насос работает на закрытую арматуру!',
+        text: 'Насос включен, но вода через него не идет: закрыты его краны или краны дома. Вода в насосе нагревается, уплотнения изнашиваются.',
+        detail: `Н1: ${c.PUMP ? 'вкл' : 'выкл'}, кран ${c.PUMP1_ISO ? 'откр' : 'закр'} · Н2: ${c.PUMP2 ? 'вкл' : 'выкл'}, кран ${c.PUMP2_ISO ? 'откр' : 'закр'} · дом ${o.houseOpen ? 'откр' : 'закр'}`
+      });
+    }
+    if (c.HOUSE_VENT && o.houseFill >= 0.999 && o.P_house > 0.3) {
+      list.push({
+        id: 'house_vent_spray', level: 'warn',
+        title: 'ПРЕДУПРЕЖДЕНИЕ: Из воздушников на 9 этаже течет вода!',
+        text: 'Система заполнена — воздушники нужно закрыть.',
+        detail: `P внизу дома = ${f2(o.P_house)} бар`
+      });
+    }
+    if (o.houseFill < 0.999) {
+      list.push({
+        id: 'house_section', level: 'info',
+        title: o.houseFilling ? 'Идет заполнение системы отопления дома' : 'Система отопления дома не заполнена',
+        text: o.houseFilling ? (c.HOUSE_VENT ? 'Воздух выходит через воздушники верхнего этажа.' : 'Без открытых воздушников воздух не выйдет — заполнится только 90 %.') : 'В стояках нет воды. Циркуляция невозможна.',
+        detail: `Заполнение ${Math.round(o.houseFill * 100)} %, P внизу дома ${f2(o.P_house)} бар`
       });
     }
     if (o.pumpTripped && !c.PUMP) {
@@ -578,7 +725,7 @@
         id: 'pump_trip', level: 'alarm',
         title: 'АВАРИЯ: Насос остановлен защитой по низкому давлению!',
         text: 'Давление на всасе упало ниже 1.5 бар — автоматика остановила насос, чтобы спасти его от кавитации, и закрыла КЗР. Циркуляции в доме нет.',
-        detail: `P21 = ${f2(o.P21)} бар`
+        detail: `P21 = ${f2(o.P21_disp)} бар`
       });
     }
     if (o.G1 > 0 && o.T2 > o.T2_max) {
@@ -671,6 +818,7 @@
     diagnose,
     strainerKv,
     cleanStrainer,
+    setKZR,
     defaultEnv,
     graphT1, graphT11, graphT2max,
     kvOf
