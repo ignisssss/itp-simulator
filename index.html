@@ -1,0 +1,438 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Тренажер ИТП</title>
+  <script src="https://cdn.tailwindcss.com/3.4.17"></script>
+  <style>
+    :root {
+      color-scheme: dark;
+      --bg: #070b12;
+      --panel: #0d1420;
+      --line: #1f2b3d;
+      --ok: #22c55e;
+      --warn: #f59e0b;
+      --alarm: #ef4444;
+    }
+    body { background: var(--bg); color: #e2e8f0; font-family: "Segoe UI", system-ui, sans-serif; }
+    .mono { font-family: "Consolas", "JetBrains Mono", ui-monospace, monospace; }
+    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
+    .panel-title { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #7f93ad; }
+
+    /* --- Мнемосхема --- */
+    #scheme { width: 100%; height: auto; display: block; user-select: none; }
+    #scheme text { font-family: "Consolas", ui-monospace, monospace; }
+    .pipe { fill: none; stroke-width: 9; stroke-linecap: square; stroke-linejoin: miter; transition: stroke .6s; }
+    .pipe-thin { fill: none; stroke-width: 5; stroke: #3b4a60; }
+    .flow { fill: none; stroke: rgba(255,255,255,.75); stroke-width: 3; stroke-dasharray: 8 12;
+            animation: flow-move 1s linear infinite; animation-play-state: paused; opacity: 0; transition: opacity .4s; }
+    .flow.on { animation-play-state: running; opacity: 1; }
+    @keyframes flow-move { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+
+    .node { cursor: pointer; }
+    .node:hover .hl { stroke: #38bdf8; }
+    .hl { stroke: transparent; stroke-width: 2; fill: transparent; }
+    .valve-body { stroke: #0b1220; stroke-width: 1.5; transition: fill .3s; }
+    .valve-open { fill: #22c55e; }
+    .valve-part { fill: #f59e0b; }
+    .valve-closed { fill: #ef4444; }
+    .valve-moving { fill: #f59e0b; animation: pulse .45s ease-in-out infinite alternate; }
+    @keyframes pulse { to { opacity: .3; } }
+    .flow.thin { stroke-width: 1.6; stroke-dasharray: 5 15; }
+    @media (prefers-reduced-motion: reduce) { .flow, .valve-moving, #pumpRotor.spin, .blink { animation: none !important; } }
+    .lbl { fill: #9fb3c8; font-size: 12px; }
+    .lbl-s { fill: #6b7f99; font-size: 10px; }
+    .tag-box { fill: #04070c; stroke: #2a3a52; stroke-width: 1; }
+    .tag-name { fill: #7f93ad; font-size: 10px; }
+    .tag-val { fill: #e2f3ff; font-size: 12px; font-weight: 600; }
+    .tag-val.bad { fill: #ff6b6b; }
+    .tag-val.warn { fill: #fbbf24; }
+
+    #pumpRotor { transform-box: fill-box; transform-origin: center; }
+    #pumpRotor.spin { animation: spin .6s linear infinite; }
+    @keyframes spin { to { transform: rotate(-360deg); } }
+
+    .blink { animation: blink 1s steps(2, start) infinite; }
+    @keyframes blink { to { visibility: hidden; } }
+
+    /* --- Ползунки --- */
+    input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; background: #1e293b; border-radius: 3px; outline: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 3px; background: #38bdf8; cursor: pointer; border: 2px solid #0b1220; }
+    input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 3px; background: #38bdf8; cursor: pointer; border: 2px solid #0b1220; }
+    input[type=range].danger::-webkit-slider-thumb { background: #f59e0b; }
+    input[type=range].danger::-moz-range-thumb { background: #f59e0b; }
+
+    .qbtn { width: 20px; height: 20px; border-radius: 50%; border: 1px solid #38506e; color: #7dd3fc; font-size: 12px; line-height: 18px; text-align: center; flex: none; }
+    .qbtn:hover { background: #0c4a6e; }
+
+    .alarm-card { border-left: 4px solid; border-radius: 4px; }
+    .alarm-card.alarm { border-color: var(--alarm); background: rgba(239,68,68,.10); }
+    .alarm-card.warn  { border-color: var(--warn);  background: rgba(245,158,11,.08); }
+    .alarm-card.ok    { border-color: var(--ok);    background: rgba(34,197,94,.08); }
+  </style>
+</head>
+<body class="text-slate-200 min-h-screen">
+
+  <!-- Шапка -->
+  <header class="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-slate-800 bg-[#0a101a]">
+    <div class="flex items-center gap-2">
+      <span id="statusLamp" class="inline-block w-3 h-3 rounded-full bg-green-500"></span>
+      <h1 class="text-sm sm:text-base font-semibold tracking-wide">ИТП · Жилой дом 9 эт. · Независимая схема отопления</h1>
+    </div>
+    <div class="text-xs text-slate-400 mono">T<sub>нар</sub> = −10 °C</div>
+    <div class="ml-auto flex items-center gap-3">
+      <div class="text-xs text-slate-400">Время: <span id="simTime" class="mono text-slate-200">00:00</span></div>
+      <div class="flex items-center gap-1 text-xs" id="speedGroup">
+        <span class="text-slate-400 mr-1">Скорость</span>
+        <button data-speed="1" class="speed-btn px-2 py-0.5 rounded border border-slate-700">×1</button>
+        <button data-speed="2" class="speed-btn px-2 py-0.5 rounded border border-slate-700">×2</button>
+        <button data-speed="5" class="speed-btn px-2 py-0.5 rounded border border-slate-700">×5</button>
+        <button id="pauseBtn" class="px-2 py-0.5 rounded border border-slate-700">❚❚</button>
+      </div>
+      <button id="resetBtn" class="px-3 py-1.5 text-xs font-semibold rounded bg-sky-700 hover:bg-sky-600 text-white">⟲ Сбросить в штатный режим</button>
+    </div>
+  </header>
+
+  <main class="grid gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_340px]">
+
+    <!-- Левая колонка: схема + диагностика -->
+    <section class="flex flex-col gap-3 min-w-0">
+      <div class="panel p-2">
+        <div class="flex items-center justify-between px-1 pb-1">
+          <div class="panel-title">Мнемосхема ИТП</div>
+          <div class="text-[11px] text-slate-500">Нажмите на любой узел схемы, чтобы узнать, зачем он нужен</div>
+        </div>
+
+        <svg id="scheme" viewBox="0 0 1000 520" xmlns="http://www.w3.org/2000/svg">
+          <defs>
+            <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
+              <path d="M20 0H0V20" fill="none" stroke="#0f1826" stroke-width="1"/>
+            </pattern>
+            <linearGradient id="houseGrad" x1="0" y1="0" x2="0" y2="1">
+              <stop offset="0" stop-color="#1a2536"/><stop offset="1" stop-color="#111a28"/>
+            </linearGradient>
+            <linearGradient id="gradPrim" gradientUnits="userSpaceOnUse" x1="0" y1="90" x2="0" y2="430">
+              <stop id="gpTop" offset="0" stop-color="#ef4444"/><stop id="gpBot" offset="1" stop-color="#22c55e"/>
+            </linearGradient>
+            <linearGradient id="gradSec" gradientUnits="userSpaceOnUse" x1="0" y1="104" x2="0" y2="416">
+              <stop id="gsTop" offset="0" stop-color="#facc15"/><stop id="gsBot" offset="1" stop-color="#22c55e"/>
+            </linearGradient>
+          </defs>
+          <rect width="1000" height="520" fill="url(#grid)"/>
+
+          <!-- Зоны -->
+          <text x="20" y="510" class="lbl-s">ПЕРВИЧНЫЙ КОНТУР (ТЕПЛОСЕТЬ)</text>
+          <text x="830" y="510" class="lbl-s">ВТОРИЧНЫЙ КОНТУР (ДОМ)</text>
+
+          <!-- ========== ТРУБЫ (цвет задается из app.js по температуре) ========== -->
+          <!-- Первичный: подача -->
+          <path id="pipeP1" class="pipe" d="M20 90 H440"/>
+          <!-- Первичный: обратка -->
+          <path id="pipeP2" class="pipe" d="M440 430 H20"/>
+          <!-- Вторичный: подача в дом -->
+          <path id="pipeS1" class="pipe" d="M540 90 H900 V150"/>
+          <!-- Вторичный: обратка из дома -->
+          <path id="pipeS2" class="pipe" d="M900 370 V430 H540"/>
+          <!-- Подпитка: из сетевой обратки (до V2) во всас насоса -->
+          <path id="pipeMk" class="pipe" style="stroke-width:5" d="M380 430 V500 H790 V430"/>
+          <!-- Дренаж -->
+          <path id="pipeDr" class="pipe-thin" d="M860 430 V478"/>
+          <!-- Предохранительный клапан -->
+          <path id="pipeRv" class="pipe-thin" d="M740 90 V58"/>
+
+          <!-- Анимация потока -->
+          <path id="flowP1" class="flow" d="M20 90 H440"/>
+          <path id="flowP2" class="flow" d="M440 430 H20"/>
+          <path id="flowS2" class="flow" d="M900 370 V430 H540"/>
+          <path id="flowS1" class="flow" d="M540 90 H900 V150"/>
+          <path id="flowMk" class="flow" style="stroke-width:2" d="M380 430 V500 H790 V430"/>
+          <path id="flowDr" class="flow" style="stroke-width:2" d="M860 430 V478"/>
+          <path id="flowRv" class="flow" style="stroke-width:2" d="M740 90 V58"/>
+
+          <text x="24" y="114" class="lbl-s">→ из теплосети</text>
+          <text x="24" y="454" class="lbl-s">← в теплосеть</text>
+
+          <!-- ========== ПТО ========== -->
+          <g class="node" data-info="hex">
+            <rect class="hl" x="434" y="54" width="112" height="412" rx="8"/>
+            <rect x="440" y="60" width="100" height="400" rx="6" fill="#121c2b" stroke="#4b6584" stroke-width="2"/>
+            <!-- Пластины (серые) и чередующиеся каналы: четные — сеть (сверху вниз), нечетные — дом (снизу вверх) -->
+            <g stroke="#3a4d66" stroke-width="1.5"><line x1="450" y1="84" x2="450" y2="436"/><line x1="460" y1="84" x2="460" y2="436"/><line x1="470" y1="84" x2="470" y2="436"/><line x1="480" y1="84" x2="480" y2="436"/><line x1="490" y1="84" x2="490" y2="436"/><line x1="500" y1="84" x2="500" y2="436"/><line x1="510" y1="84" x2="510" y2="436"/><line x1="520" y1="84" x2="520" y2="436"/><line x1="530" y1="84" x2="530" y2="436"/></g>
+            <path id="hexSecTop" d="M462 104 H534 V90 H540" fill="none" stroke-width="6"/>
+            <path id="hexSecBot" d="M540 430 H534 V416 H462" fill="none" stroke-width="6"/>
+            <g fill="url(#gradSec)"><rect x="461.5" y="104" width="7" height="312" rx="1"/><rect x="481.5" y="104" width="7" height="312" rx="1"/><rect x="501.5" y="104" width="7" height="312" rx="1"/><rect x="521.5" y="104" width="7" height="312" rx="1"/></g>
+            <path id="hexPrimTop" d="M440 90 H518" fill="none" stroke-width="6"/>
+            <path id="hexPrimBot" d="M518 430 H440" fill="none" stroke-width="6"/>
+            <g fill="url(#gradPrim)"><rect x="451.5" y="90" width="7" height="340" rx="1"/><rect x="471.5" y="90" width="7" height="340" rx="1"/><rect x="491.5" y="90" width="7" height="340" rx="1"/><rect x="511.5" y="90" width="7" height="340" rx="1"/></g>
+            <path id="flowHexP" class="flow thin" d="M455 92 V428 M475 92 V428 M495 92 V428 M515 92 V428"/>
+            <path id="flowHexS" class="flow thin" d="M465 414 V106 M485 414 V106 M505 414 V106 M525 414 V106"/>
+            <text x="447" y="452" class="lbl-s" style="font-size:8px">сеть↓</text>
+            <text x="533" y="452" text-anchor="end" class="lbl-s" style="font-size:8px">дом↑</text>
+            <rect x="452" y="200" width="76" height="70" rx="4" fill="#04070c" fill-opacity=".9" stroke="#2a3a52"/>
+            <text x="490" y="218" text-anchor="middle" class="tag-name">ПТО · Q</text>
+            <text id="txtQ" x="490" y="242" text-anchor="middle" class="tag-val" style="font-size:18px">0</text>
+            <text x="490" y="260" text-anchor="middle" class="tag-name">кВт</text>
+            <text x="490" y="80" text-anchor="middle" class="lbl">ПТО</text>
+            
+          </g>
+
+          <!-- ========== V1 ========== -->
+          <g class="node" data-info="valves">
+            <rect class="hl" x="110" y="52" width="40" height="60" rx="4"/>
+            <line x1="130" y1="90" x2="130" y2="66" stroke="#9fb3c8" stroke-width="2"/>
+            <line x1="120" y1="66" x2="140" y2="66" stroke="#9fb3c8" stroke-width="3"/>
+            <path id="vV1" class="valve-body valve-open" d="M116 80 L144 100 L144 80 L116 100 Z"/>
+            <text x="130" y="60" text-anchor="middle" class="lbl">V1</text>
+            <text id="txtV1" x="148" y="74" class="tag-val" style="font-size:11px"></text>
+          </g>
+
+          <!-- ========== Грязевик ========== -->
+          <g class="node" data-info="strainer">
+            <rect class="hl" x="190" y="66" width="56" height="62" rx="4"/>
+            <rect x="198" y="80" width="34" height="20" fill="#1c2a3d" stroke="#9fb3c8" stroke-width="1.5"/>
+            <path d="M214 100 L230 118 L238 112 L224 96" fill="#1c2a3d" stroke="#9fb3c8" stroke-width="1.5"/>
+            <rect id="strainerDirt" x="200" y="82" width="0" height="16" fill="#8b5a2b"/>
+            <path d="M200 98 L230 82 M206 98 L230 86 M212 98 L230 90" stroke="#4b6584" stroke-width="1"/>
+            <text x="215" y="72" text-anchor="middle" class="lbl">Гр</text>
+          </g>
+
+          <!-- ========== КЗР ========== -->
+          <g class="node" data-info="kzr">
+            <rect class="hl" x="306" y="20" width="60" height="92" rx="4"/>
+            <line x1="330" y1="90" x2="330" y2="66" stroke="#9fb3c8" stroke-width="2"/>
+            <rect x="316" y="44" width="28" height="22" rx="2" fill="#1c2a3d" stroke="#9fb3c8" stroke-width="1.5"/>
+            <text x="330" y="60" text-anchor="middle" style="fill:#e2f3ff;font-size:12px;font-weight:700">M</text>
+            <path id="vKZR" class="valve-body valve-part" d="M316 80 L344 100 L344 80 L316 100 Z"/>
+            <text x="330" y="36" text-anchor="middle" class="lbl">КЗР</text>
+            <text id="txtKZR" x="352" y="60" class="tag-val" style="font-size:12px">48%</text>
+          </g>
+
+          <!-- ========== V2 ========== -->
+          <g class="node" data-info="valves">
+            <rect class="hl" x="200" y="392" width="40" height="60" rx="4"/>
+            <line x1="220" y1="430" x2="220" y2="406" stroke="#9fb3c8" stroke-width="2"/>
+            <line x1="210" y1="406" x2="230" y2="406" stroke="#9fb3c8" stroke-width="3"/>
+            <path id="vV2" class="valve-body valve-open" d="M206 420 L234 440 L234 420 L206 440 Z"/>
+            <text x="220" y="400" text-anchor="middle" class="lbl">V2</text>
+            <text id="txtV2" x="238" y="414" class="tag-val" style="font-size:11px"></text>
+          </g>
+
+          <!-- ========== Подпитка ========== -->
+          <g class="node" data-info="makeup">
+            <rect class="hl" x="566" y="474" width="48" height="40" rx="4"/>
+            <line x1="590" y1="500" x2="590" y2="482" stroke="#9fb3c8" stroke-width="2"/>
+            <line x1="582" y1="482" x2="598" y2="482" stroke="#9fb3c8" stroke-width="3"/>
+            <path id="vMK" class="valve-body valve-closed" d="M578 492 L602 508 L602 492 L578 508 Z"/>
+            <text x="590" y="518" text-anchor="middle" class="lbl-s">Подпитка</text>
+          </g>
+          <circle cx="380" cy="430" r="4" fill="#9fb3c8"/>
+          <circle cx="790" cy="430" r="4" fill="#9fb3c8"/>
+          <!-- обратный клапан на подпитке -->
+          <g transform="translate(700 500)">
+            <path d="M-8 -7 L8 0 L-8 7 Z" fill="#0b1220" stroke="#9fb3c8" stroke-width="1.5"/>
+            <line x1="8" y1="-7" x2="8" y2="7" stroke="#9fb3c8" stroke-width="2"/>
+          </g>
+
+          <!-- ========== Насос ========== -->
+          <g class="node" data-info="pump">
+            <rect class="hl" x="612" y="402" width="56" height="56" rx="6"/>
+            <circle id="pumpBody" cx="640" cy="430" r="21" fill="#0f2a1a" stroke="#22c55e" stroke-width="2.5"/>
+            <g id="pumpRotor">
+              <path d="M640 430 L640 414 M640 430 L654 438 M640 430 L626 438" stroke="#e2f3ff" stroke-width="2.5" stroke-linecap="round"/>
+              <circle cx="640" cy="430" r="3" fill="#e2f3ff"/>
+            </g>
+            <text x="640" y="400" text-anchor="middle" class="lbl">Насос</text>
+          </g>
+
+          <!-- ========== Предохранительный клапан ========== -->
+          <g class="node" data-info="relief">
+            <rect class="hl" x="718" y="14" width="80" height="62" rx="4"/>
+            <path id="vRV" d="M730 58 L750 58 L740 42 Z" fill="#1c2a3d" stroke="#9fb3c8" stroke-width="1.5"/>
+            <path d="M740 42 l-5 -3 l10 -3 l-10 -3 l10 -3 l-5 -3" fill="none" stroke="#9fb3c8" stroke-width="1.2"/>
+            <path d="M750 50 H770" stroke="#9fb3c8" stroke-width="2"/>
+            <path d="M766 46 L772 50 L766 54" fill="none" stroke="#9fb3c8" stroke-width="1.5"/>
+            <text x="776" y="44" class="lbl-s">ПК</text>
+            <text x="776" y="56" class="lbl-s">6.0</text>
+          </g>
+
+          <!-- ========== Дренаж ========== -->
+          <g class="node" data-info="drain">
+            <rect class="hl" x="842" y="438" width="72" height="58" rx="4"/>
+            <path id="vDR" class="valve-body valve-closed" d="M852 446 L868 446 L852 464 L868 464 Z"/>
+            <path d="M848 480 L872 480 L864 492 L856 492 Z" fill="none" stroke="#9fb3c8" stroke-width="1.5"/>
+            <text x="878" y="460" class="lbl-s">Дренаж</text>
+          </g>
+
+          <!-- ========== Здание ========== -->
+          <g class="node" data-info="building">
+            <rect class="hl" x="824" y="144" width="162" height="232" rx="6"/>
+            <rect x="830" y="150" width="150" height="220" rx="3" fill="url(#houseGrad)" stroke="#4b6584" stroke-width="2"/>
+            <g id="houseWindows"></g>
+            <text x="905" y="168" text-anchor="middle" class="lbl">Жилой дом · 9 эт.</text>
+            <text x="905" y="362" text-anchor="middle" class="lbl-s">радиаторы, стояки</text>
+          </g>
+
+          <!-- Показания приборов (rect + text) добавляются из app.js -->
+          <g id="tags"></g>
+        </svg>
+      </div>
+
+      <div class="grid gap-3 lg:grid-cols-2">
+        <!-- Диагностика -->
+        <div class="panel p-3 flex flex-col">
+          <div class="flex items-center justify-between mb-2">
+            <div class="panel-title">Диагностика · аварии и предупреждения</div>
+            <span id="alarmCount" class="text-[11px] mono text-slate-400"></span>
+          </div>
+          <div id="alarms" class="flex flex-col gap-2"></div>
+        </div>
+
+        <!-- Тренд + журнал -->
+        <div class="panel p-3 flex flex-col gap-3">
+          <div>
+            <div class="flex items-center justify-between mb-1">
+              <div class="panel-title">Тренд температур · 2 мин</div>
+              <div class="flex gap-3 text-[11px] mono">
+                <span style="color:#f87171">■ T11</span>
+                <span style="color:#fbbf24">■ T2</span>
+                <span style="color:#60a5fa">■ T21</span>
+              </div>
+            </div>
+            <canvas id="trend" class="w-full h-[150px] block rounded bg-[#04070c] border border-slate-800"></canvas>
+          </div>
+          <div>
+            <div class="panel-title mb-1">Журнал событий</div>
+            <div id="log" class="mono text-[11px] leading-5 h-[120px] overflow-y-auto bg-[#04070c] border border-slate-800 rounded px-2 py-1"></div>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Правая колонка: пульт управления -->
+    <aside class="flex flex-col gap-3">
+      <div class="panel p-3">
+        <div class="panel-title mb-3">Пульт управления арматурой</div>
+
+        <div class="flex flex-col gap-4" id="controls">
+          <!-- Генерация строк ниже по шаблону; data-ctl — ключ в sim.controls -->
+          <div class="gate" data-gate="V1">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-sm font-semibold">V1</span>
+              <span class="text-xs text-slate-400">Задвижка подачи теплосети</span>
+              <button class="qbtn ml-auto" data-info="valves">?</button>
+            </div>
+            <div class="flex items-center gap-3">
+              <button id="gateBtnV1" class="gate-btn w-28 py-1.5 rounded text-xs font-semibold border"></button>
+              <div class="flex-1 min-w-0">
+                <div class="h-1.5 bg-slate-800 rounded overflow-hidden"><div class="gate-bar h-full" style="width:100%"></div></div>
+                <div class="gate-state mono text-[11px] text-slate-400 mt-1"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ctl" data-ctl="strainerFouling">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-sm font-semibold">Гр</span>
+              <span class="text-xs text-slate-400">Засорить грязевик</span>
+              <button class="qbtn ml-auto" data-info="strainer">?</button>
+              <span class="mono text-sm w-12 text-right" data-val>0%</span>
+            </div>
+            <input type="range" min="0" max="90" step="1" value="0" class="danger">
+          </div>
+
+          <div class="ctl" data-ctl="KZR">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-sm font-semibold">КЗР</span>
+              <span class="text-xs text-slate-400">Регулирующий клапан</span>
+              <button class="qbtn ml-auto" data-info="kzr">?</button>
+              <span class="mono text-sm w-12 text-right" data-val>48%</span>
+            </div>
+            <div class="flex items-center gap-2">
+              <button class="kzr-step px-2 text-xs rounded border border-slate-700" data-step="-1">−1</button>
+              <input type="range" min="0" max="100" step="1" value="48">
+              <button class="kzr-step px-2 text-xs rounded border border-slate-700" data-step="1">+1</button>
+            </div>
+          </div>
+
+          <div class="gate" data-gate="V2">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-sm font-semibold">V2</span>
+              <span class="text-xs text-slate-400">Задвижка обратки теплосети</span>
+              <button class="qbtn ml-auto" data-info="valves">?</button>
+            </div>
+            <div class="flex items-center gap-3">
+              <button id="gateBtnV2" class="gate-btn w-28 py-1.5 rounded text-xs font-semibold border"></button>
+              <div class="flex-1 min-w-0">
+                <div class="h-1.5 bg-slate-800 rounded overflow-hidden"><div class="gate-bar h-full" style="width:100%"></div></div>
+                <div class="gate-state mono text-[11px] text-slate-400 mt-1"></div>
+              </div>
+            </div>
+          </div>
+
+          <div class="ctl" data-ctl="MAKEUP">
+            <div class="flex items-center gap-2 mb-1">
+              <span class="text-sm font-semibold">Подп.</span>
+              <span class="text-xs text-slate-400">Кран подпитки контура</span>
+              <button class="qbtn ml-auto" data-info="makeup">?</button>
+              <span class="mono text-sm w-12 text-right" data-val>0%</span>
+            </div>
+            <input type="range" min="0" max="100" step="1" value="0">
+          </div>
+
+          <div class="grid grid-cols-2 gap-2 pt-1">
+            <div class="flex flex-col gap-1">
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400">Насос отопления</span>
+                <button class="qbtn ml-auto" data-info="pump">?</button>
+              </div>
+              <button id="pumpBtn" class="py-2 rounded text-sm font-semibold border"></button>
+            </div>
+            <div class="flex flex-col gap-1">
+              <div class="flex items-center gap-2">
+                <span class="text-xs text-slate-400">Сброс в дренаж</span>
+                <button class="qbtn ml-auto" data-info="drain">?</button>
+              </div>
+              <button id="drainBtn" class="py-2 rounded text-sm font-semibold border"></button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Сводка -->
+      <div class="panel p-3">
+        <div class="panel-title mb-2">Ключевые параметры</div>
+        <table class="w-full text-sm mono">
+          <tbody id="summary"></tbody>
+        </table>
+      </div>
+
+      <div class="panel p-3 text-xs text-slate-400 leading-5">
+        <div class="panel-title mb-1">Задание на смену</div>
+        Удерживайте <b class="text-slate-200">T11 = 70…80 °C</b> (цель 75 °C) и
+        <b class="text-slate-200">T2 ≤ 55 °C</b>. Попробуйте: засорить грязевик и восстановить
+        режим КЗР; правильно отключить ИТП (сначала V1, затем V2); спустить контур в дренаж
+        и заново поднять давление подпиткой.
+      </div>
+    </aside>
+  </main>
+
+  <!-- Карточка «Зачем нужен этот элемент?» -->
+  <div id="infoModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4">
+    <div class="panel max-w-lg w-full p-5 shadow-2xl">
+      <div class="flex items-start gap-3">
+        <div class="text-2xl" id="infoIcon">ℹ️</div>
+        <div class="flex-1">
+          <div class="panel-title">Зачем нужен этот элемент?</div>
+          <h2 id="infoTitle" class="text-lg font-semibold text-white mt-1"></h2>
+        </div>
+        <button id="infoClose" class="text-slate-400 hover:text-white text-xl leading-none">×</button>
+      </div>
+      <div id="infoBody" class="mt-3 text-sm text-slate-300 leading-6"></div>
+    </div>
+  </div>
+
+  <script src="physics.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
