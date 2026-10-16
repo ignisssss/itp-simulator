@@ -112,6 +112,7 @@
   function openInfo(key) {
     const it = INFO[key];
     if (!it) return;
+    if (window.ITPLessons) window.ITPLessons.onInfo(key);
     $('infoIcon').textContent = it.icon;
     $('infoTitle').textContent = it.title;
     $('infoBody').innerHTML = it.body;
@@ -329,6 +330,7 @@
     render();
   });
   $('resetBtn').addEventListener('click', () => {
+    if (window.ITPLessons && window.ITPLessons.active()) { window.ITPLessons.restart(); return; }
     P.resetNominal(sim);
     P.step(sim, 0);
     trend.length = 0;
@@ -595,6 +597,7 @@
         P.step(sim, DT);
         pushTrend();
       }
+      if (window.ITPLessons) window.ITPLessons.tick();
     }
     render();
   }
@@ -603,5 +606,16 @@
   setSpeed(1);
   log('Смена принята. ИТП в штатном режиме.', 'op');
   render();
+  // Интерфейс для движка уроков (lessons.js)
+  window.ITPApp = {
+    sim,
+    log,
+    render,
+    syncControlsUI,
+    clearTrend() { trend.length = 0; },
+    setPaused(v) { paused = v; setSpeed(speed); },
+    isPaused() { return paused; }
+  };
+
   setInterval(tick, TICK_MS);
 })();
