@@ -270,6 +270,9 @@
     }
   ];
 
+  // PDF-конспект к уроку: docs/notes/NN-id.pdf (собирается docs/build-notes.js)
+  const notesUrl = l => `docs/notes/${String(LESSONS.indexOf(l) + 1).padStart(2, '0')}-${l.id}.pdf`;
+
   // Будущие обучалки (нужно новое оборудование на схеме)
   const SOON = [
     { title: 'Слив контура отопления дома', short: 'Отсечь дом, слить, заполнить снизу вверх со спуском воздуха.' },
@@ -368,7 +371,8 @@
     showModal({
       kind: 'ok',
       title: `Урок пройден: «${lesson.title}»`,
-      body: `<p class="mb-2">Что запомнить:</p><ul class="list-disc pl-5 space-y-1">${lesson.outro.map(t => `<li>${t}</li>`).join('')}</ul>`,
+      body: `<p class="mb-2">Что запомнить:</p><ul class="list-disc pl-5 space-y-1">${lesson.outro.map(t => `<li>${t}</li>`).join('')}</ul>
+        <p class="mt-3"><a href="${notesUrl(lesson)}" target="_blank" rel="noopener" class="text-sky-300 underline">📄 Конспект урока (PDF)</a> — почему каждое действие делается именно так.</p>`,
       buttons: [
         { label: 'К списку уроков', primary: true, action: () => { exit(); openMenu(); } },
         { label: 'Пройти еще раз', action: () => restart() },
@@ -453,6 +457,7 @@
     const finished = stepIdx >= total;
     const st = lesson.steps[stepIdx];
     $('lessonTitle').textContent = lesson.title;
+    $('lessonNotes').href = notesUrl(lesson);
     $('lessonIntro').textContent = lesson.intro;
     $('lessonProgress').style.width = (Math.min(stepIdx, total) / total * 100).toFixed(0) + '%';
     $('lessonCounter').textContent = finished ? `Все ${total} шагов выполнены` : `Шаг ${stepIdx + 1} из ${total}`;
@@ -493,7 +498,8 @@
   // Меню уроков
   function renderMenu() {
     const cards = LESSONS.map((l, i) => `
-      <button data-lesson="${l.id}" class="lesson-card text-left p-3 rounded border border-slate-700 bg-slate-900 hover:border-sky-500 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500">
+      <div class="flex flex-col rounded border border-slate-700 bg-slate-900 hover:border-sky-500">
+      <button data-lesson="${l.id}" class="lesson-card text-left p-3 pb-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
         <div class="flex items-center gap-2">
           <span class="mono text-[11px] text-slate-500">${String(i + 1).padStart(2, '0')}</span>
           <span class="font-semibold text-slate-100 text-sm">${l.title}</span>
@@ -501,7 +507,9 @@
         </div>
         <div class="text-xs text-slate-400 mt-1 leading-5">${l.short}</div>
         <div class="text-[11px] text-slate-500 mt-1 mono">${l.steps.length} шагов</div>
-      </button>`).join('');
+      </button>
+      <a href="${notesUrl(l)}" target="_blank" rel="noopener" class="px-3 pb-2 text-[11px] text-sky-300 hover:underline self-start">📄 Конспект (PDF)</a>
+      </div>`).join('');
     const soon = SOON.map(l => `
       <div class="p-3 rounded border border-dashed border-slate-800 opacity-60">
         <div class="flex items-center gap-2"><span class="font-semibold text-slate-300 text-sm">${l.title}</span>
