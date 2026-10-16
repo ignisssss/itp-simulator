@@ -34,6 +34,11 @@
     G2_NOMINAL: 14.0,      // т/ч, расход в системе отопления дома (см. README: почему не 22)
     P21_DEFAULT: 3.5,      // бар, статическое давление контура
     P21_CAVITATION: 1.5,   // бар, ниже — срыв (кавитация)
+    HEX_SEC_DP: 0.5,       // бар, потери в ПТО со стороны дома при G2 ном.
+                           // (остальные 1.3 бар напора насоса теряются в стояках и радиаторах)
+    HOUSE_HEIGHT_M: 27.0,  // м, высота верхних приборов 9-го этажа над ИТП
+    BAR_PER_M: 0.098,      // бар на 1 м водяного столба
+    TOP_FLOOR_MIN_P: 0.5,  // бар, минимальный избыток давления на 9-м этаже (запас ~5 м)
     RELIEF_SET: 6.0,       // бар, настройка предохранительного клапана
     RELIEF_RESEAT: 5.9,    // бар, давление обратной посадки
     DRAIN_P: 0.5,          // бар, к чему стремится контур при открытом дренаже
@@ -229,6 +234,18 @@
     const G2 = pumpRunning ? C.G2_NOMINAL : 0;
     const P11 = s.P21 + (pumpRunning ? C.PUMP_HEAD : 0);
 
+    // Давления по контуру дома. Напор насоса тратится на ПТО (0.5 бар) и на стояки (1.3 бар).
+    const dP_hex_sec = pumpRunning ? C.HEX_SEC_DP : 0;
+    const P_house_supply = P11 - dP_hex_sec;           // подача в дом на выходе ИТП (1-й этаж)
+    const P_house_return = s.P21;                       // обратка из дома перед насосом
+    const dP_house = P_house_supply - P_house_return;   // располагаемый перепад на вводе в дом
+    const P_hydro = C.HOUSE_HEIGHT_M * C.BAR_PER_M;     // гидростатика столба 27 м
+    // Верх стояков — середина пути по системе: среднее подачи и обратки минус столб воды
+    // Отрицательное значение означает, что столб воды не доходит до 9-го этажа (стояки опорожнились).
+    const P_top_raw = (P_house_supply + P_house_return) / 2 - P_hydro;
+    const P_top = Math.max(0, P_top_raw);
+    const topFloorDry = P_top_raw < 0;
+
     // 3. Теплообмен с инерцией (явный Эйлер)
     const W1 = G1 * C.C_WATER;
     const W2 = G2 * C.C_WATER;
@@ -271,6 +288,8 @@
       dP_strainer: s.nodes[1] - prim.P_after_strainer, // показания манометров до/после грязевика
       P_hex_net: prim.P_hex_net,
       P21: s.P21, P11,
+      P_house_supply, P_house_return, dP_house, dP_hex_sec, P_top, P_hydro, topFloorDry,
+      dP_pump: P11 - s.P21,
       pumpRunning, cavitation,
       reliefOpen: s.reliefOpen,
       makeupFlow, drainFlow, reliefFlow
@@ -319,6 +338,16 @@
         title: 'АВАРИЯ: Сработал предохранительный клапан (> 6.0 бар)!',
         text: 'Превышено допустимое давление во внутреннем контуре! Закройте кран подпитки.',
         detail: `P11 = ${f2(o.P11)} бар, P21 = ${f2(o.P21)} бар`
+      });
+    }
+    if (o.P_top < C.TOP_FLOOR_MIN_P) {
+      list.push({
+        id: 'top_floor', level: 'warn',
+        title: 'ПРЕДУПРЕЖДЕНИЕ: Завоздушивание верхних этажей!',
+        text: 'Давления в контуре не хватает, чтобы держать воду до 9-го этажа с запасом. В верхних радиаторах скапливается воздух, они перестают греть. Поднимите статическое давление подпиткой до 3.5 бар.',
+        detail: o.topFloorDry
+          ? `Вода не доходит до 9-го этажа: верхние стояки пустые. P21 = ${f2(o.P21)} бар`
+          : `P на 9 эт. = ${f2(o.P_top)} бар (нужно ≥ ${f2(C.TOP_FLOOR_MIN_P)}), P21 = ${f2(o.P21)} бар`
       });
     }
     if (o.G1 > 0 && o.T2 > C.T2_MAX) {
