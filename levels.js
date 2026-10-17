@@ -17,6 +17,7 @@
   const P = window.ITPPhysics;
   const C = P.CONST;
   const app = window.ITPApp;
+  const I = window.ITPIcons;
   const sim = app.sim;
   const $ = id => document.getElementById(id);
   const STORE_KEY = 'itp-levels-v1';
@@ -446,11 +447,11 @@
       if (ok) {
         if (i.okSince === null) i.okSince = t;
         if (t - i.okSince >= d.hold) {
-          i.state = 'done'; i.doneT = i.okSince; note('ok', `Решено: ${d.title}`); app.log(`✔ Решено: ${d.title}`, 'ok');
+          i.state = 'done'; i.doneT = i.okSince; note('ok', `Решено: ${d.title}`); app.log(`Решено: ${d.title}`, 'ok');
           if (d.onDone) d.onDone(sim, api);
         }
       } else i.okSince = null;
-      if (i.state === 'active' && t - i.revealT > d.deadline) { i.state = 'failed'; note('err', `Не решено в срок: ${d.title}`); app.log(`✖ Не решено в срок: ${d.title}`, 'alarm'); }
+      if (i.state === 'active' && t - i.revealT > d.deadline) { i.state = 'failed'; note('err', `Не решено в срок: ${d.title}`); app.log(`Не решено в срок: ${d.title}`, 'alarm'); }
     });
 
     // ошибки и штрафы
@@ -565,7 +566,7 @@
     finished = true;
     app.setPaused(true);
     note('err', `АВАРИЯ: ${crit.title}`);
-    app.log(`✖ Смена провалена: ${crit.title}`, 'alarm');
+    app.log(`Смена провалена: ${crit.title}`, 'alarm');
     showResult(computeResult(), crit);
   }
 
@@ -574,17 +575,17 @@
   // ---------------------------------------------------------------------------
   function toast(from, text) {
     const box = document.createElement('div');
-    box.className = 'level-toast panel p-3 shadow-2xl border-amber-600';
-    box.innerHTML = `<div class="flex items-center gap-2"><span class="text-[11px] mono text-amber-300">${fmt(now())}</span>
-      <span class="text-xs font-semibold text-amber-200">📨 ${from}</span>
-      <button class="ml-auto text-slate-400 hover:text-white text-xs border border-slate-600 rounded px-2" aria-label="Принято">Принято</button></div>
-      <div class="text-sm text-slate-100 mt-1 leading-5">${text}</div>`;
+    box.className = 'level-toast rounded-md p-3';
+    box.innerHTML = `<div class="flex items-center gap-2"><span style="color:#B45309">${I.svg('mail', 15)}</span>
+      <span class="text-xs font-semibold" style="color:#92400E">${from}</span><span class="text-[11px] mono faint">${fmt(now())}</span>
+      <button class="btn btn-sm ml-auto" aria-label="Принято">Принято</button></div>
+      <div class="text-sm mt-1.5 leading-5" style="color:var(--ink)">${text}</div>`;
     box.querySelector('button').addEventListener('click', () => box.remove());
     $('levelToasts').prepend(box);
     const item = document.createElement('li');
-    item.innerHTML = `<span class="mono text-slate-500">${fmt(now())}</span> <span class="text-amber-200">${from}:</span> ${text}`;
+    item.innerHTML = `<span class="mono faint">${fmt(now())}</span> <span class="font-semibold" style="color:#92400E">${from}:</span> <span class="muted">${text}</span>`;
     $('levelMessages').prepend(item);
-    app.log(`📨 ${from}: ${text}`, 'warn');
+    app.log(`Сообщение — ${from}: ${text}`, 'warn');
   }
 
   function renderHud() {
@@ -601,43 +602,44 @@
     const lessonsList = (window.ITPLessons && window.ITPLessons.list) || [];
     const lessonTitle = id => (lessonsList.find(l => l.id === id) || {}).title || id;
     const rows = r.rows.map(({ i, s }) => {
-      const state = i.state === 'done' ? `<span class="text-green-300">решено</span>` : i.state === 'failed' ? `<span class="text-red-300">не в срок</span>` : i.revealT === null ? '<span class="text-slate-500">не началось</span>' : '<span class="text-amber-300">не решено</span>';
+      const state = i.state === 'done' ? `<span class="t-ok font-semibold">решено</span>` : i.state === 'failed' ? `<span class="t-bad font-semibold">не в срок</span>` : i.revealT === null ? '<span class="faint">не началось</span>' : '<span class="t-warn font-semibold">не решено</span>';
       return `<tr><td>${i.d.title}</td><td class="mono">${i.revealT === null ? '—' : fmt(i.revealT)}</td>
         <td class="mono">${i.actT === null ? '—' : '+' + Math.round(i.actT - i.revealT) + ' с'}</td>
         <td class="mono">${s.took === null ? '—' : Math.round(s.took) + ' с'}</td><td class="mono">${i.d.norm} с</td>
-        <td>${state}</td><td class="mono text-right">${s.total}</td></tr>`;
+        <td>${state}</td><td class="mono text-right font-semibold">${s.total}</td></tr>`;
     }).join('');
-    const pens = r.pen.length ? `<ul class="list-disc pl-5 text-sm text-amber-200">${r.pen.map(p => `<li>${p.text}: −${p.pts}</li>`).join('')}</ul>` : '<p class="text-sm text-green-300">Штрафов нет.</p>';
+    const pens = r.pen.length ? `<ul class="list-disc pl-5 text-sm t-warn">${r.pen.map(p => `<li>${p.text}: <span class="mono font-semibold">−${p.pts}</span></li>`).join('')}</ul>` : '<p class="text-sm t-ok">Штрафов нет.</p>';
     const tl = timeline.slice(-30).map(e => {
-      const col = { act: 'text-sky-300', msg: 'text-amber-200', err: 'text-red-300', ok: 'text-green-300', inc: 'text-slate-400', op: 'text-slate-400' }[e.kind] || 'text-slate-300';
-      return `<div class="${col}"><span class="text-slate-500">${fmt(e.t)}</span> ${e.text}</div>`;
+      const col = { act: 'log-op', msg: 'log-warn', err: 'log-alarm', ok: 'log-ok', inc: 'log-def', op: 'log-def' }[e.kind] || 'log-def';
+      return `<div class="${col}"><span class="faint">${fmt(e.t)}</span> ${e.text}</div>`;
     }).join('');
     const failedInc = incs.filter(i => i.state === 'failed' || (crit && i.state === 'active'));
     const fixes = failedInc.length ? `<h3 class="panel-title mt-4 mb-1">Как нужно было действовать</h3>
-      <ul class="text-sm text-slate-300 space-y-1">${failedInc.map(i => `<li><b class="text-slate-100">${i.d.title}:</b> ${i.d.fix}
-      <button class="text-sky-300 underline text-xs ml-1" data-go-lesson="${i.d.lesson}">урок «${lessonTitle(i.d.lesson)}»</button></li>`).join('')}</ul>` : '';
-    const stars = '★'.repeat(r.stars) + '☆'.repeat(3 - r.stars);
+      <ul class="text-sm muted space-y-1.5">${failedInc.map(i => `<li><b style="color:var(--ink)">${i.d.title}:</b> ${i.d.fix}
+      <button class="btn-link text-xs ml-1" data-go-lesson="${i.d.lesson}">урок «${lessonTitle(i.d.lesson)}»</button></li>`).join('')}</ul>` : '';
+    const stars = I.stars(r.stars, 18);
+    const box = (icon, css) => `<div class="w-10 h-10 rounded-md flex items-center justify-center flex-none" style="${css}">${I.svg(icon, 22)}</div>`;
     const head = crit
-      ? `<div class="text-2xl">🔴</div><div><div class="panel-title">Смена провалена — критическая авария</div><h2 class="text-lg font-semibold text-red-300 mt-1">${crit.title}</h2></div>`
-      : `<div class="text-2xl">${r.stars ? '🏁' : '⚠️'}</div><div><div class="panel-title">Разбор смены · уровень ${level.n}</div>
-         <h2 class="text-lg font-semibold mt-1 ${r.stars ? 'text-green-300' : 'text-amber-300'}">${r.score} баллов <span class="text-amber-300 ml-2">${stars}</span></h2>
-         <div class="text-xs text-slate-400">${r.stars ? 'Уровень пройден' : 'Нужно 60 баллов, чтобы пройти уровень'} · среднее по инцидентам ${r.avg}, штрафы −${r.pen.reduce((a, p) => a + p.pts, 0)}</div></div>`;
+      ? `${box('alarm', 'background:#FEF2F2;color:#DC2626;border:1px solid #FECACA')}<div><div class="panel-title">Смена провалена — критическая авария</div><h2 class="text-lg font-semibold t-bad mt-1">${crit.title}</h2></div>`
+      : `${r.stars ? box('flag', 'background:#F0FDF4;color:#16A34A;border:1px solid #BBF7D0') : box('alert', 'background:#FFFBEB;color:#D97706;border:1px solid #FDE68A')}<div><div class="panel-title">Разбор смены · уровень ${level.n}</div>
+         <h2 class="text-lg font-semibold mt-1 flex items-center gap-3 ${r.stars ? 't-ok' : 't-warn'}"><span class="mono">${r.score}</span> баллов ${stars}</h2>
+         <div class="text-xs faint">${r.stars ? 'Уровень пройден' : 'Нужно 60 баллов, чтобы пройти уровень'} · среднее по инцидентам ${r.avg}, штрафы −${r.pen.reduce((a, p) => a + p.pts, 0)}</div></div>`;
     $('levelModalBody').innerHTML = `
       <div class="flex items-start gap-3">${head}</div>
-      ${crit ? `<p class="mt-3 text-sm text-slate-200 leading-6">${crit.text}</p>
-        <p class="mt-2 text-sm"><button class="text-sky-300 underline" data-go-lesson="${crit.lesson}">Повторить урок «${lessonTitle(crit.lesson)}»</button></p>` : ''}
+      ${crit ? `<p class="mt-3 text-sm leading-6" style="color:var(--ink)">${crit.text}</p>
+        <p class="mt-2 text-sm"><button class="btn-link" data-go-lesson="${crit.lesson}">Повторить урок «${lessonTitle(crit.lesson)}»</button></p>` : ''}
       <h3 class="panel-title mt-4 mb-1">Инциденты</h3>
       <div class="overflow-x-auto"><table class="w-full text-xs result-table">
         <tr><th>Проблема</th><th>Узнали</th><th>Реакция</th><th>Решили за</th><th>Норматив</th><th>Итог</th><th class="text-right">Баллы</th></tr>${rows}</table></div>
       <h3 class="panel-title mt-4 mb-1">Штрафы</h3>${pens}
       ${fixes}
       <h3 class="panel-title mt-4 mb-1">Хронология</h3>
-      <div class="mono text-[11px] leading-5 max-h-48 overflow-y-auto bg-[#04070c] border border-slate-800 rounded px-2 py-1">${tl}</div>
+      <div class="mono text-[11px] leading-5 max-h-48 overflow-y-auto scroll-box px-2 py-1">${tl}</div>
       <div class="mt-4 flex flex-wrap gap-2">
-        <button class="px-3 py-1.5 rounded text-sm font-semibold bg-sky-700 hover:bg-sky-600 text-white" data-act="restart">⟲ Переиграть уровень</button>
-        ${!crit && r.stars && LEVELS.find(l => l.n === level.n + 1) ? '<button class="px-3 py-1.5 rounded text-sm font-semibold border border-green-600 text-green-200" data-act="next">Следующий уровень →</button>' : ''}
-        <button class="px-3 py-1.5 rounded text-sm border border-slate-600 text-slate-200" data-act="menu">К списку уровней</button>
-        <button class="px-3 py-1.5 rounded text-sm border border-slate-600 text-slate-200" data-act="exit">Свободный режим</button>
+        <button class="btn btn-primary" data-act="restart">${I.svg('reset', 14)}Переиграть уровень</button>
+        ${!crit && r.stars && LEVELS.find(l => l.n === level.n + 1) ? `<button class="btn btn-open" data-act="next">Следующий уровень${I.svg('arrowRight', 14)}</button>` : ''}
+        <button class="btn" data-act="menu">К списку уровней</button>
+        <button class="btn" data-act="exit">Свободный режим</button>
       </div>`;
     const m = $('levelModal');
     m.hidden = false;
@@ -662,21 +664,21 @@
     const cards = LEVELS.map(lv => {
       const rec = store[lv.id] || {};
       const open = unlocked(lv);
-      const stars = rec.stars ? '★'.repeat(rec.stars) + '☆'.repeat(3 - rec.stars) : '☆☆☆';
-      return `<button ${open ? `data-level="${lv.id}"` : 'disabled'} class="text-left p-3 rounded border ${open ? 'border-slate-700 bg-slate-900 hover:border-amber-500' : 'border-slate-800 bg-slate-950 opacity-50 cursor-not-allowed'}">
+      const stars = I.stars(rec.stars || 0, 15);
+      return `<button ${open ? `data-level="${lv.id}"` : 'disabled'} class="card text-left p-3 ${open ? 'hover:border-slate-400' : 'opacity-60 cursor-not-allowed'}" style="${open ? '' : 'background:#F8FAFC'}">
         <div class="flex items-center gap-2">
-          <span class="mono text-[11px] text-slate-500">${String(lv.n).padStart(2, '0')}</span>
-          <span class="font-semibold text-slate-100 text-sm">${lv.title}</span>
-          <span class="ml-auto text-amber-300 text-sm">${stars}</span>
+          <span class="mono text-[11px] faint">${String(lv.n).padStart(2, '0')}</span>
+          <span class="font-semibold text-sm" style="color:var(--ink)">${lv.title}</span>
+          <span class="ml-auto">${stars}</span>
         </div>
-        <div class="text-[11px] text-slate-400 mt-1">${lv.difficulty} · ${lv.incidents.filter(i => !i.manual).length} проблем${rec.best ? ` · лучший результат ${rec.best}` : ''}</div>
-        <div class="text-xs text-slate-400 mt-1 leading-5">${open ? lv.intro : '🔒 Пройдите предыдущий уровень хотя бы на одну звезду.'}</div>
+        <div class="text-[11px] faint mt-1">${lv.difficulty} · ${lv.incidents.filter(i => !i.manual).length} проблем${rec.best ? ` · лучший результат <span class="mono">${rec.best}</span>` : ''}</div>
+        <div class="text-xs muted mt-1 leading-5">${open ? lv.intro : `<span class="inline-flex items-center gap-1.5">${I.svg('lock', 13)}Пройдите предыдущий уровень хотя бы на одну звезду.</span>`}</div>
       </button>`;
     }).join('');
-    const soon = SOON.map(l => `<div class="p-3 rounded border border-dashed border-slate-800 opacity-60">
-      <div class="flex items-center gap-2"><span class="mono text-[11px] text-slate-500">${String(l.n).padStart(2, '0')}</span><span class="font-semibold text-slate-300 text-sm">${l.title}</span>
-      <span class="ml-auto text-[11px] text-slate-500 border border-slate-700 rounded px-1.5 py-0.5">в разработке</span></div>
-      <div class="text-[11px] text-slate-500 mt-1">${l.difficulty}</div><div class="text-xs text-slate-500 mt-1">${l.short}</div></div>`).join('');
+    const soon = SOON.map(l => `<div class="p-3 rounded-md border border-dashed" style="border-color:var(--line);background:#F8FAFC">
+      <div class="flex items-center gap-2"><span class="mono text-[11px] faint">${String(l.n).padStart(2, '0')}</span><span class="font-semibold text-sm muted">${l.title}</span>
+      <span class="ml-auto text-[10px] faint border rounded px-1.5 py-0.5 uppercase" style="border-color:var(--line)">в разработке</span></div>
+      <div class="text-[11px] faint mt-1">${l.difficulty}</div><div class="text-xs faint mt-1">${l.short}</div></div>`).join('');
     $('levelList').innerHTML = cards + soon;
     document.querySelectorAll('[data-level]').forEach(b => b.addEventListener('click', () => start(b.dataset.level)));
   }
@@ -686,9 +688,7 @@
   function setMode(mode) {
     document.querySelectorAll('[data-mode]').forEach(b => {
       const on = b.dataset.mode === mode;
-      b.classList.toggle('bg-sky-800', on);
-      b.classList.toggle('border-sky-500', on);
-      b.classList.toggle('text-white', on);
+      b.classList.toggle('is-active', on);
     });
   }
 

@@ -2,7 +2,7 @@
  * lessons.js — обучалки: пошаговые сценарии поверх тренажера ИТП.
  *
  * Урок = стартовое состояние + список шагов. Шаг выполняется, когда его check() возвращает true
- * (или держится true hold секунд). Любая новая авария 🔴 или «ошибка урока» останавливает
+ * (или держится true hold секунд). Любая новая авария или «ошибка урока» останавливает
  * тренажер, объясняет, что произошло бы на объекте, и откатывает к началу текущего шага.
  * Оценок нет — только отметка «пройдено». Эти же описания потом пригодятся для лайв-уровней.
  */
@@ -12,6 +12,7 @@
   const P = window.ITPPhysics;
   const C = P.CONST;
   const app = window.ITPApp;
+  const I = window.ITPIcons;
   const sim = app.sim;
   const $ = id => document.getElementById(id);
   const SVG_NS = 'http://www.w3.org/2000/svg';
@@ -454,7 +455,7 @@
 
   function advance() {
     const st = lesson.steps[stepIdx];
-    app.log(`✔ ${st.text}`, 'ok');
+    app.log(`Шаг выполнен: ${st.text}`, 'ok');
     if (stepIdx + 1 >= lesson.steps.length) finish();
     else enterStep(stepIdx + 1);
   }
@@ -468,8 +469,9 @@
     showModal({
       kind: 'ok',
       title: `Урок пройден: «${lesson.title}»`,
-      body: `<p class="mb-2">Что запомнить:</p><ul class="list-disc pl-5 space-y-1">${lesson.outro.map(t => `<li>${t}</li>`).join('')}</ul>
-        <p class="mt-3"><a href="${notesUrl(lesson)}" target="_blank" rel="noopener" class="text-sky-300 underline">📄 Конспект урока (PDF)</a> — почему каждое действие делается именно так.</p>`,
+      body: `<p class="mb-2 font-semibold" style="color:var(--ink)">Что запомнить:</p><ul class="list-disc pl-5 space-y-1">${lesson.outro.map(t => `<li>${t}</li>`).join('')}</ul>
+        <p class="mt-4 flex flex-wrap items-center gap-2"><a href="${notesUrl(lesson)}" target="_blank" rel="noopener" class="btn btn-sm btn-accent">${I.svg('doc', 14)}Конспект урока (PDF)</a>
+        <span class="text-xs faint">почему каждое действие делается именно так</span></p>`,
       buttons: [
         { label: 'К списку уроков', primary: true, action: () => { exit(); openMenu(); } },
         { label: 'Пройти еще раз', action: () => restart() },
@@ -481,11 +483,11 @@
   function mistake(title, text) {
     blocked = true;
     app.setPaused(true);
-    app.log(`✖ Ошибка в уроке: ${title}`, 'alarm');
+    app.log(`Ошибка в уроке: ${title}`, 'alarm');
     showModal({
       kind: 'alarm',
       title,
-      body: `<p>${text}</p><p class="mt-3 text-slate-400">На тренажере это не страшно. Вернемся к началу шага и попробуем еще раз.</p>`,
+      body: `<p style="color:var(--ink)">${text}</p><p class="mt-3 faint">На тренажере это не страшно. Вернемся к началу шага и попробуем еще раз.</p>`,
       buttons: [{ label: 'Вернуться к шагу', primary: true, action: () => { restoreSnapshot(); app.syncControlsUI(); app.setPaused(false); allowed = new Set(alarmIds()); holdSince = null; app.render(); } }]
     });
   }
@@ -554,19 +556,22 @@
     const finished = stepIdx >= total;
     const st = lesson.steps[stepIdx];
     $('lessonTitle').textContent = lesson.title;
+    $('lessonBadge').innerHTML = I.svg('book', 13) + 'УРОК ' + String(LESSONS.indexOf(lesson) + 1).padStart(2, '0');
     $('lessonNotes').href = notesUrl(lesson);
     $('lessonIntro').textContent = lesson.intro;
     $('lessonProgress').style.width = (Math.min(stepIdx, total) / total * 100).toFixed(0) + '%';
+    $('lessonSegs').innerHTML = lesson.steps.map((s, i) => `<span class="seg ${i < stepIdx ? 'done' : i === stepIdx ? 'cur' : ''}"></span>`).join('');
     $('lessonCounter').textContent = finished ? `Все ${total} шагов выполнены` : `Шаг ${stepIdx + 1} из ${total}`;
-    $('lessonStep').textContent = finished ? 'Урок пройден ✔' : st.text;
+    $('lessonStep').textContent = finished ? 'Урок пройден' : st.text;
     $('lessonWhy').textContent = finished ? '' : (st.why || '');
+    $('lessonWhyBox').hidden = finished || !st.why;
     $('lessonAck').hidden = finished || !st.ack;
     $('lessonHold').hidden = finished || !st.hold;
     renderHold();
     $('lessonSteps').innerHTML = lesson.steps.map((s, i) => {
-      const cls = i < stepIdx ? 'text-green-400' : i === stepIdx ? 'text-sky-200 font-semibold' : 'text-slate-500';
-      const mark = i < stepIdx ? '✔' : i === stepIdx ? '▶' : '○';
-      return `<li class="${cls} flex gap-2"><span class="w-4 flex-none">${mark}</span><span>${s.text}</span></li>`;
+      const cls = i < stepIdx ? 'step-done' : i === stepIdx ? 'step-cur' : 'step-todo';
+      const mark = i < stepIdx ? I.svg('check', 14) : i === stepIdx ? I.svg('arrowRight', 14) : I.svg('circle', 14);
+      return `<li class="${cls}"><span class="flex-none" style="margin-top:2px">${mark}</span><span>${s.text}</span></li>`;
     }).join('');
     if (!finished) highlight(st.target); else clearHighlight();
   }
@@ -574,17 +579,18 @@
   // Модальное окно урока
   function showModal({ kind, title, body, buttons }) {
     const m = $('lessonModal');
-    $('lessonModalIcon').textContent = kind === 'alarm' ? '🔴' : '✅';
+    const ic = $('lessonModalIcon');
+    ic.innerHTML = I.svg(kind === 'alarm' ? 'alarm' : 'checkCircle', 22);
+    ic.style.cssText = kind === 'alarm' ? 'background:#FEF2F2;color:#DC2626;border:1px solid #FECACA' : 'background:#F0FDF4;color:#16A34A;border:1px solid #BBF7D0';
     $('lessonModalTitle').textContent = title;
-    $('lessonModalTitle').className = 'text-lg font-semibold mt-1 ' + (kind === 'alarm' ? 'text-red-300' : 'text-green-300');
+    $('lessonModalTitle').className = 'text-lg font-semibold mt-1 ' + (kind === 'alarm' ? 't-bad' : 't-ok');
     $('lessonModalKind').textContent = kind === 'alarm' ? 'Ошибка — что произошло бы на объекте' : 'Обучалка завершена';
     $('lessonModalBody').innerHTML = body;
     const bx = $('lessonModalButtons');
     bx.innerHTML = '';
     buttons.forEach(b => {
       const btn = document.createElement('button');
-      btn.className = 'px-3 py-1.5 rounded text-sm font-semibold border ' +
-        (b.primary ? 'bg-sky-700 border-sky-500 text-white hover:bg-sky-600' : 'bg-slate-800 border-slate-600 text-slate-200 hover:bg-slate-700');
+      btn.className = 'btn ' + (b.primary ? 'btn-primary' : '');
       btn.textContent = b.label;
       btn.addEventListener('click', () => { m.hidden = true; blocked = false; b.action(); });
       bx.appendChild(btn);
@@ -595,23 +601,23 @@
   // Меню уроков
   function renderMenu() {
     const cards = LESSONS.map((l, i) => `
-      <div class="flex flex-col rounded border border-slate-700 bg-slate-900 hover:border-sky-500">
-      <button data-lesson="${l.id}" class="lesson-card text-left p-3 pb-1 focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-500 rounded">
+      <div class="card flex flex-col hover:border-slate-400" style="${done.has(l.id) ? 'border-left:3px solid #16A34A' : ''}">
+      <button data-lesson="${l.id}" class="lesson-card text-left p-3 pb-1 rounded focus:outline-none focus-visible:ring-2 focus-visible:ring-sky-600">
         <div class="flex items-center gap-2">
-          <span class="mono text-[11px] text-slate-500">${String(i + 1).padStart(2, '0')}</span>
-          <span class="font-semibold text-slate-100 text-sm">${l.title}</span>
-          ${done.has(l.id) ? '<span class="ml-auto text-[11px] text-green-300 border border-green-600/60 rounded px-1.5 py-0.5">✔ пройдено</span>' : ''}
+          <span class="mono text-[11px] faint">${String(i + 1).padStart(2, '0')}</span>
+          <span class="font-semibold text-sm" style="color:var(--ink)">${l.title}</span>
+          ${done.has(l.id) ? `<span class="ml-auto text-[11px] t-ok inline-flex items-center gap-1 font-semibold">${I.svg('check', 13)}пройдено</span>` : ''}
         </div>
-        <div class="text-xs text-slate-400 mt-1 leading-5">${l.short}</div>
-        <div class="text-[11px] text-slate-500 mt-1 mono">${l.steps.length} шагов</div>
+        <div class="text-xs muted mt-1 leading-5">${l.short}</div>
+        <div class="text-[11px] faint mt-1 mono">${l.steps.length} шагов</div>
       </button>
-      <a href="${notesUrl(l)}" target="_blank" rel="noopener" class="px-3 pb-2 text-[11px] text-sky-300 hover:underline self-start">📄 Конспект (PDF)</a>
+      <a href="${notesUrl(l)}" target="_blank" rel="noopener" class="mx-3 mb-2.5 mt-1 self-start text-[11px] font-semibold t-acc inline-flex items-center gap-1 hover:underline">${I.svg('doc', 13)}Конспект PDF</a>
       </div>`).join('');
     const soon = SOON.map(l => `
-      <div class="p-3 rounded border border-dashed border-slate-800 opacity-60">
-        <div class="flex items-center gap-2"><span class="font-semibold text-slate-300 text-sm">${l.title}</span>
-        <span class="ml-auto text-[11px] text-slate-500 border border-slate-700 rounded px-1.5 py-0.5">скоро</span></div>
-        <div class="text-xs text-slate-500 mt-1 leading-5">${l.short}</div>
+      <div class="p-3 rounded-md border border-dashed" style="border-color:var(--line);background:#F8FAFC">
+        <div class="flex items-center gap-2"><span class="font-semibold text-sm muted">${l.title}</span>
+        <span class="ml-auto text-[10px] faint border rounded px-1.5 py-0.5 uppercase tracking-wide" style="border-color:var(--line)">скоро</span></div>
+        <div class="text-xs faint mt-1 leading-5">${l.short}</div>
       </div>`).join('');
     $('lessonList').innerHTML = cards;
     $('lessonSoon').innerHTML = soon;
@@ -625,9 +631,7 @@
   function setMode(mode) {
     document.querySelectorAll('[data-mode]').forEach(b => {
       const on = b.dataset.mode === mode;
-      b.classList.toggle('bg-sky-800', on);
-      b.classList.toggle('border-sky-500', on);
-      b.classList.toggle('text-white', on);
+      b.classList.toggle('is-active', on);
     });
   }
 

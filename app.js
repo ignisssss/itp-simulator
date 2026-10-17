@@ -19,11 +19,74 @@
   const $ = id => document.getElementById(id);
 
   // ---------------------------------------------------------------------------
+  // Линейные SVG-иконки (stroke = currentColor). Доступны lessons.js / levels.js через window.ITPIcons.
+  // ---------------------------------------------------------------------------
+  const ICON_PATHS = {
+    alert: 'M12 3.5 2.8 19.5h18.4L12 3.5z M12 10v4.5 M12 17.2v.3',
+    alarm: 'M8.2 3h7.6L21 8.2v7.6L15.8 21H8.2L3 15.8V8.2z M12 7.8v5.4 M12 16.4v.3',
+    info: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 11v5 M12 7.8v.3',
+    check: 'M5 12.5l4.2 4.2L19 7',
+    checkCircle: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M8 12.3l2.7 2.7L16.2 9.4',
+    close: 'M6 6l12 12M18 6 6 18',
+    reset: 'M4.5 12a7.5 7.5 0 1 0 2.2-5.3 M4.5 4.5v4h4',
+    pause: 'M9 6v12M15 6v12',
+    play: 'M8 5.5v13l10-6.5z',
+    clock: 'M12 21a9 9 0 1 0 0-18 9 9 0 0 0 0 18z M12 7.5V12l3 2',
+    phone: 'M5 4h3.5l1.8 4.4-2.3 1.4a11 11 0 0 0 6.2 6.2l1.4-2.3 4.4 1.8V19a1.5 1.5 0 0 1-1.6 1.5A16.5 16.5 0 0 1 3.5 5.6 1.5 1.5 0 0 1 5 4z',
+    book: 'M4 5.5a2 2 0 0 1 2-2h13v15H6a2 2 0 0 0-2 2z M4 20.5v-15 M8 7.5h7',
+    doc: 'M7 3h7l4 4v14H7z M14 3v4h4 M9.5 12h6 M9.5 15.5h6',
+    flag: 'M5 21V4 M5 4h11l-2 4 2 4H5',
+    gauge: 'M4 16a8 8 0 1 1 16 0 M12 16l4.2-5.2 M6.5 16h0 M17.5 16h0',
+    list: 'M9 6h11M9 12h11M9 18h11 M4.5 6h.01M4.5 12h.01M4.5 18h.01',
+    wrench: 'M15 4.5a4.5 4.5 0 0 0-4.3 5.9L4 17.1 6.9 20l6.7-6.7A4.5 4.5 0 0 0 19.5 9l-2.7 2.7-2.6-.9-.9-2.6z',
+    sliders: 'M6 4v16M12 4v16M18 4v16 M4 15h4M10 8h4M16 12h4',
+    gear: 'M12 15.2a3.2 3.2 0 1 0 0-6.4 3.2 3.2 0 0 0 0 6.4z M12 2.8v2.6 M12 18.6v2.6 M2.8 12h2.6 M18.6 12h2.6 M5.5 5.5l1.9 1.9 M16.6 16.6l1.9 1.9 M5.5 18.5l1.9-1.9 M16.6 7.4l1.9-1.9',
+    lock: 'M6 11h12v10H6z M8.5 11V8a3.5 3.5 0 0 1 7 0v3',
+    mail: 'M3.5 6h17v12h-17z M3.5 6.5l8.5 6.5 8.5-6.5',
+    star: 'M12 3.2l2.7 5.6 6.1.8-4.5 4.2 1.1 6-5.4-3-5.4 3 1.1-6-4.5-4.2 6.1-.8z',
+    valve: 'M4 7v10l16-10v10z M12 12V5 M8.5 5h7',
+    filter: 'M4 5h16l-6 7v6l-4 2v-8z',
+    pump: 'M12 20a8 8 0 1 0 0-16 8 8 0 0 0 0 16z M12 12V6.5 M12 12l4.8 2.8 M12 12l-4.8 2.8',
+    hex: 'M5 3h14v18H5z M9 3v18 M12 3v18 M15 3v18',
+    shield: 'M12 3l7 3v5c0 4.5-3 8-7 10-4-2-7-5.5-7-10V6z',
+    drop: 'M12 3.5c3.5 4.5 6 7.6 6 10.5a6 6 0 0 1-12 0c0-2.9 2.5-6 6-10.5z',
+    drain: 'M12 3v9 M8.5 9.5 12 13l3.5-3.5 M4 17h16l-3 4H7z',
+    building: 'M5 21V4h10v17 M15 9h4v12 M3 21h18 M8 7.5h1M11 7.5h1M8 11h1M11 11h1M8 14.5h1M11 14.5h1',
+    arrowRight: 'M5 12h14M13 6l6 6-6 6',
+    chevDown: 'M6 9l6 6 6-6',
+    chevUp: 'M6 15l6-6 6 6',
+    dot: 'M12 13.5a1.5 1.5 0 1 0 0-3 1.5 1.5 0 0 0 0 3z',
+    circle: 'M12 18a6 6 0 1 0 0-12 6 6 0 0 0 0 12z'
+  };
+  const ICONS = {
+    /** svg(имя, размер, {fill: true}) → строка разметки */
+    svg(name, size, opt) {
+      const d = ICON_PATHS[name] || ICON_PATHS.info;
+      const z = size || 16;
+      const fill = opt && opt.fill ? 'currentColor' : 'none';
+      return `<svg class="ico" width="${z}" height="${z}" viewBox="0 0 24 24" fill="${fill}" stroke="currentColor" stroke-width="1.75" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="${d}"/></svg>`;
+    },
+    /** Геометрические звезды рейтинга: n закрашенных из 3 */
+    stars(n, size) {
+      let h = '<span class="stars" aria-label="' + n + ' из 3">';
+      for (let i = 0; i < 3; i++) h += ICONS.svg('star', size || 16, { fill: i < n });
+      return h + '</span>';
+    },
+    fillAll(root) {
+      (root || document).querySelectorAll('[data-icon]').forEach(el => {
+        if (!el.firstChild) el.innerHTML = ICONS.svg(el.dataset.icon, Number(el.dataset.size) || 15);
+      });
+    }
+  };
+  window.ITPIcons = ICONS;
+  ICONS.fillAll();
+
+  // ---------------------------------------------------------------------------
   // Справочник «Зачем нужен этот элемент?»
   // ---------------------------------------------------------------------------
   const INFO = {
     valves: {
-      icon: '🔩', title: 'Задвижки V1 / V2',
+      icon: 'valve', title: 'Задвижки V1 / V2',
       body: `<p><b>Запорная арматура</b> на вводе теплосети: V1 — на подающем трубопроводе, V2 — на обратном.</p>
         <p class="mt-2">Работает только в двух положениях: <b>«открыто» или «закрыто»</b>. Регулировать расход задвижкой нельзя —
         поток в узкой щели срывает и размывает кромку затвора, после чего задвижка перестает держать.</p>
@@ -35,7 +98,7 @@
         сначала V2, затем V1. Если закрыть только обратку, ПТО окажется под полным давлением подачи (6.5 бар).</p>`
     },
     netdrain: {
-      icon: '🪣', title: 'Дренаж и воздушник сетевого участка',
+      icon: 'drain', title: 'Дренаж и воздушник сетевого участка',
       body: `<p>Участок между вводными задвижками V1 и V2 (грязевик, КЗР, ПТО) нельзя ремонтировать, пока в нем есть вода под
         давлением. Закрытые задвижки только <b>отсекают</b> участок — давление и горячая вода остаются внутри.</p>
         <p class="mt-2"><b>Дренаж</b> стоит в нижней точке (перед V2): через него сбрасывают давление и сливают воду.
@@ -46,7 +109,7 @@
         <p class="mt-2">Если КЗР закрыт, грязевик отсечен от дренажа и останется под давлением — перед сливом откройте КЗР.</p>`
     },
     strainer: {
-      icon: '🧲', title: 'Грязевик (сетчатый фильтр)',
+      icon: 'filter', title: 'Грязевик (сетчатый фильтр)',
       body: `<p>Ловит ржавчину, окалину и песок из теплосети, спасая <b>узкие каналы пластин ПТО</b> и <b>седло регулирующего клапана КЗР</b>.</p>
         <p class="mt-2">Диагностируется по <b>двум манометрам — до и после</b> фильтра. Чистый грязевик теряет сотые доли бара;
         перепад больше 0.6 бар означает, что сетка забита и ее пора промывать.</p>
@@ -55,17 +118,17 @@
         «Вскрыть и промыть» → закрыть дренаж, заполнить участок через V2 с открытым воздушником → закрыть воздушник → открыть V1.</p>`
     },
     kzr: {
-      icon: '🎛️', title: 'Клапан КЗР с электроприводом',
+      icon: 'gauge', title: 'Клапан КЗР с электроприводом',
       body: `<p><b>Главный рабочий орган регулирования мощности ИТП.</b> Меняет расход греющей сетевой воды через ПТО.</p>
         <p class="mt-2">Больше открыт → больше расход G1 → выше T11 в доме, но и выше температура обратки T2 (штраф теплосети).
         Меньше открыт → недотоп.</p>
         <p class="mt-2">В реальном ИТП им управляет погодный контроллер по датчику наружного воздуха и T11. Здесь вы — контроллер:
         рабочая зона около 45…50 %.</p>
-        <p class="mt-2">Положение клапана меняет <b>электропривод</b> (буква M на схеме). Если привод отказал (✕), клапан стоит в последнем положении —
+        <p class="mt-2">Положение клапана меняет <b>электропривод</b> (буква M на схеме). Если привод отказал (!), клапан стоит в последнем положении —
         тогда включают <b>ручной режим</b> (Р) и крутят клапан штурвалом. Штурвалом клапан движется медленнее.</p>`
     },
     hex: {
-      icon: '♨️', title: 'ПТО — пластинчатый теплообменник',
+      icon: 'hex', title: 'ПТО — пластинчатый теплообменник',
       body: `<p>Передает тепло через <b>гофрированные стальные пластины</b> без смешения сетевой и домовой воды.</p>
         <p class="mt-2">На схеме видно устройство: между пластинами чередуются каналы. В каждом втором канале идет
         <b>сетевая вода — сверху вниз</b> (от T1 к T2), в соседних — <b>домовая вода снизу вверх</b> (от T21 к T11). Это противоток:
@@ -76,7 +139,7 @@
         перегреваются до температуры сети и обрастают накипью.</p>`
     },
     house: {
-      icon: '🚿', title: 'Краны дома, спуск стояков и воздушники',
+      icon: 'valve', title: 'Краны дома, спуск стояков и воздушники',
       body: `<p><b>Кд1 и Кд2</b> — отсекающие краны на подаче в дом и на обратке из дома. Ими дом отделяют от ИТП, например при
         прорыве радиатора или ремонте стояков. Пока хотя бы один кран открыт, давление в доме и в ИТП общее; циркуляция идет только при обоих открытых.</p>
         <p class="mt-2"><b>Спуск стояков</b> сбрасывает давление и сливает воду из дома в канализацию. <b>Воздушники 9 этажа</b> при сливе впускают воздух
@@ -85,7 +148,7 @@
         и поднимают давление до ≈ 3.5 бар. Насос пускают только в полностью заполненную систему.</p>`
     },
     pump: {
-      icon: '🌀', title: 'Циркуляционные насосы Н1 и Н2',
+      icon: 'pump', title: 'Циркуляционные насосы Н1 и Н2',
       body: `<p>Крутит воду по стоякам и радиаторам дома. Важно: насос <b>не создает статического давления, а только перепад</b>
         (здесь 1.8 бар): P11 = P21 + 1.8.</p>
         <p class="mt-2">Если давление на всасе P21 упадет ниже 1.5 бар — начнется <b>кавитация</b>: вода вскипает на лопатках колеса и
@@ -95,26 +158,26 @@
         Насос, работающий на закрытые краны, гоняет воду «сам в себе» — она греется, уплотнения изнашиваются.</p>`
     },
     makeup: {
-      icon: '💧', title: 'Линия подпитки',
+      icon: 'drop', title: 'Линия подпитки',
       body: `<p>Статическое давление, нужное чтобы вода дошла до верхних этажей, держит <b>линия подпитки</b> из сетевой обратки
         (через обратный клапан). Штатное давление на всасе — <b>3.5 бар</b>.</p>
         <p class="mt-2">Открытая подпитка поднимает P21 к давлению сетевой обратки (4.5 бар), и тогда P11 = 4.5 + 1.8 = 6.3 бар —
         сработает предохранительный клапан. Поэтому подпитку открывают ненадолго и следят за манометром.</p>`
     },
     relief: {
-      icon: '🛡️', title: 'Предохранительный клапан (ПК 6.0 бар)',
+      icon: 'shield', title: 'Предохранительный клапан (ПК 6.0 бар)',
       body: `<p>Последний рубеж защиты внутреннего контура: при давлении выше <b>6.0 бар</b> пружина открывает клапан и сбрасывает воду,
         не давая разорвать радиаторы на нижних этажах. Садится обратно ниже 5.9 бар.</p>
         <p class="mt-2">Срабатывание ПК — всегда авария: нужно найти причину (обычно — открытая подпитка).</p>`
     },
     drain: {
-      icon: '🚰', title: 'Дренаж',
+      icon: 'drain', title: 'Дренаж',
       body: `<p>Кран сброса воды из внутреннего контура в канализацию. Нужен для ремонта и для снижения давления.</p>
         <p class="mt-2">Открытый дренаж опускает P21 почти до нуля — работающий насос уйдет в кавитацию. После дренажа давление
         поднимают подпиткой до 3.5 бар.</p>`
     },
     building: {
-      icon: '🏢', title: 'Система отопления дома',
+      icon: 'building', title: 'Система отопления дома',
       body: `<p>Стояки и радиаторы 9-этажного дома. Вода приходит с температурой <b>T11</b> (норма 70…80 °C), отдает тепло квартирам
         и возвращается с температурой <b>T21</b> примерно на 30 °C ниже.</p>
         <p class="mt-2">Чем холоднее на улице, тем больше тепла теряет дом, поэтому по <b>температурному графику</b> растет нужная T11
@@ -132,7 +195,7 @@
     if (!it) return;
     if (window.ITPLevels && window.ITPLevels.active()) return; // в уровнях справочник недоступен
     if (window.ITPLessons) window.ITPLessons.onInfo(key);
-    $('infoIcon').textContent = it.icon;
+    $('infoIcon').innerHTML = ICONS.svg(it.icon, 22);
     $('infoTitle').textContent = it.title;
     $('infoBody').innerHTML = it.body;
     const m = $('infoModal');
@@ -153,20 +216,23 @@
   // ---------------------------------------------------------------------------
   // Показания приборов на схеме
   // ---------------------------------------------------------------------------
-  // rows: [название, ключ в sim.out, единицы, знаков]
+  // Шильдик прибора: сверху цветная плашка с позицией (горячая/обратная/общая среда),
+  // ниже строки «код — значение». rows: [код, ключ в sim.out, единицы, знаков]
+  const MEDIUM = { hot: '#C2410C', cold: '#0369A1', gen: '#334155' };
   const TAGS = [
-    { x: 22, y: 16, w: 94, rows: [['T1', 'T1', '°C', 1], ['P1', 'P1', 'бар', 2]] },
-    { x: 190, y: 128, w: 112, rows: [['P до', 'P_before_strainer', 'бар', 2], ['P после', 'P_after_strainer', 'бар', 2]] },
-    { x: 320, y: 104, w: 112, rows: [['P пто', 'P_hex_net', 'бар', 2], ['G1', 'G1', 'т/ч', 1]] },
-    { x: 22, y: 362, w: 94, rows: [['T2', 'T2', '°C', 1], ['P2', 'P2', 'бар', 2]] },
-    { x: 560, y: 16, w: 100, rows: [['T11', 'T11', '°C', 1], ['G2', 'G2', 'т/ч', 1]] },
-    { x: 532, y: 456, w: 88, rows: [['P11', 'P11', 'бар', 2]] },
-    { x: 664, y: 456, w: 88, rows: [['P21', 'P21_disp', 'бар', 2]] },
-    { x: 736, y: 376, w: 88, rows: [['T21', 'T21', '°C', 1]] },
-    { x: 806, y: 16, w: 120, rows: [['P подача', 'P_house_supply', 'бар', 2]] },
-    { x: 694, y: 188, w: 128, rows: [['P 9 эт.', 'P_top', 'бар', 2], ['ΔP дома', 'dP_house', 'бар', 2], ['P низ дома', 'P_house', 'бар', 2], ['T кварт.', 'T_room', '°C', 1]] }
+    { x: 22, y: 16, w: 94, head: 'ПОДАЧА СЕТИ', m: 'hot', rows: [['T1', 'T1', '°C', 1], ['P1', 'P1', 'бар', 2]] },
+    { x: 190, y: 128, w: 112, head: 'ГРЯЗЕВИК', m: 'gen', rows: [['P до', 'P_before_strainer', 'бар', 2], ['P после', 'P_after_strainer', 'бар', 2]] },
+    { x: 320, y: 104, w: 112, head: 'ВХОД ПТО', m: 'hot', rows: [['P пто', 'P_hex_net', 'бар', 2], ['G1', 'G1', 'т/ч', 1]] },
+    { x: 22, y: 362, w: 94, head: 'ОБРАТКА СЕТИ', m: 'cold', rows: [['T2', 'T2', '°C', 1], ['P2', 'P2', 'бар', 2]] },
+    { x: 560, y: 16, w: 100, head: 'ПОДАЧА В ДОМ', m: 'hot', rows: [['T11', 'T11', '°C', 1], ['G2', 'G2', 'т/ч', 1]] },
+    { x: 532, y: 452, w: 88, head: 'НАГНЕТАНИЕ', m: 'cold', rows: [['P11', 'P11', 'бар', 2]] },
+    { x: 664, y: 452, w: 88, head: 'ВСАС', m: 'cold', rows: [['P21', 'P21_disp', 'бар', 2]] },
+    { x: 736, y: 372, w: 88, head: 'ОБРАТКА ДОМА', m: 'cold', rows: [['T21', 'T21', '°C', 1]] },
+    { x: 806, y: 16, w: 120, head: 'ВЫХОД ИТП', m: 'hot', rows: [['P подача', 'P_house_supply', 'бар', 2]] },
+    { x: 694, y: 184, w: 128, head: 'ДОМ', m: 'gen', rows: [['P 9 эт.', 'P_top', 'бар', 2], ['ΔP дома', 'dP_house', 'бар', 2], ['P низ дома', 'P_house', 'бар', 2], ['T кварт.', 'T_room', '°C', 1]] }
   ];
   const tagEls = {};
+  const tagFrames = [];   // { frame, keys }
 
   function svgEl(name, attrs, parent) {
     const el = document.createElementNS(SVG_NS, name);
@@ -178,21 +244,25 @@
   (function buildTags() {
     const g = $('tags');
     TAGS.forEach(t => {
-      const h = 8 + t.rows.length * 20;
-      svgEl('rect', { x: t.x, y: t.y, width: t.w, height: h, rx: 3, class: 'tag-box' }, g);
+      const h = 13 + t.rows.length * 18 + 4;
+      const frame = svgEl('rect', { x: t.x, y: t.y, width: t.w, height: h, rx: 1.5, class: 'tag-box' }, g);
+      svgEl('rect', { x: t.x + 0.5, y: t.y + 0.5, width: t.w - 1, height: 12, fill: MEDIUM[t.m] }, g);
+      svgEl('text', { x: t.x + 5, y: t.y + 9.5, class: 'tag-head' }, g).textContent = t.head;
       t.rows.forEach((r, i) => {
-        const y = t.y + 20 + i * 20;
+        const y = t.y + 13 + 15 + i * 18;
+        if (i) svgEl('line', { x1: t.x + 4, x2: t.x + t.w - 4, y1: y - 13.5, y2: y - 13.5, stroke: '#E2E8F0', 'stroke-width': 0.8 }, g);
         svgEl('text', { x: t.x + 5, y: y - 1, class: 'tag-name' }, g).textContent = r[0];
         const v = svgEl('text', { x: t.x + t.w - 5, y, 'text-anchor': 'end', class: 'tag-val' }, g);
         tagEls[r[1]] = { el: v, unit: r[2], digits: r[3] };
       });
+      tagFrames.push({ frame, keys: t.rows.map(r => r[1]) });
     });
 
     // Окна дома: 9 этажей × 5 окон
     const w = $('houseWindows');
     for (let f = 0; f < 9; f++) {
       for (let k = 0; k < 5; k++) {
-        svgEl('rect', { x: 842 + k * 26, y: 178 + f * 19, width: 16, height: 11, rx: 1, class: 'win', fill: '#f5c26b' }, w);
+        svgEl('rect', { x: 842 + k * 26, y: 178 + f * 19, width: 16, height: 11, rx: 0.5, class: 'win', fill: '#FCD34D', stroke: '#94A3B8', 'stroke-width': 0.6 }, w);
       }
     }
   })();
@@ -216,11 +286,17 @@
   // ---------------------------------------------------------------------------
   // Цвета и анимация потока
   // ---------------------------------------------------------------------------
+  // Инженерная палитра теплоносителя: обратка — стальной синий, середина — охра, подача — терракотовая медь
+  // до 55 °C — обратка (синий), 55…68 °C — переход в охру, 68…90 °C — к терракоте подачи
+  const T_STOPS = [[20, [3, 105, 161]], [55, [3, 105, 161]], [68, [217, 119, 6]], [90, [194, 65, 12]]];
   function tempColor(t) {
-    // 20 °C — синий, 95 °C — красный
-    const x = Math.min(1, Math.max(0, (t - 20) / 75));
-    const hue = 215 - 215 * x;
-    return `hsl(${hue.toFixed(0)}, 80%, ${(48 + 6 * x).toFixed(0)}%)`;
+    const v = Math.min(90, Math.max(20, t));
+    let k = 0;
+    while (k < T_STOPS.length - 2 && v > T_STOPS[k + 1][0]) k++;
+    const [t0, c0] = T_STOPS[k], [t1, c1] = T_STOPS[k + 1];
+    const x = (v - t0) / (t1 - t0);
+    const c = c0.map((a, i) => Math.round(a + (c1[i] - a) * x));
+    return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
   }
 
   const flowCache = {};
@@ -262,17 +338,23 @@
       const opening = sim.controls[k + 'cmd'] === 'open';
       const moving = gateMoving(k);
       const btn = row.querySelector('.gate-btn');
-      btn.textContent = opening ? '▼ Закрыть' : '▲ Открыть';
-      btn.className = 'gate-btn w-28 py-1.5 rounded text-xs font-semibold border bg-slate-800 ' +
-        (opening ? 'border-red-500/70 text-red-200 hover:bg-red-900/40' : 'border-green-500/70 text-green-200 hover:bg-green-900/40');
+      const want = opening ? 'close' : 'open';
+      if (btn.dataset.want !== want) {
+        btn.dataset.want = want;
+        btn.innerHTML = opening ? ICONS.svg('chevDown', 14) + 'Закрыть' : ICONS.svg('chevUp', 14) + 'Открыть';
+        btn.className = 'gate-btn btn btn-sm w-24 ' + (opening ? 'btn-close' : 'btn-open');
+      }
       const bar = row.querySelector('.gate-bar');
       bar.style.width = pos.toFixed(1) + '%';
-      bar.style.background = moving ? '#f59e0b' : (pos >= 100 ? '#22c55e' : '#ef4444');
+      bar.style.background = moving ? '#D97706' : (pos >= 100 ? '#16A34A' : '#DC2626');
       const tag = row.querySelector('.tag-btn');
       const tagged = sim.controls[k + 'tag'];
-      tag.textContent = tagged ? '🔒 Плакат' : 'Плакат';
-      tag.className = 'tag-btn px-2 py-1.5 rounded text-xs border ' +
-        (tagged ? 'bg-red-800/50 border-red-500 text-red-100' : 'bg-slate-800 border-slate-600 text-slate-400 hover:border-red-500');
+      const tagSt = tagged ? 'on' : 'off';
+      if (tag.dataset.state !== tagSt) {
+        tag.dataset.state = tagSt;
+        tag.innerHTML = tagged ? '<span>Не открывать!</span><span>Работают люди</span>' : 'Повесить плакат';
+        tag.className = 'tag-btn ' + (tagged ? 'tag-on' : 'tag-off');
+      }
       $('tag' + k).toggleAttribute('hidden', !tagged);
       row.querySelector('.gate-state').textContent = moving
         ? (opening ? 'открывается… ' : 'закрывается… ') + Math.round(pos) + '%'
@@ -312,20 +394,18 @@
   }
 
   // Переключатели: <button data-toggle="КЛЮЧ" data-on="…" data-off="…" data-tone="green|amber|slate" data-inverse="1">
-  const TONES = {
-    green: 'bg-green-700/40 border-green-500 text-green-200',
-    amber: 'bg-amber-700/40 border-amber-500 text-amber-200',
-    red: 'bg-red-800/50 border-red-500 text-red-100',
-    off: 'bg-slate-800 border-slate-600 text-slate-400'
-  };
+  const TONES = { green: 'tb-green', amber: 'tb-amber', red: 'tb-red', off: '' };
   const toggleEls = Array.from(document.querySelectorAll('[data-toggle]'));
+  toggleEls.forEach(b => { b.dataset.base = b.className; });
   function renderToggles() {
     toggleEls.forEach(b => {
       const on = !!sim.controls[b.dataset.toggle];
-      b.textContent = on ? b.dataset.on : b.dataset.off;
+      const label = on ? b.dataset.on : b.dataset.off;
+      if (b.textContent !== label) b.textContent = label;
       // «Инверсные» (краны, нормально открытые): закрытое состояние подсвечивается красным
       const tone = b.dataset.inverse ? (on ? 'off' : 'red') : (on ? b.dataset.tone : 'off');
-      b.className = b.className.replace(/\b(bg|border|text)-[a-z]+-[0-9]+(\/[0-9]+)?\b/g, '').trim() + ' ' + TONES[tone];
+      const cls = (b.dataset.base + ' ' + TONES[tone]).trim();
+      if (b.className !== cls) b.className = cls;
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
   }
@@ -333,7 +413,7 @@
     const k = b.dataset.toggle;
     sim.controls[k] = !sim.controls[k];
     if ((k === 'PUMP' || k === 'PUMP2') && sim.controls[k]) sim.state.pumpTripped = false;
-    log(`Оператор: ${b.dataset.label} — ${(sim.controls[k] ? b.dataset.on : b.dataset.off).replace(/[●○▼▲✋]\s?/g, '').toLowerCase()}`, 'op');
+    log(`Оператор: ${b.dataset.label} — ${(sim.controls[k] ? b.dataset.on : b.dataset.off).toLowerCase()}`, 'op');
     renderToggles();
   }));
 
@@ -372,11 +452,11 @@
     speed = s;
     document.querySelectorAll('.speed-btn').forEach(b => {
       const active = Number(b.dataset.speed) === s && !paused;
-      b.classList.toggle('bg-sky-800', active);
-      b.classList.toggle('border-sky-500', active);
+      b.classList.toggle('is-active', active);
     });
-    $('pauseBtn').classList.toggle('bg-amber-800', paused);
-    $('pauseBtn').textContent = paused ? '▶' : '❚❚';
+    $('pauseBtn').classList.toggle('is-paused', paused);
+    $('pauseBtn').innerHTML = ICONS.svg(paused ? 'play' : 'pause', 13);
+    $('pauseBtn').setAttribute('aria-label', paused ? 'Продолжить' : 'Пауза');
   }
   document.querySelectorAll('.speed-btn').forEach(b =>
     b.addEventListener('click', () => { paused = false; setSpeed(Number(b.dataset.speed)); }));
@@ -392,10 +472,10 @@
     const s = Math.floor(t);
     return String(Math.floor(s / 60)).padStart(2, '0') + ':' + String(s % 60).padStart(2, '0');
   }
-  const LOG_COLORS = { alarm: 'text-red-400', warn: 'text-amber-300', ok: 'text-green-400', op: 'text-sky-300', info: 'text-sky-300', clear: 'text-slate-500' };
+  const LOG_COLORS = { alarm: 'log-alarm', warn: 'log-warn', ok: 'log-ok', op: 'log-op', info: 'log-info', clear: 'log-clear' };
   function log(msg, kind) {
     const div = document.createElement('div');
-    div.className = LOG_COLORS[kind] || 'text-slate-300';
+    div.className = LOG_COLORS[kind] || 'log-def';
     div.textContent = `[${fmtTime(sim.state.time)}] ${msg}`;
     const box = $('log');
     box.prepend(div);
@@ -405,7 +485,7 @@
   // ---------------------------------------------------------------------------
   // Табло аварий
   // ---------------------------------------------------------------------------
-  const ICON = { alarm: '🔴', warn: '🟡', ok: '🟢', info: '🔵' };
+  const ICON = { alarm: 'alarm', warn: 'alert', ok: 'checkCircle', info: 'info' };
   let lastSignature = '';
   let activeIds = new Map(); // id -> заголовок
 
@@ -415,12 +495,10 @@
     if (signature !== lastSignature) {
       lastSignature = signature;
       $('alarms').innerHTML = list.map(a => `
-        <div class="alarm-card ${a.level} px-3 py-2">
-          <div class="text-sm font-semibold ${a.level === 'alarm' ? 'text-red-300' : a.level === 'warn' ? 'text-amber-200' : a.level === 'info' ? 'text-sky-300' : 'text-green-300'}">
-            <span class="${a.level === 'alarm' ? 'blink' : ''}">${ICON[a.level]}</span> ${a.title}
-          </div>
-          <div class="alarm-text text-xs text-slate-300 mt-1 leading-5">${a.text}</div>
-          <div class="text-[11px] mono text-slate-400 mt-1" data-detail="${a.id}"></div>
+        <div class="alarm-card ${a.level}">
+          <div class="a-title"><span class="${a.level === 'alarm' ? 'blink' : ''}" style="margin-top:1px">${ICONS.svg(ICON[a.level], 16)}</span><span>${a.title}</span></div>
+          <div class="alarm-text">${a.text}</div>
+          <div class="a-detail" data-detail="${a.id}"></div>
         </div>`).join('');
 
       // Журнал: появление и снятие событий
@@ -469,27 +547,27 @@
     const y = t => h - 4 - (Math.min(tMax, Math.max(tMin, t)) - tMin) / (tMax - tMin) * (h - 8);
 
     // Сетка и нормативы
-    ctx.font = '10px Consolas, monospace';
-    ctx.fillStyle = '#4b6584';
-    ctx.strokeStyle = '#132033';
+    ctx.font = "500 10px 'JetBrains Mono', Consolas, monospace";
+    ctx.fillStyle = '#64748B';
+    ctx.strokeStyle = '#E2E8F0';
     ctx.lineWidth = 1;
     [20, 40, 60, 80, 100].forEach(t => {
       ctx.beginPath(); ctx.moveTo(0, y(t)); ctx.lineTo(w, y(t)); ctx.stroke();
       ctx.fillText(t + '°', 2, y(t) - 2);
     });
-    ctx.fillStyle = 'rgba(34,197,94,.08)';
+    ctx.fillStyle = 'rgba(22,163,74,.08)';
     ctx.fillRect(0, y(sim.out.T11_max), w, y(sim.out.T11_min) - y(sim.out.T11_max));
     ctx.setLineDash([4, 4]);
-    ctx.strokeStyle = 'rgba(251,191,36,.5)';
+    ctx.strokeStyle = 'rgba(217,119,6,.75)';
     ctx.beginPath(); ctx.moveTo(0, y(sim.out.T2_max)); ctx.lineTo(w, y(sim.out.T2_max)); ctx.stroke();
     ctx.setLineDash([]);
 
-    const colors = ['#f87171', '#fbbf24', '#60a5fa'];
+    const colors = ['#C2410C', '#D97706', '#0369A1'];
     const dx = w / (TREND_LEN - 1);
     const x0 = w - (trend.length - 1) * dx;
     colors.forEach((col, k) => {
       ctx.strokeStyle = col;
-      ctx.lineWidth = 1.8;
+      ctx.lineWidth = 2;
       ctx.beginPath();
       trend.forEach((p, i) => { const X = x0 + i * dx; i ? ctx.lineTo(X, y(p[k])) : ctx.moveTo(X, y(p[k])); });
       ctx.stroke();
@@ -509,48 +587,55 @@
     $('tOut').textContent = (o.T_out > 0 ? '+' : o.T_out < 0 ? '−' : '') + Math.abs(o.T_out).toFixed(0) + ' °C';
 
     // Приборы
+    const states = {};
     for (const key in tagEls) {
       const t = tagEls[key];
+      states[key] = tagState(key, o);
       t.el.textContent = fmt(o[key], t.digits) + ' ' + t.unit;
-      t.el.setAttribute('class', 'tag-val ' + tagState(key, o));
+      t.el.setAttribute('class', 'tag-val ' + states[key]);
     }
+    // рамка шильдика подсвечивается по худшему параметру
+    tagFrames.forEach(({ frame, keys }) => {
+      const st = keys.some(k => states[k] === 'bad') ? 'bad' : keys.some(k => states[k] === 'warn') ? 'warn' : '';
+      frame.setAttribute('class', 'tag-box ' + st);
+    });
     $('txtQ').textContent = Math.round(o.Q);
     $('txtKZR').textContent = Math.round(c.KZR) + '%';
     const mode = $('txtKZRmode');
-    if (c.KZR_MANUAL) { mode.textContent = 'Р'; mode.style.fill = '#fbbf24'; }
-    else if (o.kzrFail) { mode.textContent = '✕'; mode.style.fill = '#ef4444'; }
-    else { mode.textContent = 'M'; mode.style.fill = '#e2f3ff'; }
+    if (c.KZR_MANUAL) { mode.textContent = 'Р'; mode.style.fill = '#B45309'; }
+    else if (o.kzrFail) { mode.textContent = '!'; mode.style.fill = '#DC2626'; }
+    else { mode.textContent = 'M'; mode.style.fill = '#0F172A'; }
     $('kzrPos').textContent = `положение ${Math.round(c.KZR)} %` + (o.kzrFail && !c.KZR_MANUAL ? ' · привод не отвечает' : c.KZR_MANUAL ? ' · штурвал' : '');
     renderToggles();
 
     // Цвета труб по температуре
     // Сетевой участок: пустые трубы — серые, частично заполненные — полупрозрачные
-    const EMPTY = '#273244';
+    const EMPTY = '#CBD5E1';   // опорожненный участок
     const secT = c.V1 >= C.CLOSED_PCT ? o.T1 : o.T2;
     const fillPipe = (id, n, t) => {
       const f = o.fill[n];
       const el = $(id);
-      el.style.stroke = f < 0.05 ? EMPTY : tempColor(t);
-      el.style.opacity = (0.3 + 0.7 * f).toFixed(2);
+      el.style.stroke = f < 0.2 ? EMPTY : tempColor(t);
+      el.style.opacity = f < 0.2 ? '1' : (0.45 + 0.55 * f).toFixed(2);
     };
     $('pipeP1a').style.stroke = tempColor(o.T1);
     fillPipe('pipeP1b', 1, secT);
     fillPipe('pipeP1c', 3, secT);
     fillPipe('pipeP2a', 4, o.T2);
     $('pipeP2b').style.stroke = tempColor(o.T2);
-    $('pipeNetDr').style.stroke = c.NET_DRAIN ? '#f59e0b' : '#3b4a60';
-    $('pipeVent').style.stroke = c.NET_VENT ? '#38bdf8' : '#3b4a60';
+    $('pipeNetDr').style.stroke = c.NET_DRAIN ? '#D97706' : '#94A3B8';
+    $('pipeVent').style.stroke = c.NET_VENT ? '#0284C7' : '#94A3B8';
     $('pipeS1').style.stroke = tempColor(o.T11);
     $('pipeS2').style.stroke = tempColor(o.T21);
     $('pipeMk').style.stroke = tempColor(o.T2);
 
     // Каналы ПТО: сеть сверху (T1) вниз (T2), дом снизу (T21) вверх (T11)
-    $('gpTop').setAttribute('stop-color', o.fill[3] < 0.05 ? EMPTY : tempColor(secT));
-    $('gpBot').setAttribute('stop-color', o.fill[4] < 0.05 ? EMPTY : tempColor(o.T2));
+    $('gpTop').setAttribute('stop-color', o.fill[3] < 0.2 ? EMPTY : tempColor(secT));
+    $('gpBot').setAttribute('stop-color', o.fill[4] < 0.2 ? EMPTY : tempColor(o.T2));
     $('gsTop').setAttribute('stop-color', tempColor(o.T11));
     $('gsBot').setAttribute('stop-color', tempColor(o.T21));
-    $('hexPrimTop').style.stroke = o.fill[3] < 0.05 ? EMPTY : tempColor(secT);
-    $('hexPrimBot').style.stroke = o.fill[4] < 0.05 ? EMPTY : tempColor(o.T2);
+    $('hexPrimTop').style.stroke = o.fill[3] < 0.2 ? EMPTY : tempColor(secT);
+    $('hexPrimBot').style.stroke = o.fill[4] < 0.2 ? EMPTY : tempColor(o.T2);
     $('hexSecTop').style.stroke = tempColor(o.T11);
     $('hexSecBot').style.stroke = tempColor(o.T21);
 
@@ -575,9 +660,9 @@
     const minFill = Math.min(o.fill[1], o.fill[2], o.fill[3], o.fill[4]);
     $('netFillBar').style.width = (minFill * 100).toFixed(0) + '%';
     $('netFillTxt').textContent = `Заполнение участка ${Math.round(minFill * 100)} % · P грязевик ${fmt(o.nodes[2], 2)} бар · P ПТО ${fmt(o.P_hex_net, 2)} бар`;
-    $('pipeRv').style.stroke = o.reliefOpen ? '#ef4444' : '#3b4a60';
-    $('vRV').style.fill = o.reliefOpen ? '#ef4444' : '#1c2a3d';
-    $('pipeDr').style.stroke = c.DRAIN ? '#f59e0b' : '#3b4a60';
+    $('pipeRv').style.stroke = o.reliefOpen ? '#DC2626' : '#94A3B8';
+    $('vRV').style.fill = o.reliefOpen ? '#DC2626' : '#E2E8F0';
+    $('pipeDr').style.stroke = c.DRAIN ? '#D97706' : '#94A3B8';
 
     // Арматура
     renderGates();
@@ -596,11 +681,11 @@
     [['pumpBody', 'pumpRotor', c.PUMP, env.pump1Fail, o.p1Running], ['pump2Body', 'pump2Rotor', c.PUMP2, env.pump2Fail, o.p2Running]].forEach(([b, r, on, fail, run]) => {
       $(r).classList.toggle('spin', !!run);
       const body = $(b);
-      if (on && fail) { body.setAttribute('stroke', '#ef4444'); body.setAttribute('fill', '#3a1010'); }
-      else if (on && o.cavitation) { body.setAttribute('stroke', '#ef4444'); body.setAttribute('fill', '#3a1010'); }
-      else if (run) { body.setAttribute('stroke', '#22c55e'); body.setAttribute('fill', '#0f2a1a'); }
-      else if (on) { body.setAttribute('stroke', '#f59e0b'); body.setAttribute('fill', '#2a1d08'); }
-      else { body.setAttribute('stroke', '#64748b'); body.setAttribute('fill', '#111827'); }
+      if (on && fail) { body.setAttribute('stroke', '#DC2626'); body.setAttribute('fill', '#FEE2E2'); }
+      else if (on && o.cavitation) { body.setAttribute('stroke', '#DC2626'); body.setAttribute('fill', '#FEE2E2'); }
+      else if (run) { body.setAttribute('stroke', '#16A34A'); body.setAttribute('fill', '#DCFCE7'); }
+      else if (on) { body.setAttribute('stroke', '#D97706'); body.setAttribute('fill', '#FEF3C7'); }
+      else { body.setAttribute('stroke', '#64748B'); body.setAttribute('fill', '#F1F5F9'); }
     });
     setValve('vISO1', c.PUMP1_ISO ? 100 : 0);
     setValve('vISO2', c.PUMP2_ISO ? 100 : 0);
@@ -612,8 +697,8 @@
     setValve('vHR', c.HOUSE_RET ? 100 : 0);
     setValve('vHD', c.HOUSE_DRAIN ? 100 : 0);
     setValve('vHV', c.HOUSE_VENT ? 100 : 0);
-    $('pipeHD').style.stroke = c.HOUSE_DRAIN ? '#f59e0b' : '#3b4a60';
-    $('pipeHV').style.stroke = c.HOUSE_VENT ? '#38bdf8' : '#3b4a60';
+    $('pipeHD').style.stroke = c.HOUSE_DRAIN ? '#D97706' : '#94A3B8';
+    $('pipeHV').style.stroke = c.HOUSE_VENT ? '#0284C7' : '#94A3B8';
     setFlow('flowHD', o.houseDrainFlow > 0 || (c.HOUSE_DRAIN && o.houseFill > 0 && o.P_house <= 0.01) ? 0.6 : 0, 30);
     setFlow('flowHV', c.HOUSE_VENT && (o.houseFilling || o.P_house > 0.05 || (c.HOUSE_DRAIN && o.houseFill > 0)) ? 0.5 : 0, 30);
     $('houseFillBar').style.width = (o.houseFill * 100).toFixed(0) + '%';
@@ -621,7 +706,7 @@
       (o.floodFlow > 0 ? ' · ТЕЧЬ В КВАРТИРУ' : '');
 
     // Окна дома — «самочувствие» жильцов по T11 в доме (с учетом циркуляции)
-    const winColor = o.houseFill < 0.999 ? '#334155' : o.T_room < C.ROOM_COLD ? '#7dd3fc' : o.T_room > C.ROOM_HOT ? '#f87171' : '#f5c26b';
+    const winColor = o.houseFill < 0.999 ? '#CBD5E1' : o.T_room < C.ROOM_COLD ? '#93C5FD' : o.T_room > C.ROOM_HOT ? '#FCA5A5' : '#FCD34D';
     document.querySelectorAll('#houseWindows .win').forEach(w => w.setAttribute('fill', winColor));
 
     // Сводка
@@ -644,7 +729,7 @@
       ['P на 9 этаже', o.topFloorDry ? 'нет воды' : fmt(o.P_top, 2) + ' бар']
     ];
     $('summary').innerHTML = rows.map(r =>
-      `<tr class="border-b border-slate-800/70"><td class="py-1 text-slate-400 font-sans text-xs">${r[0]}</td><td class="py-1 text-right">${r[1]}</td></tr>`).join('');
+      `<tr><td class="text-xs faint">${r[0]}</td><td class="text-right mono text-[13px] font-semibold">${r[1]}</td></tr>`).join('');
 
     renderAlarms();
     drawTrend();

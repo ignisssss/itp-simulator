@@ -4,200 +4,334 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>Тренажер ИТП</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Golos+Text:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap">
   <script src="https://cdn.tailwindcss.com/3.4.17"></script>
   <style>
+    /* «Светлая инженерная лаборатория»: лист чертежа P&ID, щит автоматики, статусы по ISA-101 */
     :root {
-      color-scheme: dark;
-      --bg: #070b12;
-      --panel: #0d1420;
-      --line: #1f2b3d;
-      --ok: #22c55e;
-      --warn: #f59e0b;
-      --alarm: #ef4444;
+      color-scheme: light;
+      --bg: #F1F5F9;          /* фон страницы */
+      --card: #FFFFFF;        /* карточки, шапка, пульт */
+      --line: #CBD5E1;        /* границы */
+      --line-soft: #E2E8F0;
+      --ink: #0F172A;         /* основной текст */
+      --ink-2: #475569;       /* вторичный */
+      --ink-3: #64748B;       /* подписи, единицы */
+      --accent: #0284C7;      /* учебный акцент */
+      --steel: #1E293B;       /* контуры оборудования */
+      --metal: #E2E8F0;
+      --metal-2: #94A3B8;
+      --ok: #16A34A;
+      --warn: #D97706;
+      --bad: #DC2626;
+      --hot: #C2410C;
+      --cold: #0369A1;
+      --sheet: #FAFBFD;       /* лист чертежа */
+      --font: 'Golos Text', 'Segoe UI', system-ui, sans-serif;
+      --mono: 'JetBrains Mono', Consolas, ui-monospace, monospace;
     }
-    body { background: var(--bg); color: #e2e8f0; font-family: "Segoe UI", system-ui, sans-serif; }
-    .mono { font-family: "Consolas", "JetBrains Mono", ui-monospace, monospace; }
-    .panel { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; }
-    .panel-title { font-size: 11px; letter-spacing: .12em; text-transform: uppercase; color: #7f93ad; }
+    html { background: var(--bg); }
+    body { background: var(--bg); color: var(--ink); font-family: var(--font); -webkit-font-smoothing: antialiased; }
+    .mono, .font-mono, .kpi-val { font-family: var(--mono); font-variant-numeric: tabular-nums; }
+    [hidden] { display: none !important; }
+    .ico { display: inline-block; flex: none; vertical-align: -0.15em; }
 
-    /* --- Мнемосхема --- */
+    /* --- Карточки и заголовки --- */
+    .panel, .card { background: var(--card); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 1px 2px rgba(15, 23, 42, .05); }
+    .panel-title { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: var(--ink-3); }
+    .sec-h { font-size: 11px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3);
+             border-bottom: 1px solid var(--line-soft); padding-bottom: 6px; margin-bottom: 10px; display: flex; align-items: center; gap: 8px; }
+    .sec-h .num { font-family: var(--mono); color: var(--metal-2); }
+    .muted { color: var(--ink-2); }
+    .faint { color: var(--ink-3); }
+    .t-ok { color: #166534; } .t-warn { color: #92400E; } .t-bad { color: #991B1B; } .t-acc { color: var(--accent); }
+
+    /* --- Кнопки --- */
+    .btn { display: inline-flex; align-items: center; justify-content: center; gap: 6px; padding: 6px 11px; font-size: 13px; font-weight: 600;
+           line-height: 1.2; color: var(--ink); background: var(--card); border: 1px solid var(--line); border-radius: 5px; transition: background .15s, border-color .15s; }
+    .btn:hover { background: #F8FAFC; border-color: var(--metal-2); }
+    .btn:focus-visible, .tbtn:focus-visible, .mode-btn:focus-visible, .qbtn:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+    .btn-sm { padding: 4px 8px; font-size: 12px; }
+    .btn-primary { background: var(--ink); border-color: var(--ink); color: #fff; }
+    .btn-primary:hover { background: var(--steel); border-color: var(--steel); }
+    .btn-accent { color: var(--accent); border-color: #7DD3FC; background: #F0F9FF; }
+    .btn-accent:hover { background: #E0F2FE; border-color: var(--accent); }
+    .btn-open { color: #166534; border-color: #86EFAC; background: #F0FDF4; }
+    .btn-open:hover { border-color: var(--ok); }
+    .btn-close { color: #991B1B; border-color: #FCA5A5; background: #FEF2F2; }
+    .btn-close:hover { border-color: var(--bad); }
+    .btn-warn { color: #92400E; border-color: #FCD34D; background: #FFFBEB; }
+    .btn-warn:hover { border-color: var(--warn); }
+    .btn-link { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; font-weight: 600; }
+    .mode-btn { display: inline-flex; align-items: center; gap: 8px; padding: 7px 14px; font-size: 14px; font-weight: 600; color: var(--ink-2);
+                background: var(--card); border: 1px solid var(--line); border-radius: 6px; }
+    .mode-btn:hover { color: var(--ink); border-color: var(--metal-2); }
+    .mode-btn.is-active { background: var(--ink); color: #fff; border-color: var(--ink); }
+    .speed-btn, #pauseBtn { font-family: var(--mono); font-size: 12px; font-weight: 600; padding: 3px 8px; border: 1px solid var(--line); border-radius: 4px; background: var(--card); color: var(--ink-2); display: inline-flex; align-items: center; }
+    .speed-btn.is-active { background: var(--ink); color: #fff; border-color: var(--ink); }
+    #pauseBtn.is-paused { background: #FFFBEB; color: #92400E; border-color: var(--warn); }
+    .qbtn { width: 20px; height: 20px; border-radius: 50%; border: 1px solid var(--line); color: var(--ink-3); font-size: 11px; font-weight: 700;
+            line-height: 18px; text-align: center; flex: none; background: var(--card); }
+    .qbtn:hover { border-color: var(--accent); color: var(--accent); }
+
+    /* Переключатели щита: индикатор-«лампа» слева */
+    .tbtn { display: inline-flex; align-items: center; justify-content: center; gap: 7px; padding: 6px 8px; border-radius: 5px; font-size: 12px; font-weight: 600;
+            border: 1px solid var(--line); background: #F8FAFC; color: var(--ink-3); letter-spacing: .01em; }
+    .tbtn::before { content: ''; width: 8px; height: 8px; border-radius: 50%; background: #CBD5E1; box-shadow: inset 0 0 0 1px rgba(15,23,42,.15); flex: none; }
+    .tb-green { background: #F0FDF4; border-color: var(--ok); color: #166534; }
+    .tb-green::before { background: var(--ok); box-shadow: 0 0 0 2px rgba(22,163,74,.18); }
+    .tb-amber { background: #FFFBEB; border-color: var(--warn); color: #92400E; }
+    .tb-amber::before { background: var(--warn); box-shadow: 0 0 0 2px rgba(217,119,6,.18); }
+    .tb-red { background: #FEF2F2; border-color: var(--bad); color: #991B1B; }
+    .tb-red::before { background: var(--bad); box-shadow: 0 0 0 2px rgba(220,38,38,.18); }
+
+    /* Плакат безопасности на задвижке */
+    .tag-btn { min-width: 112px; padding: 3px 6px; border-radius: 3px; font-size: 10px; font-weight: 700; line-height: 1.15; text-align: center; }
+    .tag-btn.tag-off { border: 1px dashed var(--line); color: var(--ink-3); background: var(--card); }
+    .tag-btn.tag-off:hover { border-color: var(--bad); color: #991B1B; }
+    .tag-btn.tag-on { border: 4px double var(--bad); background: #fff; color: #B91C1C; text-transform: uppercase; letter-spacing: .03em; }
+    .tag-btn.tag-on span { display: block; }
+    .tag-btn.tag-on span + span { font-size: 9px; text-transform: none; letter-spacing: 0; color: var(--ink); font-weight: 600; }
+
+    /* Индикаторы-полосы */
+    .meter { height: 6px; background: var(--line-soft); border-radius: 3px; overflow: hidden; }
+    .meter > div { height: 100%; }
+
+    /* Ползунки */
+    input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 4px; background: var(--line-soft); border-radius: 2px; outline: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 14px; height: 18px; border-radius: 3px; background: var(--ink); cursor: pointer; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--ink); }
+    input[type=range]::-moz-range-thumb { width: 12px; height: 16px; border-radius: 3px; background: var(--ink); cursor: pointer; border: 2px solid #fff; box-shadow: 0 0 0 1px var(--ink); }
+    input[type=range]:focus-visible::-webkit-slider-thumb { box-shadow: 0 0 0 3px var(--accent); }
+
+    /* --- Табло диагностики (ISA-101) --- */
+    .alarm-card { border-left: 4px solid; border-radius: 4px; padding: 8px 12px; }
+    .alarm-card.alarm { background: #FEF2F2; border-color: var(--bad); }
+    .alarm-card.warn  { background: #FFFBEB; border-color: var(--warn); }
+    .alarm-card.ok    { background: #F0FDF4; border-color: var(--ok); }
+    .alarm-card.info  { background: #F0F9FF; border-color: var(--accent); }
+    .alarm-card .a-title { font-size: 13px; font-weight: 700; display: flex; align-items: flex-start; gap: 7px; }
+    .alarm-card.alarm .a-title { color: #991B1B; }
+    .alarm-card.warn .a-title  { color: #92400E; }
+    .alarm-card.ok .a-title    { color: #166534; }
+    .alarm-card.info .a-title  { color: #075985; }
+    .alarm-card .alarm-text { font-size: 12px; color: var(--ink-2); margin-top: 4px; line-height: 1.5; }
+    .alarm-card .a-detail { font-family: var(--mono); font-variant-numeric: tabular-nums; font-size: 11px; color: var(--ink-3); margin-top: 4px; }
+
+    /* Журнал */
+    #log div { padding: 1px 0; border-bottom: 1px dotted var(--line-soft); }
+    .log-alarm { color: #B91C1C; } .log-warn { color: #B45309; } .log-ok { color: #15803D; }
+    .log-op, .log-info { color: #0369A1; } .log-clear { color: var(--metal-2); } .log-def { color: var(--ink-2); }
+
+    /* --- Учебная карточка --- */
+    .badge { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11px; font-weight: 600; letter-spacing: .04em;
+             padding: 3px 8px; border-radius: 4px; background: #E0F2FE; color: #075985; border: 1px solid #BAE6FD; }
+    .badge-amber { background: #FFFBEB; color: #92400E; border-color: #FDE68A; }
+    .segs { display: flex; gap: 3px; }
+    .seg { flex: 1; height: 6px; border-radius: 2px; background: var(--line-soft); }
+    .seg.done { background: var(--accent); }
+    .seg.cur { background: #7DD3FC; box-shadow: inset 0 0 0 1px var(--accent); }
+    .why { background: #F8FAFC; border-left: 3px solid var(--accent); border-radius: 0 4px 4px 0; padding: 8px 12px; }
+    .why-h { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--accent); margin-bottom: 3px; }
+    #lessonSteps li { display: flex; gap: 8px; align-items: flex-start; }
+    .step-done { color: #15803D; } .step-cur { color: var(--ink); font-weight: 600; } .step-todo { color: var(--metal-2); }
+    .sr-bar { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
+
+    /* --- Мнемосхема: лист чертежа P&ID --- */
     #scheme { width: 100%; height: auto; display: block; user-select: none; }
-    #scheme text { font-family: "Consolas", ui-monospace, monospace; }
-    .pipe { fill: none; stroke-width: 9; stroke-linecap: square; stroke-linejoin: miter; transition: stroke .6s; }
-    .pipe-thin { fill: none; stroke-width: 5; stroke: #3b4a60; }
-    .flow { fill: none; stroke: rgba(255,255,255,.75); stroke-width: 3; stroke-dasharray: 8 12;
+    #scheme text { font-family: var(--font); }
+    .pipe { fill: none; stroke-width: 9; stroke-linecap: butt; stroke-linejoin: miter; transition: stroke .6s, opacity .6s; }
+    .pipe-thin { fill: none; stroke-width: 5; stroke: var(--metal-2); }
+    .flow { fill: none; stroke: rgba(255,255,255,.92); stroke-width: 2.6; stroke-dasharray: 8 12;
             animation: flow-move 1s linear infinite; animation-play-state: paused; opacity: 0; transition: opacity .4s; }
     .flow.on { animation-play-state: running; opacity: 1; }
-    @keyframes flow-move { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
-
-    .node { cursor: pointer; }
-    .node:hover .hl { stroke: #38bdf8; }
-    .hl { stroke: transparent; stroke-width: 2; fill: transparent; }
-    .valve-body { stroke: #0b1220; stroke-width: 1.5; transition: fill .3s; }
-    .valve-open { fill: #22c55e; }
-    .valve-part { fill: #f59e0b; }
-    .valve-closed { fill: #ef4444; }
-    .valve-moving { fill: #f59e0b; animation: pulse .45s ease-in-out infinite alternate; }
-    @keyframes pulse { to { opacity: .3; } }
     .flow.thin { stroke-width: 1.6; stroke-dasharray: 5 15; }
-    @media (prefers-reduced-motion: reduce) { .flow, .valve-moving, #pumpRotor.spin, #pump2Rotor.spin, .blink { animation: none !important; } }
-    .lbl { fill: #9fb3c8; font-size: 12px; }
-    .lbl-s { fill: #6b7f99; font-size: 10px; }
-    .tag-box { fill: #04070c; stroke: #2a3a52; stroke-width: 1; }
-    .tag-name { fill: #7f93ad; font-size: 10px; }
-    .tag-val { fill: #e2f3ff; font-size: 12px; font-weight: 600; }
-    .tag-val.bad { fill: #ff6b6b; }
-    .tag-val.warn { fill: #fbbf24; }
-
+    @keyframes flow-move { from { stroke-dashoffset: 20; } to { stroke-dashoffset: 0; } }
+    .node { cursor: pointer; }
+    .node:hover .hl { stroke: var(--accent); stroke-dasharray: 3 3; }
+    .hl { stroke: transparent; stroke-width: 1.2; fill: transparent; }
+    .eq { fill: var(--metal); stroke: var(--steel); stroke-width: 1.5; }
+    .eq-line { stroke: var(--steel); }
+    .valve-body { stroke: var(--steel); stroke-width: 1.4; transition: fill .3s; }
+    .valve-open { fill: var(--ok); }
+    .valve-part { fill: var(--warn); }
+    .valve-closed { fill: var(--bad); }
+    .valve-moving { fill: var(--warn); animation: pulse .45s ease-in-out infinite alternate; }
+    @keyframes pulse { to { opacity: .35; } }
+    .lbl { fill: #334155; font-size: 12px; font-weight: 600; }
+    .lbl-s { fill: var(--ink-3); font-size: 10px; }
+    .tag-box { fill: #FFFFFF; stroke: #334155; stroke-width: 1; }
+    .tag-box.warn { stroke: var(--warn); stroke-width: 2; }
+    .tag-box.bad { stroke: var(--bad); stroke-width: 2; }
+    .tag-head { font-size: 8px; font-weight: 600; letter-spacing: .07em; fill: #FFFFFF; }
+    .tag-name { fill: var(--ink-3); font-size: 9px; font-family: var(--mono) !important; }
+    .tag-val { fill: var(--ink); font-size: 12px; font-weight: 600; font-family: var(--mono) !important; font-variant-numeric: tabular-nums; }
+    .tag-val.warn { fill: #B45309; }
+    .tag-val.bad { fill: var(--bad); }
+    .stamp-t { font-family: var(--mono) !important; font-size: 8.5px; fill: #334155; }
     #pumpRotor, #pump2Rotor { transform-box: fill-box; transform-origin: center; }
     #pumpRotor.spin, #pump2Rotor.spin { animation: spin .6s linear infinite; }
-    .tbtn { padding: .45rem .5rem; border-radius: .25rem; font-size: .8rem; font-weight: 600; border: 1px solid; }
     @keyframes spin { to { transform: rotate(-360deg); } }
-
     .blink { animation: blink 1s steps(2, start) infinite; }
     @keyframes blink { to { visibility: hidden; } }
+    .lesson-ring { fill: none; stroke: var(--accent); stroke-width: 2.5; pointer-events: none; animation: ring 1.1s ease-in-out infinite alternate; }
+    @keyframes ring { from { stroke-opacity: 1; stroke-width: 2.5; } to { stroke-opacity: .3; stroke-width: 5; } }
+    .lesson-hl { outline: 2px solid var(--accent); outline-offset: 3px; border-radius: 6px; animation: hl 1.1s ease-in-out infinite alternate; }
+    @keyframes hl { to { outline-color: rgba(2,132,199,.25); } }
+    @media (prefers-reduced-motion: reduce) {
+      .flow, .valve-moving, #pumpRotor.spin, #pump2Rotor.spin, .blink, .lesson-ring, .lesson-hl { animation: none !important; }
+    }
 
-    /* --- Ползунки --- */
-    input[type=range] { -webkit-appearance: none; appearance: none; width: 100%; height: 6px; background: #1e293b; border-radius: 3px; outline: none; }
-    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 16px; height: 16px; border-radius: 3px; background: #38bdf8; cursor: pointer; border: 2px solid #0b1220; }
-    input[type=range]::-moz-range-thumb { width: 14px; height: 14px; border-radius: 3px; background: #38bdf8; cursor: pointer; border: 2px solid #0b1220; }
-    input[type=range].danger::-webkit-slider-thumb { background: #f59e0b; }
-    input[type=range].danger::-moz-range-thumb { background: #f59e0b; }
-
-    .qbtn { width: 20px; height: 20px; border-radius: 50%; border: 1px solid #38506e; color: #7dd3fc; font-size: 12px; line-height: 18px; text-align: center; flex: none; }
-    .qbtn:hover { background: #0c4a6e; }
-
-    .alarm-card { border-left: 4px solid; border-radius: 4px; }
-    .alarm-card.alarm { border-color: var(--alarm); background: rgba(239,68,68,.10); }
-    .alarm-card.warn  { border-color: var(--warn);  background: rgba(245,158,11,.08); }
-    .alarm-card.ok    { border-color: var(--ok);    background: rgba(34,197,94,.08); }
-    .alarm-card.info  { border-color: #38bdf8;      background: rgba(56,189,248,.08); }
-    .pipe { transition: stroke .6s, opacity .6s; }
-    [hidden] { display: none !important; }
-    .lesson-ring { fill: none; stroke: #38bdf8; stroke-width: 3; pointer-events: none;
-                   animation: ring 1.1s ease-in-out infinite alternate; }
-    @keyframes ring { from { stroke-opacity: 1; stroke-width: 3; } to { stroke-opacity: .25; stroke-width: 6; } }
-    .lesson-hl { outline: 2px solid #38bdf8; outline-offset: 3px; border-radius: 6px;
-                 animation: hl 1.1s ease-in-out infinite alternate; }
-    @keyframes hl { to { outline-color: rgba(56,189,248,.25); } }
-    @media (prefers-reduced-motion: reduce) { .lesson-ring, .lesson-hl { animation: none; } }
-    /* Уровни */
+    /* --- Уровни --- */
     body.level-mode .alarm-text, body.level-mode .qbtn, body.level-mode #pauseBtn, body.level-mode .scheme-hint { display: none !important; }
     body.level-mode .node { cursor: default; }
-    #levelToasts { position: fixed; right: 16px; bottom: 16px; z-index: 35; width: min(340px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
-    #levelToasts .level-toast { pointer-events: auto; animation: toastIn .35s ease-out; }
+    #levelToasts { position: fixed; right: 16px; bottom: 16px; z-index: 35; width: min(360px, calc(100vw - 32px)); display: flex; flex-direction: column; gap: 8px; pointer-events: none; }
+    #levelToasts .level-toast { pointer-events: auto; animation: toastIn .3s ease-out; background: #FFFFFF; border: 1px solid var(--line); border-left: 4px solid var(--warn);
+                                box-shadow: 0 10px 24px rgba(15,23,42,.12); }
     @keyframes toastIn { from { transform: translateX(24px); } to { transform: none; } }
-    #levelToasts .level-toast { background: #1a1408; border-color: #b45309; box-shadow: 0 8px 30px rgba(0,0,0,.6); }
     @media (prefers-reduced-motion: reduce) { #levelToasts .level-toast { animation: none; } }
-    .result-table th, .result-table td { border-bottom: 1px solid #1f2b3d; padding: 4px 6px; text-align: left; vertical-align: top; }
-    .result-table th { color: #7f93ad; font-weight: 600; }
+    .result-table th, .result-table td { border-bottom: 1px solid var(--line-soft); padding: 5px 6px; text-align: left; vertical-align: top; }
+    .result-table th { color: var(--ink-3); font-weight: 600; font-size: 11px; text-transform: uppercase; letter-spacing: .04em; }
+    .stars { display: inline-flex; gap: 2px; color: var(--warn); vertical-align: middle; }
+    .overlay { background: rgba(15, 23, 42, .38); }
+    .scroll-box { background: #F8FAFC; border: 1px solid var(--line-soft); border-radius: 4px; }
+    .k-table tr { border-bottom: 1px solid var(--line-soft); }
+    .k-table td { padding: 4px 0; }
   </style>
 </head>
-<body class="text-slate-200 min-h-screen">
+<body class="min-h-screen">
 
   <!-- Шапка -->
-  <header class="flex flex-wrap items-center gap-3 px-4 py-2 border-b border-slate-800 bg-[#0a101a]">
-    <div class="flex items-center gap-2">
+  <header class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 bg-white border-b" style="border-color:var(--line)">
+    <div class="flex items-center gap-2.5 min-w-0">
       <span id="statusLamp" class="inline-block w-3 h-3 rounded-full bg-green-500"></span>
-      <h1 class="text-sm sm:text-base font-semibold tracking-wide">ИТП · Жилой дом 9 эт. · Независимая схема отопления</h1>
+      <h1 class="text-[15px] font-semibold tracking-tight">ИТП · Жилой дом 9 эт. · Независимая схема отопления</h1>
     </div>
-    <div class="text-xs text-slate-400 mono">T<sub>нар</sub> = <span id="tOut" class="text-slate-200">−10 °C</span></div>
-    <div class="ml-auto flex items-center gap-3">
-      <div class="text-xs text-slate-400">Время: <span id="simTime" class="mono text-slate-200">00:00</span></div>
+    <div class="text-xs muted">T<sub>нар</sub> = <span id="tOut" class="mono font-semibold" style="color:var(--ink)">−10 °C</span></div>
+    <div class="ml-auto flex flex-wrap items-center gap-3">
+      <div class="text-xs muted flex items-center gap-1.5"><span data-icon="clock"></span>Время <span id="simTime" class="mono font-semibold" style="color:var(--ink)">00:00</span></div>
       <div class="flex items-center gap-1 text-xs" id="speedGroup">
-        <span class="text-slate-400 mr-1">Скорость</span>
-        <button data-speed="1" class="speed-btn px-2 py-0.5 rounded border border-slate-700">×1</button>
-        <button data-speed="2" class="speed-btn px-2 py-0.5 rounded border border-slate-700">×2</button>
-        <button data-speed="5" class="speed-btn px-2 py-0.5 rounded border border-slate-700">×5</button>
-        <button id="pauseBtn" class="px-2 py-0.5 rounded border border-slate-700">❚❚</button>
+        <span class="faint mr-1">Скорость</span>
+        <button data-speed="1" class="speed-btn">×1</button>
+        <button data-speed="2" class="speed-btn">×2</button>
+        <button data-speed="5" class="speed-btn">×5</button>
+        <button id="pauseBtn" aria-label="Пауза"></button>
       </div>
-      <button id="resetBtn" class="px-3 py-1.5 text-xs font-semibold rounded bg-sky-700 hover:bg-sky-600 text-white">⟲ Сбросить в штатный режим</button>
+      <button id="resetBtn" class="btn btn-primary btn-sm"><span data-icon="reset"></span>Сбросить в штатный режим</button>
     </div>
   </header>
 
   <!-- Режимы -->
   <nav class="flex flex-wrap items-center gap-2 px-3 pt-3" aria-label="Режим тренажера">
-    <button data-mode="free" class="px-3 py-1.5 rounded border border-slate-700 text-sm text-slate-300 hover:border-sky-500">Свободный режим</button>
-    <button data-mode="lesson" class="px-3 py-1.5 rounded border border-slate-700 text-sm text-slate-300 hover:border-sky-500">📘 Обучение</button>
-    <button data-mode="levels" class="px-3 py-1.5 rounded border border-slate-700 text-sm text-slate-300 hover:border-amber-500">🎮 Уровни</button>
+    <button data-mode="free" class="mode-btn"><span data-icon="gauge"></span>Свободный режим</button>
+    <button data-mode="lesson" class="mode-btn"><span data-icon="book"></span>Обучение</button>
+    <button data-mode="levels" class="mode-btn"><span data-icon="flag"></span>Уровни</button>
   </nav>
 
-  <main class="grid gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_340px]">
+  <main class="grid gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_356px]">
 
     <!-- Левая колонка: схема + диагностика -->
     <section class="flex flex-col gap-3 min-w-0">
       <!-- Панель уровня (смены) -->
-      <div id="levelPanel" class="panel p-3 border-amber-800" hidden>
+      <div id="levelPanel" class="panel p-4" style="border-top:3px solid var(--warn)" hidden>
         <div class="flex flex-wrap items-center gap-2">
-          <span class="text-[11px] uppercase tracking-widest text-amber-400">Смена</span>
-          <h2 id="levelTitle" class="text-base font-semibold text-white"></h2>
-          <span class="mono text-sm text-amber-200 ml-2">⏱ <span id="levelClock">00:00</span></span>
+          <span class="badge badge-amber">СМЕНА</span>
+          <h2 id="levelTitle" class="text-base font-semibold"></h2>
+          <span class="mono text-sm font-semibold ml-1 flex items-center gap-1.5" style="color:#92400E"><span data-icon="clock"></span><span id="levelClock">00:00</span></span>
           <div class="ml-auto flex flex-wrap gap-2">
-            <button id="levelReport" class="px-2 py-1 text-xs rounded border border-amber-600 text-amber-100 hover:bg-amber-900/40">📞 Сообщить диспетчеру теплосети</button>
-            <button id="levelRestart" class="px-2 py-1 text-xs rounded border border-slate-700 hover:border-sky-500">⟲ Заново</button>
-            <button id="levelExit" class="px-2 py-1 text-xs rounded border border-slate-700 hover:border-red-500">✕ Выйти</button>
+            <button id="levelReport" class="btn btn-sm btn-warn"><span data-icon="phone"></span>Сообщить диспетчеру теплосети</button>
+            <button id="levelRestart" class="btn btn-sm"><span data-icon="reset"></span>Заново</button>
+            <button id="levelExit" class="btn btn-sm"><span data-icon="close"></span>Выйти</button>
           </div>
         </div>
-        <p id="levelIntro" class="text-xs text-slate-400 mt-2 leading-5"></p>
-        <div id="levelStatus" class="text-[11px] mono text-slate-400 mt-2"></div>
+        <p id="levelIntro" class="text-[13px] muted mt-2 leading-5"></p>
+        <div id="levelStatus" class="text-[11px] mono faint mt-2"></div>
         <details class="mt-2">
-          <summary class="text-xs text-slate-400 cursor-pointer">Принятые сообщения</summary>
+          <summary class="text-xs muted cursor-pointer">Принятые сообщения</summary>
           <ul id="levelMessages" class="text-xs leading-5 mt-1 flex flex-col gap-1 max-h-32 overflow-y-auto"></ul>
         </details>
       </div>
 
       <!-- Панель текущего урока -->
-      <div id="lessonPanel" class="panel p-3 border-sky-800" hidden>
+      <div id="lessonPanel" class="panel p-4" style="border-top:3px solid var(--accent)" hidden>
         <div class="flex flex-wrap items-center gap-2">
-          <span class="text-[11px] uppercase tracking-widest text-sky-400">Обучение</span>
-          <h2 id="lessonTitle" class="text-base font-semibold text-white"></h2>
-          <div class="ml-auto flex gap-2">
-            <a id="lessonNotes" href="#" target="_blank" rel="noopener" class="px-2 py-1 text-xs rounded border border-sky-700 text-sky-200 hover:border-sky-400">📄 Конспект</a>
-            <button id="lessonAll" class="px-2 py-1 text-xs rounded border border-slate-700 hover:border-sky-500">Все уроки</button>
-            <button id="lessonRestart" class="px-2 py-1 text-xs rounded border border-slate-700 hover:border-sky-500">⟲ Заново</button>
-            <button id="lessonExit" class="px-2 py-1 text-xs rounded border border-slate-700 hover:border-red-500">✕ Выйти</button>
+          <span id="lessonBadge" class="badge"></span>
+          <h2 id="lessonTitle" class="text-base font-semibold"></h2>
+          <div class="ml-auto flex flex-wrap gap-2">
+            <a id="lessonNotes" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-accent"><span data-icon="doc"></span>Конспект PDF</a>
+            <button id="lessonAll" class="btn btn-sm"><span data-icon="list"></span>Все уроки</button>
+            <button id="lessonRestart" class="btn btn-sm"><span data-icon="reset"></span>Заново</button>
+            <button id="lessonExit" class="btn btn-sm"><span data-icon="close"></span>Выйти</button>
           </div>
         </div>
-        <p id="lessonIntro" class="text-xs text-slate-400 mt-2 leading-5"></p>
-        <div class="mt-3 h-1 bg-slate-800 rounded overflow-hidden"><div id="lessonProgress" class="h-full bg-sky-500" style="width:0%"></div></div>
-        <div class="grid gap-3 mt-3 lg:grid-cols-[minmax(0,1fr)_minmax(0,1fr)]">
+        <p id="lessonIntro" class="text-[13px] muted mt-2 leading-5" style="max-width:78ch"></p>
+        <div id="lessonSegs" class="segs mt-3" aria-hidden="true"></div>
+        <div class="sr-bar"><div id="lessonProgress" style="width:0%"></div></div>
+        <div class="grid gap-4 mt-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
           <div class="min-w-0">
-            <div id="lessonCounter" class="text-[11px] mono text-slate-500"></div>
-            <div id="lessonStep" class="text-sm sm:text-base font-semibold text-sky-100 mt-1 leading-6"></div>
-            <div id="lessonWhy" class="text-xs text-slate-400 mt-1 leading-5"></div>
-            <div id="lessonHold" class="text-xs mono text-amber-300 mt-2" hidden></div>
-            <button id="lessonAck" class="mt-3 px-4 py-1.5 rounded text-sm font-semibold bg-sky-700 hover:bg-sky-600 text-white" hidden>Далее →</button>
+            <div id="lessonCounter" class="text-[11px] mono faint"></div>
+            <div id="lessonStep" class="text-[17px] font-semibold mt-1 leading-snug" style="text-wrap:balance"></div>
+            <div id="lessonWhyBox" class="why mt-3">
+              <div class="why-h">Почему это важно · физика процесса</div>
+              <div id="lessonWhy" class="text-[13px] muted leading-5"></div>
+            </div>
+            <div id="lessonHold" class="text-xs mono mt-2" style="color:#92400E" hidden></div>
+            <button id="lessonAck" class="btn btn-primary mt-3" hidden>Далее</button>
           </div>
-          <ol id="lessonSteps" class="text-xs leading-5 flex flex-col gap-1 min-w-0"></ol>
+          <ol id="lessonSteps" class="text-xs leading-5 flex flex-col gap-1.5 min-w-0"></ol>
         </div>
       </div>
 
       <div class="panel p-2">
-        <div class="flex items-center justify-between px-1 pb-1">
-          <div class="panel-title">Мнемосхема ИТП</div>
-          <div class="scheme-hint text-[11px] text-slate-500">Нажмите на любой узел схемы, чтобы узнать, зачем он нужен</div>
+        <div class="flex items-center justify-between px-1 pb-1.5">
+          <div class="panel-title">Мнемосхема ИТП · технологическая схема</div>
+          <div class="scheme-hint text-[11px] faint">Нажмите на узел схемы, чтобы узнать, зачем он нужен</div>
         </div>
 
-        <svg id="scheme" viewBox="0 0 1000 520" xmlns="http://www.w3.org/2000/svg">
+        <svg id="scheme" viewBox="0 0 1000 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Технологическая схема ИТП">
           <defs>
             <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
-              <path d="M20 0H0V20" fill="none" stroke="#0f1826" stroke-width="1"/>
+              <path d="M20 0H0V20" fill="none" stroke="#E2E8F0" stroke-width="0.7"/>
+            </pattern>
+            <pattern id="gridMajor" width="100" height="100" patternUnits="userSpaceOnUse">
+              <rect width="100" height="100" fill="url(#grid)"/>
+              <path d="M100 0H0V100" fill="none" stroke="#CBD5E1" stroke-width="0.8"/>
             </pattern>
             <linearGradient id="houseGrad" x1="0" y1="0" x2="0" y2="1">
-              <stop offset="0" stop-color="#1a2536"/><stop offset="1" stop-color="#111a28"/>
+              <stop offset="0" stop-color="#F8FAFC"/><stop offset="1" stop-color="#E2E8F0"/>
+            </linearGradient>
+            <linearGradient id="metalGrad" x1="0" y1="0" x2="1" y2="0">
+              <stop offset="0" stop-color="#CBD5E1"/><stop offset=".5" stop-color="#F1F5F9"/><stop offset="1" stop-color="#CBD5E1"/>
             </linearGradient>
             <linearGradient id="gradPrim" gradientUnits="userSpaceOnUse" x1="0" y1="90" x2="0" y2="430">
-              <stop id="gpTop" offset="0" stop-color="#ef4444"/><stop id="gpBot" offset="1" stop-color="#22c55e"/>
+              <stop id="gpTop" offset="0" stop-color="#C2410C"/><stop id="gpBot" offset="1" stop-color="#D97706"/>
             </linearGradient>
             <linearGradient id="gradSec" gradientUnits="userSpaceOnUse" x1="0" y1="104" x2="0" y2="416">
-              <stop id="gsTop" offset="0" stop-color="#facc15"/><stop id="gsBot" offset="1" stop-color="#22c55e"/>
+              <stop id="gsTop" offset="0" stop-color="#D97706"/><stop id="gsBot" offset="1" stop-color="#0369A1"/>
             </linearGradient>
           </defs>
-          <rect width="1000" height="520" fill="url(#grid)"/>
+          <!-- Лист чертежа: фон, сетка, рамка -->
+          <rect width="1000" height="520" fill="#FAFBFD"/>
+          <rect width="1000" height="520" fill="url(#gridMajor)"/>
+          <rect x="3" y="3" width="994" height="514" fill="none" stroke="#94A3B8" stroke-width="1"/>
+          <rect x="6" y="6" width="988" height="508" fill="none" stroke="#CBD5E1" stroke-width="0.6"/>
 
           <!-- Зоны -->
-          <text x="20" y="510" class="lbl-s">ПЕРВИЧНЫЙ КОНТУР (ТЕПЛОСЕТЬ)</text>
-          <text x="830" y="510" class="lbl-s">ВТОРИЧНЫЙ КОНТУР (ДОМ)</text>
+          <text x="20" y="510" class="lbl-s" style="letter-spacing:.06em">ПЕРВИЧНЫЙ КОНТУР (ТЕПЛОСЕТЬ)</text>
+          <text x="830" y="510" class="lbl-s" style="letter-spacing:.06em">ВТОРИЧНЫЙ КОНТУР (ДОМ)</text>
+
+          <!-- Штамп -->
+          <g aria-hidden="true">
+            <rect x="392" y="464" width="138" height="31" fill="#FFFFFF" stroke="#334155" stroke-width="0.9"/>
+            <line x1="392" y1="474" x2="530" y2="474" stroke="#94A3B8" stroke-width="0.6"/>
+            <line x1="392" y1="484" x2="530" y2="484" stroke="#94A3B8" stroke-width="0.6"/>
+            <line x1="430" y1="464" x2="430" y2="474" stroke="#94A3B8" stroke-width="0.6"/>
+            <text x="396" y="471.5" class="stamp-t" style="font-weight:600">ИТП-01</text>
+            <text x="434" y="471.5" class="stamp-t">лист 1 · P&amp;ID</text>
+            <text x="396" y="481.5" class="stamp-t">Независимая схема СО</text>
+            <text x="396" y="491.5" class="stamp-t">График 95/70 → 75/45 °C</text>
+          </g>
 
           <!-- ========== ТРУБЫ (цвет задается из app.js по температуре) ========== -->
           <!-- Первичный: подача -->
@@ -221,7 +355,7 @@
           <!-- Предохранительный клапан -->
           <path id="pipeRv" class="pipe-thin" d="M740 90 V58"/>
 
-          <!-- Анимация потока -->
+          <!-- Анимация потока (внутренний светлый пунктир) -->
           <path id="flowP1" class="flow" d="M20 90 H440"/>
           <path id="flowP2" class="flow" d="M440 430 H20"/>
           <path id="flowNetDr" class="flow" style="stroke-width:2" d="M300 430 V478"/>
@@ -237,10 +371,12 @@
 
           <!-- ========== ПТО ========== -->
           <g class="node" data-info="hex">
-            <rect class="hl" x="434" y="54" width="112" height="412" rx="8"/>
-            <rect x="440" y="60" width="100" height="400" rx="6" fill="#121c2b" stroke="#4b6584" stroke-width="2"/>
-            <!-- Пластины (серые) и чередующиеся каналы: четные — сеть (сверху вниз), нечетные — дом (снизу вверх) -->
-            <g stroke="#3a4d66" stroke-width="1.5"><line x1="450" y1="84" x2="450" y2="436"/><line x1="460" y1="84" x2="460" y2="436"/><line x1="470" y1="84" x2="470" y2="436"/><line x1="480" y1="84" x2="480" y2="436"/><line x1="490" y1="84" x2="490" y2="436"/><line x1="500" y1="84" x2="500" y2="436"/><line x1="510" y1="84" x2="510" y2="436"/><line x1="520" y1="84" x2="520" y2="436"/><line x1="530" y1="84" x2="530" y2="436"/></g>
+            <rect class="hl" x="434" y="54" width="112" height="412" rx="4"/>
+            <rect x="440" y="60" width="100" height="400" rx="3" fill="#F1F5F9" stroke="#1E293B" stroke-width="1.8"/>
+            <rect x="440" y="60" width="100" height="14" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/>
+            <rect x="440" y="446" width="100" height="14" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/>
+            <!-- Пластины и чередующиеся каналы: четные — сеть (сверху вниз), нечетные — дом (снизу вверх) -->
+            <g stroke="#94A3B8" stroke-width="1.2"><line x1="450" y1="84" x2="450" y2="436"/><line x1="460" y1="84" x2="460" y2="436"/><line x1="470" y1="84" x2="470" y2="436"/><line x1="480" y1="84" x2="480" y2="436"/><line x1="490" y1="84" x2="490" y2="436"/><line x1="500" y1="84" x2="500" y2="436"/><line x1="510" y1="84" x2="510" y2="436"/><line x1="520" y1="84" x2="520" y2="436"/><line x1="530" y1="84" x2="530" y2="436"/></g>
             <path id="hexSecTop" d="M462 104 H534 V90 H540" fill="none" stroke-width="6"/>
             <path id="hexSecBot" d="M540 430 H534 V416 H462" fill="none" stroke-width="6"/>
             <g fill="url(#gradSec)"><rect x="461.5" y="104" width="7" height="312" rx="1"/><rect x="481.5" y="104" width="7" height="312" rx="1"/><rect x="501.5" y="104" width="7" height="312" rx="1"/><rect x="521.5" y="104" width="7" height="312" rx="1"/></g>
@@ -249,43 +385,43 @@
             <g fill="url(#gradPrim)"><rect x="451.5" y="90" width="7" height="340" rx="1"/><rect x="471.5" y="90" width="7" height="340" rx="1"/><rect x="491.5" y="90" width="7" height="340" rx="1"/><rect x="511.5" y="90" width="7" height="340" rx="1"/></g>
             <path id="flowHexP" class="flow thin" d="M455 92 V428 M475 92 V428 M495 92 V428 M515 92 V428"/>
             <path id="flowHexS" class="flow thin" d="M465 414 V106 M485 414 V106 M505 414 V106 M525 414 V106"/>
-            <text x="447" y="452" class="lbl-s" style="font-size:8px">сеть↓</text>
-            <text x="533" y="452" text-anchor="end" class="lbl-s" style="font-size:8px">дом↑</text>
-            <rect x="452" y="200" width="76" height="70" rx="4" fill="#04070c" fill-opacity=".9" stroke="#2a3a52"/>
-            <text x="490" y="218" text-anchor="middle" class="tag-name">ПТО · Q</text>
-            <text id="txtQ" x="490" y="242" text-anchor="middle" class="tag-val" style="font-size:18px">0</text>
-            <text x="490" y="260" text-anchor="middle" class="tag-name">кВт</text>
-            <text x="490" y="80" text-anchor="middle" class="lbl">ПТО</text>
-            
+            <text x="447" y="456" class="lbl-s" style="font-size:8px;fill:#334155">сеть↓</text>
+            <text x="533" y="456" text-anchor="end" class="lbl-s" style="font-size:8px;fill:#334155">дом↑</text>
+            <rect x="452" y="200" width="76" height="70" rx="2" fill="#FFFFFF" stroke="#334155" stroke-width="1"/>
+            <rect x="452" y="200" width="76" height="13" fill="#334155"/>
+            <text x="490" y="209.5" text-anchor="middle" class="tag-head">ПТО · Q</text>
+            <text id="txtQ" x="490" y="245" text-anchor="middle" class="tag-val" style="font-size:20px">0</text>
+            <text x="490" y="262" text-anchor="middle" class="tag-name">кВт</text>
+            <text x="490" y="71" text-anchor="middle" class="lbl" style="font-size:10px;letter-spacing:.08em">ПТО</text>
           </g>
 
           <!-- ========== V1 ========== -->
           <g class="node" data-info="valves">
-            <rect class="hl" x="110" y="52" width="40" height="60" rx="4"/>
-            <line x1="130" y1="90" x2="130" y2="66" stroke="#9fb3c8" stroke-width="2"/>
-            <line x1="120" y1="66" x2="140" y2="66" stroke="#9fb3c8" stroke-width="3"/>
+            <rect class="hl" x="110" y="52" width="40" height="60" rx="3"/>
+            <line x1="130" y1="90" x2="130" y2="66" class="eq-line" stroke-width="1.8"/>
+            <line x1="120" y1="66" x2="140" y2="66" class="eq-line" stroke-width="2.6"/>
             <path id="vV1" class="valve-body valve-open" d="M116 80 L144 100 L144 80 L116 100 Z"/>
-            <g id="tagV1" hidden><rect x="142" y="100" width="24" height="15" rx="2" fill="#dc2626" stroke="#fff" stroke-width="1"/><text x="154" y="111" text-anchor="middle" style="fill:#fff;font-size:9px;font-weight:700">НЕ ОТКР</text></g>
+            <g id="tagV1" hidden><rect x="142" y="100" width="26" height="15" rx="1" fill="#FFFFFF" stroke="#DC2626" stroke-width="1.6"/><rect x="144" y="102" width="22" height="11" fill="none" stroke="#DC2626" stroke-width="0.6"/><text x="155" y="110.5" text-anchor="middle" style="fill:#B91C1C;font-size:6.5px;font-weight:700">НЕ ОТКР</text></g>
             <text x="130" y="60" text-anchor="middle" class="lbl">V1</text>
             <text id="txtV1" x="148" y="74" class="tag-val" style="font-size:11px"></text>
           </g>
 
           <!-- ========== Грязевик ========== -->
           <g class="node" data-info="strainer">
-            <rect class="hl" x="190" y="66" width="56" height="62" rx="4"/>
-            <rect x="198" y="80" width="34" height="20" fill="#1c2a3d" stroke="#9fb3c8" stroke-width="1.5"/>
-            <path d="M214 100 L230 118 L238 112 L224 96" fill="#1c2a3d" stroke="#9fb3c8" stroke-width="1.5"/>
-            <rect id="strainerDirt" x="200" y="82" width="0" height="16" fill="#8b5a2b"/>
-            <path d="M200 98 L230 82 M206 98 L230 86 M212 98 L230 90" stroke="#4b6584" stroke-width="1"/>
+            <rect class="hl" x="190" y="66" width="56" height="62" rx="3"/>
+            <rect x="198" y="80" width="34" height="20" class="eq"/>
+            <path d="M214 100 L230 118 L238 112 L224 96" class="eq"/>
+            <rect id="strainerDirt" x="200" y="82" width="0" height="16" fill="#92400E" fill-opacity=".75"/>
+            <path d="M200 98 L230 82 M206 98 L230 86 M212 98 L230 90" stroke="#64748B" stroke-width="0.9"/>
             <text x="215" y="72" text-anchor="middle" class="lbl">Гр</text>
           </g>
 
           <!-- ========== КЗР ========== -->
           <g class="node" data-info="kzr">
-            <rect class="hl" x="306" y="20" width="60" height="92" rx="4"/>
-            <line x1="330" y1="90" x2="330" y2="66" stroke="#9fb3c8" stroke-width="2"/>
-            <rect x="316" y="44" width="28" height="22" rx="2" fill="#1c2a3d" stroke="#9fb3c8" stroke-width="1.5"/>
-            <text id="txtKZRmode" x="330" y="60" text-anchor="middle" style="fill:#e2f3ff;font-size:12px;font-weight:700">M</text>
+            <rect class="hl" x="306" y="20" width="60" height="92" rx="3"/>
+            <line x1="330" y1="90" x2="330" y2="66" class="eq-line" stroke-width="1.8"/>
+            <rect x="316" y="44" width="28" height="22" rx="2" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1.5"/>
+            <text id="txtKZRmode" x="330" y="60" text-anchor="middle" style="fill:#0F172A;font-size:12px;font-weight:700;font-family:var(--mono)">M</text>
             <path id="vKZR" class="valve-body valve-part" d="M316 80 L344 100 L344 80 L316 100 Z"/>
             <text x="330" y="36" text-anchor="middle" class="lbl">КЗР</text>
             <text id="txtKZR" x="352" y="60" class="tag-val" style="font-size:12px">48%</text>
@@ -293,128 +429,128 @@
 
           <!-- ========== V2 ========== -->
           <g class="node" data-info="valves">
-            <rect class="hl" x="200" y="392" width="40" height="60" rx="4"/>
-            <line x1="220" y1="430" x2="220" y2="406" stroke="#9fb3c8" stroke-width="2"/>
-            <line x1="210" y1="406" x2="230" y2="406" stroke="#9fb3c8" stroke-width="3"/>
+            <rect class="hl" x="200" y="392" width="40" height="60" rx="3"/>
+            <line x1="220" y1="430" x2="220" y2="406" class="eq-line" stroke-width="1.8"/>
+            <line x1="210" y1="406" x2="230" y2="406" class="eq-line" stroke-width="2.6"/>
             <path id="vV2" class="valve-body valve-open" d="M206 420 L234 440 L234 420 L206 440 Z"/>
-            <g id="tagV2" hidden><rect x="232" y="440" width="24" height="15" rx="2" fill="#dc2626" stroke="#fff" stroke-width="1"/><text x="244" y="451" text-anchor="middle" style="fill:#fff;font-size:9px;font-weight:700">НЕ ОТКР</text></g>
+            <g id="tagV2" hidden><rect x="232" y="440" width="26" height="15" rx="1" fill="#FFFFFF" stroke="#DC2626" stroke-width="1.6"/><rect x="234" y="442" width="22" height="11" fill="none" stroke="#DC2626" stroke-width="0.6"/><text x="245" y="450.5" text-anchor="middle" style="fill:#B91C1C;font-size:6.5px;font-weight:700">НЕ ОТКР</text></g>
             <text x="220" y="400" text-anchor="middle" class="lbl">V2</text>
             <text id="txtV2" x="238" y="414" class="tag-val" style="font-size:11px"></text>
           </g>
 
           <!-- ========== Подпитка ========== -->
           <g class="node" data-info="makeup">
-            <rect class="hl" x="566" y="474" width="48" height="40" rx="4"/>
-            <line x1="590" y1="500" x2="590" y2="482" stroke="#9fb3c8" stroke-width="2"/>
-            <line x1="582" y1="482" x2="598" y2="482" stroke="#9fb3c8" stroke-width="3"/>
+            <rect class="hl" x="566" y="474" width="48" height="40" rx="3"/>
+            <line x1="590" y1="500" x2="590" y2="482" class="eq-line" stroke-width="1.8"/>
+            <line x1="582" y1="482" x2="598" y2="482" class="eq-line" stroke-width="2.6"/>
             <path id="vMK" class="valve-body valve-closed" d="M578 492 L602 508 L602 492 L578 508 Z"/>
             <text x="590" y="518" text-anchor="middle" class="lbl-s">Подпитка</text>
           </g>
-          <circle cx="380" cy="430" r="4" fill="#9fb3c8"/>
-          <circle cx="790" cy="430" r="4" fill="#9fb3c8"/>
+          <circle cx="380" cy="430" r="4" fill="#334155"/>
+          <circle cx="790" cy="430" r="4" fill="#334155"/>
           <!-- обратный клапан на подпитке -->
           <g transform="translate(700 500)">
-            <path d="M-8 -7 L8 0 L-8 7 Z" fill="#0b1220" stroke="#9fb3c8" stroke-width="1.5"/>
-            <line x1="8" y1="-7" x2="8" y2="7" stroke="#9fb3c8" stroke-width="2"/>
+            <path d="M-8 -7 L8 0 L-8 7 Z" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.4"/>
+            <line x1="8" y1="-7" x2="8" y2="7" stroke="#1E293B" stroke-width="2"/>
           </g>
 
           <!-- ========== Насосы Н1 (рабочий) и Н2 (резервный) с кранами ========== -->
           <path id="pipeH2" class="pipe" style="stroke-width:6" d="M700 430 V392 H580 V430"/>
           <path id="flowH2" class="flow" style="stroke-width:2" d="M700 430 V392 H580 V430"/>
-          <circle cx="580" cy="430" r="3.5" fill="#9fb3c8"/>
-          <circle cx="700" cy="430" r="3.5" fill="#9fb3c8"/>
+          <circle cx="580" cy="430" r="3.5" fill="#334155"/>
+          <circle cx="700" cy="430" r="3.5" fill="#334155"/>
           <g class="node" data-info="pump">
-            <rect class="hl" x="566" y="370" width="146" height="84" rx="6"/>
+            <rect class="hl" x="566" y="370" width="146" height="84" rx="4"/>
             <!-- Н1 -->
-            <circle id="pumpBody" cx="636" cy="430" r="18" fill="#0f2a1a" stroke="#22c55e" stroke-width="2.5"/>
+            <circle id="pumpBody" cx="636" cy="430" r="18" fill="#DCFCE7" stroke="#16A34A" stroke-width="2"/>
             <g id="pumpRotor">
-              <path d="M636 430 L636 416 M636 430 L648 437 M636 430 L624 437" stroke="#e2f3ff" stroke-width="2.5" stroke-linecap="round"/>
-              <circle cx="636" cy="430" r="3" fill="#e2f3ff"/>
+              <path d="M636 430 L636 416 M636 430 L648 437 M636 430 L624 437" stroke="#1E293B" stroke-width="2.2" stroke-linecap="round"/>
+              <circle cx="636" cy="430" r="3" fill="#1E293B"/>
             </g>
-            <text x="602" y="423" text-anchor="middle" class="lbl-s">Н1</text>
+            <text x="602" y="423" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Н1</text>
             <path id="vISO1" class="valve-body valve-open" d="M672 424 L688 436 L688 424 L672 436 Z"/>
             <!-- Н2 -->
-            <circle id="pump2Body" cx="636" cy="392" r="14" fill="#111827" stroke="#64748b" stroke-width="2.2"/>
+            <circle id="pump2Body" cx="636" cy="392" r="14" fill="#F1F5F9" stroke="#64748B" stroke-width="1.8"/>
             <g id="pump2Rotor">
-              <path d="M636 392 L636 381 M636 392 L645 397 M636 392 L627 397" stroke="#e2f3ff" stroke-width="2" stroke-linecap="round"/>
+              <path d="M636 392 L636 381 M636 392 L645 397 M636 392 L627 397" stroke="#1E293B" stroke-width="1.8" stroke-linecap="round"/>
             </g>
-            <text x="636" y="374" text-anchor="middle" class="lbl-s">Н2 резерв</text>
+            <text x="636" y="374" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Н2 резерв</text>
             <path id="vISO2" class="valve-body valve-open" d="M672 386 L688 398 L688 386 L672 398 Z"/>
           </g>
 
           <!-- ========== Предохранительный клапан ========== -->
           <g class="node" data-info="relief">
-            <rect class="hl" x="718" y="14" width="80" height="62" rx="4"/>
-            <path id="vRV" d="M730 58 L750 58 L740 42 Z" fill="#1c2a3d" stroke="#9fb3c8" stroke-width="1.5"/>
-            <path d="M740 42 l-5 -3 l10 -3 l-10 -3 l10 -3 l-5 -3" fill="none" stroke="#9fb3c8" stroke-width="1.2"/>
-            <path d="M750 50 H770" stroke="#9fb3c8" stroke-width="2"/>
-            <path d="M766 46 L772 50 L766 54" fill="none" stroke="#9fb3c8" stroke-width="1.5"/>
-            <text x="776" y="44" class="lbl-s">ПК</text>
-            <text x="776" y="56" class="lbl-s">6.0</text>
+            <rect class="hl" x="718" y="14" width="80" height="62" rx="3"/>
+            <path id="vRV" d="M730 58 L750 58 L740 42 Z" fill="#E2E8F0" stroke="#1E293B" stroke-width="1.4"/>
+            <path d="M740 42 l-5 -3 l10 -3 l-10 -3 l10 -3 l-5 -3" fill="none" stroke="#1E293B" stroke-width="1.1"/>
+            <path d="M750 50 H770" stroke="#1E293B" stroke-width="1.8"/>
+            <path d="M766 46 L772 50 L766 54" fill="none" stroke="#1E293B" stroke-width="1.4"/>
+            <text x="776" y="44" class="lbl-s" style="fill:#334155;font-weight:600">ПК</text>
+            <text x="776" y="56" class="lbl-s" style="font-family:var(--mono)">6.0</text>
           </g>
 
           <!-- ========== Дренаж ========== -->
           <g class="node" data-info="drain">
-            <rect class="hl" x="842" y="438" width="72" height="58" rx="4"/>
+            <rect class="hl" x="842" y="438" width="72" height="58" rx="3"/>
             <path id="vDR" class="valve-body valve-closed" d="M852 446 L868 446 L852 464 L868 464 Z"/>
-            <path d="M848 480 L872 480 L864 492 L856 492 Z" fill="none" stroke="#9fb3c8" stroke-width="1.5"/>
+            <path d="M848 480 L872 480 L864 492 L856 492 Z" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.3"/>
             <text x="878" y="460" class="lbl-s">Дренаж</text>
           </g>
 
           <!-- ========== Краны дома, спуск стояков, воздушники ========== -->
           <g class="node" data-info="house">
-            <rect class="hl" x="884" y="104" width="44" height="32" rx="4"/>
+            <rect class="hl" x="884" y="104" width="44" height="32" rx="3"/>
             <path id="vHS" class="valve-body valve-open" d="M892 112 L908 112 L892 128 L908 128 Z"/>
-            <text x="912" y="124" class="lbl-s">Кд1</text>
+            <text x="912" y="124" class="lbl-s" style="fill:#334155;font-weight:600">Кд1</text>
           </g>
           <g class="node" data-info="house">
-            <rect class="hl" x="884" y="390" width="44" height="34" rx="4"/>
+            <rect class="hl" x="884" y="390" width="44" height="34" rx="3"/>
             <path id="vHR" class="valve-body valve-open" d="M892 398 L908 398 L892 414 L908 414 Z"/>
-            <text x="912" y="414" class="lbl-s">Кд2</text>
+            <text x="912" y="414" class="lbl-s" style="fill:#334155;font-weight:600">Кд2</text>
           </g>
           <path id="pipeHD" class="pipe-thin" style="stroke-width:3" d="M900 382 H952 V420"/>
           <path id="flowHD" class="flow" style="stroke-width:2" d="M900 382 H952 V420"/>
           <g class="node" data-info="house">
-            <rect class="hl" x="924" y="374" width="56" height="62" rx="4"/>
+            <rect class="hl" x="924" y="374" width="56" height="62" rx="3"/>
             <path id="vHD" class="valve-body valve-closed" d="M926 376 L940 388 L940 376 L926 388 Z"/>
-            <path d="M942 420 L962 420 L956 430 L948 430 Z" fill="none" stroke="#9fb3c8" stroke-width="1.3"/>
+            <path d="M942 420 L962 420 L956 430 L948 430 Z" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.2"/>
             <text x="966" y="402" class="lbl-s">спуск</text>
           </g>
           <path id="pipeHV" class="pipe-thin" style="stroke-width:3" d="M962 150 V122"/>
           <path id="flowHV" class="flow" style="stroke-width:2" d="M962 150 V114"/>
           <g class="node" data-info="house">
-            <rect class="hl" x="944" y="104" width="40" height="44" rx="4"/>
+            <rect class="hl" x="944" y="104" width="40" height="44" rx="3"/>
             <path id="vHV" class="valve-body valve-closed" d="M956 126 L968 126 L956 140 L968 140 Z"/>
-            <path d="M957 118 L962 110 L967 118" fill="none" stroke="#9fb3c8" stroke-width="1.3"/>
+            <path d="M957 118 L962 110 L967 118" fill="none" stroke="#1E293B" stroke-width="1.2"/>
           </g>
 
           <!-- ========== Здание ========== -->
           <g class="node" data-info="building">
-            <rect class="hl" x="824" y="144" width="162" height="232" rx="6"/>
-            <rect x="830" y="150" width="150" height="220" rx="3" fill="url(#houseGrad)" stroke="#4b6584" stroke-width="2"/>
+            <rect class="hl" x="824" y="144" width="162" height="232" rx="4"/>
+            <rect x="830" y="150" width="150" height="220" rx="2" fill="url(#houseGrad)" stroke="#334155" stroke-width="1.6"/>
             <g id="houseWindows"></g>
-            <text x="905" y="168" text-anchor="middle" class="lbl">Жилой дом · 9 эт.</text>
-            <text x="905" y="362" text-anchor="middle" class="lbl-s">радиаторы · H = 27 м</text>
+            <text x="905" y="167" text-anchor="middle" class="lbl" style="font-size:11px">Жилой дом · 9 эт.</text>
+            <text x="905" y="362" text-anchor="middle" class="lbl-s" style="fill:#334155">радиаторы · H = 27 м</text>
           </g>
 
           <!-- ========== Дренаж сети ========== -->
           <g class="node" data-info="netdrain">
-            <rect class="hl" x="282" y="436" width="96" height="60" rx="4"/>
+            <rect class="hl" x="282" y="436" width="96" height="60" rx="3"/>
             <path id="vNDR" class="valve-body valve-closed" d="M292 443 L308 443 L292 461 L308 461 Z"/>
-            <path d="M288 480 L312 480 L304 492 L296 492 Z" fill="none" stroke="#9fb3c8" stroke-width="1.5"/>
+            <path d="M288 480 L312 480 L304 492 L296 492 Z" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.3"/>
             <text x="316" y="470" class="lbl-s">Дренаж</text>
             <text x="316" y="482" class="lbl-s">сети</text>
           </g>
 
           <!-- ========== Воздушник сети ========== -->
           <g class="node" data-info="netdrain">
-            <rect class="hl" x="396" y="36" width="44" height="50" rx="4"/>
+            <rect class="hl" x="396" y="36" width="44" height="50" rx="3"/>
             <path id="vNVT" class="valve-body valve-closed" d="M402 63 L418 63 L402 81 L418 81 Z"/>
-            <path d="M405 52 L410 44 L415 52" fill="none" stroke="#9fb3c8" stroke-width="1.5"/>
+            <path d="M405 52 L410 44 L415 52" fill="none" stroke="#1E293B" stroke-width="1.3"/>
             <text x="420" y="50" class="lbl-s">Возд.</text>
           </g>
 
-          <!-- Показания приборов (rect + text) добавляются из app.js -->
+          <!-- Показания приборов КИПиА (шильдики) добавляются из app.js -->
           <g id="tags"></g>
           <!-- Подсветка шага урока -->
           <g id="lessonMarks"></g>
@@ -423,228 +559,236 @@
 
       <div class="grid gap-3 lg:grid-cols-2">
         <!-- Диагностика -->
-        <div class="panel p-3 flex flex-col">
-          <div class="flex items-center justify-between mb-2">
-            <div class="panel-title">Диагностика · аварии и предупреждения</div>
-            <span id="alarmCount" class="text-[11px] mono text-slate-400"></span>
+        <div class="panel p-4 flex flex-col">
+          <div class="flex items-center justify-between mb-3">
+            <div class="panel-title flex items-center gap-2"><span data-icon="alert"></span>Диагностика · аварии и предупреждения</div>
+            <span id="alarmCount" class="text-[11px] mono faint"></span>
           </div>
           <div id="alarms" class="flex flex-col gap-2"></div>
         </div>
 
         <!-- Тренд + журнал -->
-        <div class="panel p-3 flex flex-col gap-3">
+        <div class="panel p-4 flex flex-col gap-4">
           <div>
-            <div class="flex items-center justify-between mb-1">
+            <div class="flex items-center justify-between mb-2">
               <div class="panel-title">Тренд температур · 2 мин</div>
               <div class="flex gap-3 text-[11px] mono">
-                <span style="color:#f87171">■ T11</span>
-                <span style="color:#fbbf24">■ T2</span>
-                <span style="color:#60a5fa">■ T21</span>
+                <span class="flex items-center gap-1.5" style="color:#C2410C"><i style="display:inline-block;width:14px;height:2.5px;background:#C2410C"></i>T11</span>
+                <span class="flex items-center gap-1.5" style="color:#B45309"><i style="display:inline-block;width:14px;height:2.5px;background:#D97706"></i>T2</span>
+                <span class="flex items-center gap-1.5" style="color:#0369A1"><i style="display:inline-block;width:14px;height:2.5px;background:#0369A1"></i>T21</span>
               </div>
             </div>
-            <canvas id="trend" class="w-full h-[150px] block rounded bg-[#04070c] border border-slate-800"></canvas>
+            <canvas id="trend" class="w-full h-[160px] block rounded" style="background:#FFFFFF;border:1px solid var(--line-soft)"></canvas>
           </div>
           <div>
-            <div class="panel-title mb-1">Журнал событий</div>
-            <div id="log" class="mono text-[11px] leading-5 h-[120px] overflow-y-auto bg-[#04070c] border border-slate-800 rounded px-2 py-1"></div>
+            <div class="panel-title mb-1.5">Журнал событий</div>
+            <div id="log" class="mono text-[11px] leading-5 h-[124px] overflow-y-auto scroll-box px-2 py-1"></div>
           </div>
         </div>
       </div>
     </section>
 
-    <!-- Правая колонка: пульт управления -->
+    <!-- Правая колонка: щит управления ИТП -->
     <aside class="flex flex-col gap-3">
-      <div class="panel p-3">
-        <div class="panel-title mb-3">Пульт управления арматурой</div>
+      <div class="panel p-4">
+        <div class="flex items-center justify-between mb-3">
+          <div class="text-[13px] font-semibold flex items-center gap-2"><span data-icon="sliders"></span>Щит управления ИТП</div>
+          <span class="mono text-[10px] faint">ШУ-ИТП-01</span>
+        </div>
 
-        <div class="flex flex-col gap-4" id="controls">
-          <!-- Генерация строк ниже по шаблону; data-ctl — ключ в sim.controls -->
-          <div class="gate" data-gate="V1">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-sm font-semibold">V1</span>
-              <span class="text-xs text-slate-400">Задвижка подачи теплосети</span>
-              <button class="qbtn ml-auto" data-info="valves">?</button>
-            </div>
-            <div class="flex items-center gap-3">
-              <button id="gateBtnV1" class="gate-btn w-28 py-1.5 rounded text-xs font-semibold border"></button>
-              <button id="tagBtnV1" class="tag-btn px-2 py-1.5 rounded text-xs border" title="Плакат «Не открывать — работают люди»"></button>
-              <div class="flex-1 min-w-0">
-                <div class="h-1.5 bg-slate-800 rounded overflow-hidden"><div class="gate-bar h-full" style="width:100%"></div></div>
-                <div class="gate-state mono text-[11px] text-slate-400 mt-1"></div>
+        <div class="flex flex-col gap-5" id="controls">
+          <!-- 1. Первичный контур -->
+          <section>
+            <div class="sec-h"><span class="num">01</span>Первичный контур (Теплосеть)</div>
+            <div class="flex flex-col gap-4">
+              <div class="gate" data-gate="V1">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-sm font-semibold mono">V1</span>
+                  <span class="text-xs muted">Задвижка подачи теплосети</span>
+                  <button class="qbtn ml-auto" data-info="valves">?</button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button id="gateBtnV1" class="gate-btn btn btn-sm w-24"></button>
+                  <button id="tagBtnV1" class="tag-btn tag-off" title="Плакат «Не открывать — работают люди»"></button>
+                  <div class="flex-1 min-w-0">
+                    <div class="meter"><div class="gate-bar" style="width:100%"></div></div>
+                    <div class="gate-state mono text-[10.5px] faint mt-1"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div id="strainerRow">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-sm font-semibold mono">Гр</span>
+                  <span class="text-xs muted">Грязевик: засор сетки</span>
+                  <button class="qbtn ml-auto" data-info="strainer">?</button>
+                  <span id="foulVal" class="mono text-sm w-12 text-right">0%</span>
+                </div>
+                <div class="meter mb-2"><div id="foulBar" style="width:0%;background:#92400E"></div></div>
+                <div class="flex gap-2">
+                  <button id="foulBtn" class="btn btn-sm btn-warn flex-1">Засорить +10%</button>
+                  <button id="cleanBtn" class="btn btn-sm flex-1"><span data-icon="wrench"></span>Вскрыть и промыть</button>
+                </div>
+              </div>
+
+              <div class="ctl" data-ctl="KZRcmd">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-sm font-semibold mono">КЗР</span>
+                  <span class="text-xs muted">Регулирующий клапан</span>
+                  <button class="qbtn ml-auto" data-info="kzr">?</button>
+                  <span class="mono text-sm w-12 text-right" data-val>48%</span>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button class="kzr-step btn btn-sm mono" data-step="-1">−1</button>
+                  <input type="range" min="0" max="100" step="1" value="48" aria-label="Задание КЗР">
+                  <button class="kzr-step btn btn-sm mono" data-step="1">+1</button>
+                </div>
+                <div class="flex items-center gap-2 mt-2">
+                  <span id="kzrPos" class="mono text-[10.5px] faint"></span>
+                  <button id="kzrManualBtn" data-toggle="KZR_MANUAL" data-on="Ручной (штурвал)" data-off="Авто (привод)" data-tone="amber" data-label="Режим КЗР" class="tbtn ml-auto"></button>
+                </div>
+              </div>
+
+              <div class="gate" data-gate="V2">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-sm font-semibold mono">V2</span>
+                  <span class="text-xs muted">Задвижка обратки теплосети</span>
+                  <button class="qbtn ml-auto" data-info="valves">?</button>
+                </div>
+                <div class="flex items-center gap-2">
+                  <button id="gateBtnV2" class="gate-btn btn btn-sm w-24"></button>
+                  <button id="tagBtnV2" class="tag-btn tag-off" title="Плакат «Не открывать — работают люди»"></button>
+                  <div class="flex-1 min-w-0">
+                    <div class="meter"><div class="gate-bar" style="width:100%"></div></div>
+                    <div class="gate-state mono text-[10.5px] faint mt-1"></div>
+                  </div>
+                </div>
+              </div>
+
+              <div>
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-xs muted">Ремонт участка между V1 и V2</span>
+                  <button class="qbtn ml-auto" data-info="netdrain">?</button>
+                </div>
+                <div class="grid grid-cols-2 gap-2">
+                  <div class="flex flex-col gap-1">
+                    <span class="text-[11px] faint">Дренаж сети</span>
+                    <button id="netDrainBtn" data-toggle="NET_DRAIN" data-on="ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Дренаж сети" class="tbtn"></button>
+                  </div>
+                  <div class="flex flex-col gap-1">
+                    <span class="text-[11px] faint">Воздушник</span>
+                    <button id="netVentBtn" data-toggle="NET_VENT" data-on="ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Воздушник сети" class="tbtn"></button>
+                  </div>
+                </div>
+                <div class="meter mt-2.5"><div id="netFillBar" style="width:100%;background:var(--cold)"></div></div>
+                <div id="netFillTxt" class="mono text-[10.5px] faint mt-1"></div>
+                <div class="text-[11px] faint mt-2 leading-4">
+                  Слив: закрыть V1, затем V2 → открыть дренаж и воздушник → дождаться 0 бар и 0 % → промыть грязевик.<br>
+                  Заполнение: закрыть дренаж, воздушник открыт → открыть V2 → когда участок полон, закрыть воздушник → открыть V1.
+                </div>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div id="strainerRow">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-sm font-semibold">Гр</span>
-              <span class="text-xs text-slate-400">Грязевик: засор сетки</span>
-              <button class="qbtn ml-auto" data-info="strainer">?</button>
-              <span id="foulVal" class="mono text-sm w-12 text-right">0%</span>
-            </div>
-            <div class="h-1.5 bg-slate-800 rounded overflow-hidden mb-2"><div id="foulBar" class="h-full" style="width:0%;background:#a16207"></div></div>
-            <div class="flex gap-2">
-              <button id="foulBtn" class="flex-1 py-1.5 rounded text-xs font-semibold border border-amber-700/70 text-amber-200 bg-slate-800 hover:bg-amber-900/30">Засорить +10%</button>
-              <button id="cleanBtn" class="flex-1 py-1.5 rounded text-xs font-semibold border border-sky-600/70 text-sky-200 bg-slate-800 hover:bg-sky-900/30">Вскрыть и промыть</button>
-            </div>
-          </div>
+          <!-- 2. Вторичный контур и насосная группа -->
+          <section>
+            <div class="sec-h"><span class="num">02</span>Вторичный контур и насосная группа</div>
+            <div class="flex flex-col gap-3">
+              <div class="flex items-center gap-2">
+                <span class="text-xs muted">Циркуляционные насосы</span>
+                <button class="qbtn ml-auto" data-info="pump">?</button>
+              </div>
+              <div class="grid grid-cols-[2.2rem_1fr_1fr] gap-2 items-center">
+                <span class="text-sm font-semibold mono">Н1</span>
+                <button id="pumpBtn" data-toggle="PUMP" data-on="В РАБОТЕ" data-off="СТОП" data-tone="green" data-label="Насос Н1" class="tbtn"></button>
+                <button id="iso1Btn" data-toggle="PUMP1_ISO" data-on="Краны открыты" data-off="Краны закрыты" data-tone="slate" data-inverse="1" data-label="Краны Н1" class="tbtn"></button>
+                <span class="text-sm font-semibold mono">Н2</span>
+                <button id="pump2Btn" data-toggle="PUMP2" data-on="В РАБОТЕ" data-off="СТОП" data-tone="green" data-label="Насос Н2" class="tbtn"></button>
+                <button id="iso2Btn" data-toggle="PUMP2_ISO" data-on="Краны открыты" data-off="Краны закрыты" data-tone="slate" data-inverse="1" data-label="Краны Н2" class="tbtn"></button>
+              </div>
 
-          <div class="ctl" data-ctl="KZRcmd">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-sm font-semibold">КЗР</span>
-              <span class="text-xs text-slate-400">Регулирующий клапан</span>
-              <button class="qbtn ml-auto" data-info="kzr">?</button>
-              <span class="mono text-sm w-12 text-right" data-val>48%</span>
-            </div>
-            <div class="flex items-center gap-2">
-              <button class="kzr-step px-2 text-xs rounded border border-slate-700" data-step="-1">−1</button>
-              <input type="range" min="0" max="100" step="1" value="48">
-              <button class="kzr-step px-2 text-xs rounded border border-slate-700" data-step="1">+1</button>
-            </div>
-            <div class="flex items-center gap-2 mt-1">
-              <span id="kzrPos" class="mono text-[11px] text-slate-400"></span>
-              <button id="kzrManualBtn" data-toggle="KZR_MANUAL" data-on="✋ Ручной (штурвал)" data-off="Авто (привод)" data-tone="amber" data-label="Режим КЗР" class="tbtn ml-auto"></button>
-            </div>
-          </div>
+              <div class="ctl" data-ctl="MAKEUP">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-sm font-semibold mono">Подп.</span>
+                  <span class="text-xs muted">Кран подпитки контура</span>
+                  <button class="qbtn ml-auto" data-info="makeup">?</button>
+                  <span class="mono text-sm w-12 text-right" data-val>0%</span>
+                </div>
+                <input type="range" min="0" max="100" step="1" value="0" aria-label="Открытие подпитки">
+              </div>
 
-          <div class="gate" data-gate="V2">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-sm font-semibold">V2</span>
-              <span class="text-xs text-slate-400">Задвижка обратки теплосети</span>
-              <button class="qbtn ml-auto" data-info="valves">?</button>
-            </div>
-            <div class="flex items-center gap-3">
-              <button id="gateBtnV2" class="gate-btn w-28 py-1.5 rounded text-xs font-semibold border"></button>
-              <button id="tagBtnV2" class="tag-btn px-2 py-1.5 rounded text-xs border" title="Плакат «Не открывать — работают люди»"></button>
-              <div class="flex-1 min-w-0">
-                <div class="h-1.5 bg-slate-800 rounded overflow-hidden"><div class="gate-bar h-full" style="width:100%"></div></div>
-                <div class="gate-state mono text-[11px] text-slate-400 mt-1"></div>
+              <div class="flex items-center gap-2">
+                <span class="text-xs muted">Сброс в дренаж (ИТП)</span>
+                <button class="qbtn" data-info="drain">?</button>
+                <button id="drainBtn" data-toggle="DRAIN" data-on="ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Дренаж ИТП" class="tbtn ml-auto w-32"></button>
               </div>
             </div>
-          </div>
+          </section>
 
-          <div class="ctl" data-ctl="MAKEUP">
-            <div class="flex items-center gap-2 mb-1">
-              <span class="text-sm font-semibold">Подп.</span>
-              <span class="text-xs text-slate-400">Кран подпитки контура</span>
-              <button class="qbtn ml-auto" data-info="makeup">?</button>
-              <span class="mono text-sm w-12 text-right" data-val>0%</span>
+          <!-- 3. Контур здания -->
+          <section>
+            <div class="sec-h"><span class="num">03</span>Контур здания (Отопление)<button class="qbtn ml-auto" data-info="house">?</button></div>
+            <div class="grid grid-cols-2 gap-2">
+              <div class="flex flex-col gap-1"><span class="text-[11px] faint">Кран подачи Кд1</span>
+                <button id="houseSupBtn" data-toggle="HOUSE_SUP" data-on="Открыт" data-off="ЗАКРЫТ" data-tone="slate" data-inverse="1" data-label="Кран подачи дома Кд1" class="tbtn"></button></div>
+              <div class="flex flex-col gap-1"><span class="text-[11px] faint">Кран обратки Кд2</span>
+                <button id="houseRetBtn" data-toggle="HOUSE_RET" data-on="Открыт" data-off="ЗАКРЫТ" data-tone="slate" data-inverse="1" data-label="Кран обратки дома Кд2" class="tbtn"></button></div>
+              <div class="flex flex-col gap-1"><span class="text-[11px] faint">Спуск стояков</span>
+                <button id="houseDrainBtn" data-toggle="HOUSE_DRAIN" data-on="ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Спуск стояков" class="tbtn"></button></div>
+              <div class="flex flex-col gap-1"><span class="text-[11px] faint">Воздушники 9 эт.</span>
+                <button id="houseVentBtn" data-toggle="HOUSE_VENT" data-on="ОТКРЫТЫ" data-off="ЗАКРЫТЫ" data-tone="amber" data-label="Воздушники 9 этажа" class="tbtn"></button></div>
             </div>
-            <input type="range" min="0" max="100" step="1" value="0">
-          </div>
-
-          <div class="flex flex-col gap-2 pt-1">
-            <div class="flex items-center gap-2">
-              <span class="text-xs text-slate-400">Циркуляционные насосы</span>
-              <button class="qbtn ml-auto" data-info="pump">?</button>
-            </div>
-            <div class="grid grid-cols-[2.2rem_1fr_1fr] gap-2 items-center">
-              <span class="text-sm font-semibold">Н1</span>
-              <button id="pumpBtn" data-toggle="PUMP" data-on="● В РАБОТЕ" data-off="○ СТОП" data-tone="green" data-label="Насос Н1" class="tbtn"></button>
-              <button id="iso1Btn" data-toggle="PUMP1_ISO" data-on="Краны открыты" data-off="Краны закрыты" data-tone="slate" data-inverse="1" data-label="Краны Н1" class="tbtn"></button>
-              <span class="text-sm font-semibold">Н2</span>
-              <button id="pump2Btn" data-toggle="PUMP2" data-on="● В РАБОТЕ" data-off="○ СТОП" data-tone="green" data-label="Насос Н2" class="tbtn"></button>
-              <button id="iso2Btn" data-toggle="PUMP2_ISO" data-on="Краны открыты" data-off="Краны закрыты" data-tone="slate" data-inverse="1" data-label="Краны Н2" class="tbtn"></button>
-            </div>
-            <div class="flex items-center gap-2 mt-1">
-              <span class="text-xs text-slate-400">Сброс в дренаж (ИТП)</span>
-              <button class="qbtn" data-info="drain">?</button>
-              <button id="drainBtn" data-toggle="DRAIN" data-on="▼ ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Дренаж ИТП" class="tbtn ml-auto w-32"></button>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- Система отопления дома -->
-      <div class="panel p-3">
-        <div class="flex items-center gap-2 mb-2">
-          <div class="panel-title">Система отопления дома</div>
-          <button class="qbtn ml-auto" data-info="house">?</button>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div class="flex flex-col gap-1"><span class="text-xs text-slate-400">Кран подачи Кд1</span>
-            <button id="houseSupBtn" data-toggle="HOUSE_SUP" data-on="Открыт" data-off="▼ ЗАКРЫТ" data-tone="slate" data-inverse="1" data-label="Кран подачи дома Кд1" class="tbtn"></button></div>
-          <div class="flex flex-col gap-1"><span class="text-xs text-slate-400">Кран обратки Кд2</span>
-            <button id="houseRetBtn" data-toggle="HOUSE_RET" data-on="Открыт" data-off="▼ ЗАКРЫТ" data-tone="slate" data-inverse="1" data-label="Кран обратки дома Кд2" class="tbtn"></button></div>
-          <div class="flex flex-col gap-1"><span class="text-xs text-slate-400">Спуск стояков</span>
-            <button id="houseDrainBtn" data-toggle="HOUSE_DRAIN" data-on="▼ ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Спуск стояков" class="tbtn"></button></div>
-          <div class="flex flex-col gap-1"><span class="text-xs text-slate-400">Воздушники 9 эт.</span>
-            <button id="houseVentBtn" data-toggle="HOUSE_VENT" data-on="▲ ОТКРЫТЫ" data-off="ЗАКРЫТЫ" data-tone="amber" data-label="Воздушники 9 этажа" class="tbtn"></button></div>
-        </div>
-        <div class="mt-3 h-1.5 bg-slate-800 rounded overflow-hidden"><div id="houseFillBar" class="h-full bg-sky-500" style="width:100%"></div></div>
-        <div id="houseFillTxt" class="mono text-[11px] text-slate-400 mt-1"></div>
-      </div>
-
-      <!-- Ремонт сетевого участка -->
-      <div class="panel p-3">
-        <div class="flex items-center gap-2 mb-2">
-          <div class="panel-title">Ремонт сетевого участка</div>
-          <button class="qbtn ml-auto" data-info="netdrain">?</button>
-        </div>
-        <div class="grid grid-cols-2 gap-2">
-          <div class="flex flex-col gap-1">
-            <span class="text-xs text-slate-400">Дренаж сети</span>
-            <button id="netDrainBtn" data-toggle="NET_DRAIN" data-on="▼ ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Дренаж сети" class="tbtn"></button>
-          </div>
-          <div class="flex flex-col gap-1">
-            <span class="text-xs text-slate-400">Воздушник</span>
-            <button id="netVentBtn" data-toggle="NET_VENT" data-on="▲ ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Воздушник сети" class="tbtn"></button>
-          </div>
-        </div>
-        <div class="mt-3 h-1.5 bg-slate-800 rounded overflow-hidden"><div id="netFillBar" class="h-full bg-sky-500" style="width:100%"></div></div>
-        <div id="netFillTxt" class="mono text-[11px] text-slate-400 mt-1"></div>
-        <div class="text-[11px] text-slate-500 mt-2 leading-4">
-          Слив: закрыть V1, затем V2 → открыть дренаж и воздушник → дождаться 0 бар и 0 % → промыть грязевик.<br>
-          Заполнение: закрыть дренаж, воздушник открыт → открыть V2 → когда участок полон, закрыть воздушник → открыть V1.
+            <div class="meter mt-2.5"><div id="houseFillBar" style="width:100%;background:var(--cold)"></div></div>
+            <div id="houseFillTxt" class="mono text-[10.5px] faint mt-1"></div>
+          </section>
         </div>
       </div>
 
       <!-- Сводка -->
-      <div class="panel p-3">
+      <div class="panel p-4">
         <div class="panel-title mb-2">Ключевые параметры</div>
-        <table class="w-full text-sm mono">
+        <table class="w-full text-sm k-table">
           <tbody id="summary"></tbody>
         </table>
       </div>
 
-      <div class="panel p-3 text-xs text-slate-400 leading-5">
-        <div class="panel-title mb-1">Задание на смену</div>
-        Удерживайте <b class="text-slate-200">T11 = 70…80 °C</b> (цель 75 °C) и
-        <b class="text-slate-200">T2 ≤ 55 °C</b>. Попробуйте: засорить грязевик и восстановить
-        режим КЗР; правильно отключить ИТП (сначала V1, затем V2); спустить контур в дренаж
-        и заново поднять давление подпиткой.
+      <div class="panel p-4 text-xs muted leading-5">
+        <div class="panel-title mb-1.5">Задание на смену</div>
+        Держите <b style="color:var(--ink)">T11 по температурному графику</b> (при −10 °C — 75 °C, коридор ±5 °C) и
+        <b style="color:var(--ink)">T2 не выше графика</b> (при −10 °C — 55 °C). Попробуйте: засорить грязевик и восстановить
+        режим; правильно отключить ИТП (сначала V1, затем V2); спустить контур в дренаж и заново поднять давление подпиткой.
       </div>
     </aside>
   </main>
 
   <!-- Карточка «Зачем нужен этот элемент?» -->
-  <div id="infoModal" class="fixed inset-0 z-50 hidden items-center justify-center bg-black/60 p-4">
-    <div class="panel max-w-lg w-full p-5 shadow-2xl">
+  <div id="infoModal" class="fixed inset-0 z-50 hidden items-center justify-center overlay p-4">
+    <div class="panel max-w-lg w-full p-5" style="box-shadow:0 20px 40px rgba(15,23,42,.18)">
       <div class="flex items-start gap-3">
-        <div class="text-2xl" id="infoIcon">ℹ️</div>
+        <div id="infoIcon" class="w-10 h-10 rounded-md flex items-center justify-center" style="background:#F0F9FF;color:var(--accent);border:1px solid #BAE6FD"></div>
         <div class="flex-1">
           <div class="panel-title">Зачем нужен этот элемент?</div>
-          <h2 id="infoTitle" class="text-lg font-semibold text-white mt-1"></h2>
+          <h2 id="infoTitle" class="text-lg font-semibold mt-0.5"></h2>
         </div>
-        <button id="infoClose" class="text-slate-400 hover:text-white text-xl leading-none">×</button>
+        <button id="infoClose" class="btn btn-sm" aria-label="Закрыть"><span data-icon="close"></span></button>
       </div>
-      <div id="infoBody" class="mt-3 text-sm text-slate-300 leading-6"></div>
+      <div id="infoBody" class="mt-3 text-sm muted leading-6"></div>
     </div>
   </div>
 
   <script src="physics.js"></script>
   <!-- Меню уроков -->
-  <div id="lessonMenu" class="fixed inset-0 z-40 bg-black/60 p-4 overflow-y-auto" hidden>
-    <div class="panel max-w-3xl mx-auto p-5 shadow-2xl">
+  <div id="lessonMenu" class="fixed inset-0 z-40 overlay p-4 overflow-y-auto" hidden>
+    <div class="panel max-w-3xl mx-auto p-5" style="box-shadow:0 20px 40px rgba(15,23,42,.18)">
       <div class="flex items-start gap-3">
         <div>
           <div class="panel-title">Обучение</div>
-          <h2 class="text-lg font-semibold text-white mt-1">Обучалки по отдельным ситуациям</h2>
-          <p class="text-xs text-slate-400 mt-1 leading-5">Пошаговые сценарии с подсказками. Ошибка не проваливает урок: тренажер объяснит, что случилось бы на объекте, и вернет к началу шага.</p>
+          <h2 class="text-xl font-semibold mt-1">Обучалки по отдельным ситуациям</h2>
+          <p class="text-[13px] muted mt-1 leading-5" style="max-width:68ch">Пошаговые сценарии с подсказками. Ошибка не проваливает урок: тренажер объяснит, что случилось бы на объекте, и вернет к началу шага.</p>
         </div>
-        <button id="lessonMenuClose" class="ml-auto text-slate-400 hover:text-white text-xl leading-none" aria-label="Закрыть">×</button>
+        <button id="lessonMenuClose" class="btn btn-sm ml-auto" aria-label="Закрыть"><span data-icon="close"></span></button>
       </div>
-      <div id="lessonDoneCount" class="text-xs mono text-green-300 mt-3"></div>
+      <div id="lessonDoneCount" class="text-xs mono t-ok mt-3"></div>
       <div id="lessonList" class="grid gap-2 mt-2 sm:grid-cols-2"></div>
       <div class="panel-title mt-5 mb-2">Скоро</div>
       <div id="lessonSoon" class="grid gap-2 sm:grid-cols-2"></div>
@@ -652,16 +796,16 @@
   </div>
 
   <!-- Окно ошибки / завершения урока -->
-  <div id="lessonModal" class="fixed inset-0 z-50 bg-black/60 p-4 flex items-center justify-center" hidden>
-    <div class="panel max-w-lg w-full p-5 shadow-2xl">
+  <div id="lessonModal" class="fixed inset-0 z-50 overlay p-4 flex items-center justify-center" hidden>
+    <div class="panel max-w-lg w-full p-5" style="box-shadow:0 20px 40px rgba(15,23,42,.18)">
       <div class="flex items-start gap-3">
-        <div id="lessonModalIcon" class="text-2xl"></div>
+        <div id="lessonModalIcon" class="w-10 h-10 rounded-md flex items-center justify-center flex-none"></div>
         <div class="flex-1 min-w-0">
           <div id="lessonModalKind" class="panel-title"></div>
           <h2 id="lessonModalTitle" class="text-lg font-semibold mt-1"></h2>
         </div>
       </div>
-      <div id="lessonModalBody" class="mt-3 text-sm text-slate-300 leading-6"></div>
+      <div id="lessonModalBody" class="mt-3 text-sm muted leading-6"></div>
       <div id="lessonModalButtons" class="mt-4 flex flex-wrap gap-2"></div>
     </div>
   </div>
@@ -670,25 +814,25 @@
   <div id="levelToasts" aria-live="polite"></div>
 
   <!-- Меню уровней -->
-  <div id="levelMenu" class="fixed inset-0 z-40 bg-black/60 p-4 overflow-y-auto" hidden>
-    <div class="panel max-w-3xl mx-auto p-5 shadow-2xl">
+  <div id="levelMenu" class="fixed inset-0 z-40 overlay p-4 overflow-y-auto" hidden>
+    <div class="panel max-w-3xl mx-auto p-5" style="box-shadow:0 20px 40px rgba(15,23,42,.18)">
       <div class="flex items-start gap-3">
         <div>
           <div class="panel-title">Уровни</div>
-          <h2 class="text-lg font-semibold text-white mt-1">Смены с внезапными проблемами</h2>
-          <p class="text-xs text-slate-400 mt-1 leading-5">Подсказок нет: справочник, советы на табло и пауза отключены. Оцениваются правильность и скорость.
+          <h2 class="text-xl font-semibold mt-1">Смены с внезапными проблемами</h2>
+          <p class="text-[13px] muted mt-1 leading-5" style="max-width:72ch">Подсказок нет: справочник, советы на табло и пауза отключены. Оцениваются правильность и скорость.
             За каждую проблему — 60 баллов за решение и до 40 за скорость (в пределах норматива). Мягкие ошибки снимают баллы,
-            критическая авария прекращает смену. ★ — от 60 баллов (открывает следующий уровень), ★★ — от 75, ★★★ — от 90.</p>
+            критическая авария прекращает смену. Одна звезда — от 60 баллов (открывает следующий уровень), две — от 75, три — от 90.</p>
         </div>
-        <button id="levelMenuClose" class="ml-auto text-slate-400 hover:text-white text-xl leading-none" aria-label="Закрыть">×</button>
+        <button id="levelMenuClose" class="btn btn-sm ml-auto" aria-label="Закрыть"><span data-icon="close"></span></button>
       </div>
       <div id="levelList" class="grid gap-2 mt-4 sm:grid-cols-2"></div>
     </div>
   </div>
 
   <!-- Разбор смены -->
-  <div id="levelModal" class="fixed inset-0 z-50 bg-black/60 p-4 overflow-y-auto" hidden>
-    <div class="panel max-w-2xl mx-auto p-5 shadow-2xl"><div id="levelModalBody"></div></div>
+  <div id="levelModal" class="fixed inset-0 z-50 overlay p-4 overflow-y-auto" hidden>
+    <div class="panel max-w-2xl mx-auto p-5" style="box-shadow:0 20px 40px rgba(15,23,42,.18)"><div id="levelModalBody"></div></div>
   </div>
 
   <script src="app.js"></script>
