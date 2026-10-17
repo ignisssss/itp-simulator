@@ -327,7 +327,7 @@
     if (window.ITPLessons && window.ITPLessons.active()) window.ITPLessons.exit();
     closeMenu();
     level = lv;
-    P.resetNominal(sim);
+    P.resetNominal(sim, { forceBase: true });   // уровни рассчитаны на базовую схему
     lv.setup();
     P.step(sim, 0);
     t0 = sim.state.time;

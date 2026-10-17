@@ -85,6 +85,9 @@
     .tb-amber { background: #FFFBEB; border-color: var(--warn); color: #92400E; }
     .tb-amber::before { background: var(--warn); box-shadow: 0 0 0 2px rgba(217,119,6,.18); }
     .tb-red { background: #FEF2F2; border-color: var(--bad); color: #991B1B; }
+    .tb-blue { background: #F0F9FF; border-color: var(--cold); color: #075985; }
+    .tb-blue::before { background: var(--cold); box-shadow: 0 0 0 2px rgba(3,105,161,.18); }
+    .tbtn:disabled { opacity: .55; cursor: not-allowed; }
     .tb-red::before { background: var(--bad); box-shadow: 0 0 0 2px rgba(220,38,38,.18); }
 
     /* Плакат безопасности на задвижке */
@@ -183,6 +186,19 @@
       .flow, .valve-moving, #pumpRotor.spin, #pump2Rotor.spin, .blink, .lesson-ring, .lesson-hl { animation: none !important; }
     }
 
+    /* --- Конфигуратор схемы --- */
+    .seg-group { display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #F8FAFC; }
+    .seg-btn { padding: 5px 11px; font-size: 12.5px; font-weight: 600; color: var(--ink-2); border-right: 1px solid var(--line); background: transparent; }
+    .seg-btn:last-child { border-right: 0; }
+    .seg-btn:hover:not(:disabled) { background: #F1F5F9; color: var(--ink); }
+    .seg-btn.is-active { background: var(--ink); color: #fff; }
+    .seg-btn:disabled { color: var(--metal-2); cursor: not-allowed; }
+    .cfg-label { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); }
+    body.level-mode #configPanel { display: none !important; }
+    #mpRotor { transform-box: fill-box; transform-origin: center; }
+    #mpRotor.spin { animation: spin 1s linear infinite; }
+    @media (prefers-reduced-motion: reduce) { #mpRotor.spin { animation: none !important; } }
+
     /* --- Уровни --- */
     body.level-mode .alarm-text, body.level-mode .qbtn, body.level-mode #pauseBtn, body.level-mode .scheme-hint { display: none !important; }
     body.level-mode .node { cursor: default; }
@@ -228,6 +244,35 @@
     <button data-mode="lesson" class="mode-btn"><span data-icon="book"></span>Обучение</button>
     <button data-mode="levels" class="mode-btn"><span data-icon="flag"></span>Уровни</button>
   </nav>
+
+  <!-- Конфигуратор схемы (только свободный режим) -->
+  <div id="configPanel" class="mx-3 mt-3 panel px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-3">
+    <div class="flex items-center gap-2 text-[13px] font-semibold"><span data-icon="gear"></span>Конфигуратор схемы</div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="cfg-label">Подпитка СО</span>
+      <div class="seg-group" role="group" aria-label="Узел подпитки">
+        <button class="seg-btn" data-cfg="makeupType" data-val="direct">Безнасосная (от P2)</button>
+        <button class="seg-btn" data-cfg="makeupType" data-val="pumped">Насосная станция (Нп + РД)</button>
+      </div>
+      <button class="qbtn" data-info="makeupPump">?</button>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="cfg-label">Контур ГВС</span>
+      <div class="seg-group" role="group" aria-label="Схема ГВС">
+        <button class="seg-btn" data-cfg="dhwScheme" data-val="none">Без ГВС</button>
+        <button class="seg-btn" data-cfg="dhwScheme" data-val="1stage" disabled title="Будет добавлено на Этапах 2 и 3">1-ступ. (скоро)</button>
+        <button class="seg-btn" data-cfg="dhwScheme" data-val="2stage" disabled title="Будет добавлено на Этапах 2 и 3">2-ступ. (скоро)</button>
+      </div>
+    </div>
+    <div class="flex items-center gap-2 flex-wrap">
+      <span class="cfg-label">Напор сети</span>
+      <div class="seg-group" role="group" aria-label="Режим давления сети">
+        <button class="seg-btn mono" data-cfg="network" data-val="normal" title="P1 = 6.5 бар, P2 = 4.5 бар">Штатный 6.5 / 4.5</button>
+        <button class="seg-btn mono" data-cfg="network" data-val="low" title="P1 = 4.5 бар, P2 = 2.5 бар — ниже статики дома">Пониженный 4.5 / 2.5</button>
+      </div>
+    </div>
+    <div id="configNote" class="text-[11px] faint basis-full -mt-1"></div>
+  </div>
 
   <main class="grid gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_356px]">
 
@@ -323,14 +368,14 @@
 
           <!-- Штамп -->
           <g aria-hidden="true">
-            <rect x="392" y="464" width="138" height="31" fill="#FFFFFF" stroke="#334155" stroke-width="0.9"/>
-            <line x1="392" y1="474" x2="530" y2="474" stroke="#94A3B8" stroke-width="0.6"/>
-            <line x1="392" y1="484" x2="530" y2="484" stroke="#94A3B8" stroke-width="0.6"/>
-            <line x1="430" y1="464" x2="430" y2="474" stroke="#94A3B8" stroke-width="0.6"/>
-            <text x="396" y="471.5" class="stamp-t" style="font-weight:600">ИТП-01</text>
-            <text x="434" y="471.5" class="stamp-t">лист 1 · P&amp;ID</text>
-            <text x="396" y="481.5" class="stamp-t">Независимая схема СО</text>
-            <text x="396" y="491.5" class="stamp-t">График 95/70 → 75/45 °C</text>
+            <rect x="392" y="462" width="138" height="28" fill="#FFFFFF" stroke="#334155" stroke-width="0.9"/>
+            <line x1="392" y1="471.3" x2="530" y2="471.3" stroke="#94A3B8" stroke-width="0.6"/>
+            <line x1="392" y1="480.6" x2="530" y2="480.6" stroke="#94A3B8" stroke-width="0.6"/>
+            <line x1="430" y1="462" x2="430" y2="471.3" stroke="#94A3B8" stroke-width="0.6"/>
+            <text x="396" y="469.2" class="stamp-t" style="font-weight:600">ИТП-01</text>
+            <text x="434" y="469.2" class="stamp-t">лист 1 · P&amp;ID</text>
+            <text x="396" y="478.5" class="stamp-t">Независимая схема СО</text>
+            <text x="396" y="487.8" class="stamp-t">График 95/70 → 75/45 °C</text>
           </g>
 
           <!-- ========== ТРУБЫ (цвет задается из app.js по температуре) ========== -->
@@ -448,6 +493,22 @@
           </g>
           <circle cx="380" cy="430" r="4" fill="#334155"/>
           <circle cx="790" cy="430" r="4" fill="#334155"/>
+          <!-- ========== Узел подпиточного насоса Нп + реле давления РД (только в насосной схеме) ========== -->
+          <g id="svgMakeupPumpGroup" class="node" data-info="makeupPump" hidden>
+            <rect class="hl" x="440" y="488" width="122" height="31" rx="3"/>
+            <circle id="mpBody" cx="470" cy="500" r="9" fill="#F1F5F9" stroke="#64748B" stroke-width="1.6"/>
+            <path d="M465 495 L477 500 L465 505 Z" fill="none" stroke="#1E293B" stroke-width="1.3" stroke-linejoin="round"/>
+            <circle id="mpRotor" cx="470" cy="500" r="12" fill="none" stroke="#16A34A" stroke-width="1.4" stroke-dasharray="4 5" opacity="0"/>
+            <text x="455" y="515" text-anchor="end" class="lbl-s" style="fill:#334155;font-weight:600">Нп</text>
+            <!-- импульсная линия к реле давления -->
+            <path d="M520 500 V505" stroke="#334155" stroke-width="1" stroke-dasharray="2 2"/>
+            <rect x="486" y="505" width="74" height="13" rx="1.5" fill="#FFFFFF" stroke="#334155" stroke-width="0.9"/>
+            <text x="489" y="514" class="stamp-t" style="font-size:6.5px;font-weight:600">РД 3.2–3.6</text>
+            <circle id="rdRunLed" cx="534" cy="511.5" r="2.4" fill="#CBD5E1" stroke="#64748B" stroke-width="0.6"/>
+            <rect id="rdModeChip" x="539" y="507.5" width="19.5" height="8" rx="1" fill="#0369A1"/>
+            <text id="rdModeTxt" x="548.75" y="513.6" text-anchor="middle" style="fill:#fff;font-size:5.5px;font-weight:700;font-family:var(--mono)">АВТО</text>
+          </g>
+
           <!-- обратный клапан на подпитке -->
           <g transform="translate(700 500)">
             <path d="M-8 -7 L8 0 L-8 7 Z" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.4"/>
@@ -715,6 +776,17 @@
                   <span class="mono text-sm w-12 text-right" data-val>0%</span>
                 </div>
                 <input type="range" min="0" max="100" step="1" value="0" aria-label="Открытие подпитки">
+                <div id="mpControls" class="mt-2.5 p-2.5 rounded-md" style="background:#F8FAFC;border:1px solid var(--line-soft)" hidden>
+                  <div class="flex items-center gap-2 mb-2">
+                    <span class="text-xs font-semibold">Станция подпитки Нп</span>
+                    <button class="qbtn ml-auto" data-info="makeupPump">?</button>
+                  </div>
+                  <div class="grid grid-cols-2 gap-2">
+                    <button id="mpAutoBtn" data-toggle="MAKEUP_AUTO" data-on="РД: АВТО 3.2–3.6" data-off="РД: РУЧНОЙ" data-tone="blue" data-label="Режим РД" class="tbtn"></button>
+                    <button id="mpPumpBtn" data-toggle="MAKEUP_PUMP" data-on="Насос Нп: ВКЛ" data-off="Насос Нп: ВЫКЛ" data-tone="green" data-label="Насос Нп" class="tbtn"></button>
+                  </div>
+                  <div id="mpStatus" class="mono text-[10.5px] faint mt-1.5"></div>
+                </div>
               </div>
 
               <div class="flex items-center gap-2">

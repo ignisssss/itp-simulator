@@ -432,6 +432,8 @@
     if (!lesson) return;
     if (window.ITPLevels) window.ITPLevels.exitIfActive();
     closeMenu();
+    // уроки рассчитаны на базовую схему: безнасосная подпитка, штатный напор сети
+    P.setConfig(sim, P.defaultConfig());
     ctx.seen = new Set();
     lesson.setup();
     P.step(sim, 0);

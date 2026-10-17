@@ -72,6 +72,13 @@
     KZR_MANUAL_RATE: 1.5,  // %/с, ручной штурвал КЗР
     K_HOUSE_DRAIN: 0.15,   // 1/с, слив системы отопления дома через спускники стояков
     HOUSE_EMPTY_RATE: 0.04,// 1/с, опорожнение дома при открытых воздушниках (без них — в 10 раз медленнее)
+    MP_HEAD: 2.5,          // бар, напор подпиточного насоса Нп
+    RD_ON: 3.2,            // бар, реле давления РД: включение Нп при P21 ниже
+    RD_OFF: 3.6,           // бар, отключение Нп при P21 не ниже (гистерезис 0.4 бар)
+    MP_MIN_SUCTION: 0.8,   // бар, ниже на всасе Нп — сухой ход
+    MP_DRY_TRIP_S: 2.0,    // с, защита отключает Нп после сухого хода
+    MP_FLOW_K: 0.12,       // производительность Нп относительно безнасосной подпитки (небольшой насос, ~1 м3/ч)
+    MP_SUCTION_DRAW: 0.15, // бар/с — работающий Нп откачивает отсеченный участок до V2
     HOUSE_FILL_K: 0.03,    // заполнение дома: доля объема на 1 бар/с подпитки
 
     // Нормативы
@@ -165,6 +172,8 @@
       HOUSE_DRAIN: false,    // спуск воды из системы отопления дома (спускники стояков)
       HOUSE_VENT: false,     // воздушники верхнего этажа
       MAKEUP: 0,
+      MAKEUP_AUTO: false,    // насосная подпитка: автоматика по реле давления РД
+      MAKEUP_PUMP: false,    // насосная подпитка: ручной пуск Нп (когда РД не в автомате)
       DRAIN: false,
       NET_DRAIN: false,      // дренаж сетевого участка (нижняя точка, перед V2)
       NET_VENT: false,       // воздушник сетевого участка (верхняя точка, вход ПТО)
@@ -173,15 +182,64 @@
     };
   }
 
+  /** Конфигурация схемы ИТП (выбирается в свободном режиме; уроки и уровни всегда работают на базовой). */
+  function defaultConfig() {
+    return {
+      makeupType: 'direct',  // 'direct' — безнасосная подпитка от P2; 'pumped' — станция подпитки Нп + РД
+      dhwScheme: 'none',     // задел: 'none' | '1stage' | '2stage'
+      network: 'normal'      // 'normal' — P1/P2 = 6.5/4.5 бар; 'low' — пониженный напор 4.5/2.5 бар
+    };
+  }
+
+  /** Применить конфигурацию к органам управления и внешним условиям. */
+  function applyConfig(sim) {
+    const cfg = sim.config;
+    const c = sim.controls;
+    if (cfg.makeupType === 'pumped') {
+      c.MAKEUP_AUTO = true;     // автоматика на дежурстве
+      c.MAKEUP = 100;           // кран подпитки открыт, расход открывает РД вместе с электромагнитным клапаном
+      c.MAKEUP_PUMP = false;
+    } else {
+      c.MAKEUP_AUTO = false;
+      c.MAKEUP_PUMP = false;
+    }
+    sim.env.P1 = cfg.network === 'low' ? 4.5 : C.P1;
+    sim.env.P2 = cfg.network === 'low' ? 2.5 : C.P2;
+    if (sim.state) { sim.state.mpRunning = false; sim.state.mpDryTime = 0; sim.state.mpTrip = false; }
+  }
+
+  /**
+   * Изменить конфигурацию (частично) в свободном режиме. При смене типа подпитки кран и автоматика
+   * переводятся в штатное для этой схемы положение.
+   */
+  function setConfig(sim, patch) {
+    const prev = sim.config || defaultConfig();
+    const cfg = Object.assign({}, prev, patch || {});
+    sim.config = cfg;
+    const c = sim.controls;
+    if (cfg.makeupType !== prev.makeupType) {
+      if (cfg.makeupType === 'pumped') { c.MAKEUP_AUTO = true; c.MAKEUP = 100; c.MAKEUP_PUMP = false; }
+      else { c.MAKEUP_AUTO = false; c.MAKEUP_PUMP = false; c.MAKEUP = 0; }
+      if (sim.state) { sim.state.mpRunning = false; sim.state.mpDryTime = 0; sim.state.mpTrip = false; }
+    }
+    sim.env.P1 = cfg.network === 'low' ? 4.5 : C.P1;
+    sim.env.P2 = cfg.network === 'low' ? 2.5 : C.P2;
+    return cfg;
+  }
+
   function createSimulator() {
-    const sim = { controls: nominalControls(), state: null, out: null, env: defaultEnv() };
+    const sim = { controls: nominalControls(), state: null, out: null, env: defaultEnv(), config: defaultConfig() };
     sim.state = { time: 0 };
     resetNominal(sim);
     return sim;
   }
 
-  /** Возврат в штатный расчетный режим с прогревом до установившегося состояния. */
-  function resetNominal(sim) {
+  /**
+   * Возврат в штатный расчетный режим с прогревом до установившегося состояния.
+   * Конфигурация схемы сохраняется; opts.forceBase = true возвращает базовую (для уроков и уровней).
+   */
+  function resetNominal(sim, opts) {
+    if (!sim.config || (opts && opts.forceBase)) sim.config = defaultConfig();
     sim.controls = nominalControls();
     sim.env = defaultEnv();
     const time = sim.state ? sim.state.time : 0;
@@ -198,8 +256,10 @@
       nodes: [C.P1, C.P1, C.P1, C.P2, C.P2, C.P2],
       fill: [1, 1, 1, 1, 1, 1],
       strainerAlarmUntil: -1,
-      reliefOpen: false
+      reliefOpen: false,
+      mpRunning: false, mpDryTime: 0, mpTrip: false
     };
+    applyConfig(sim);
     settle(sim, 180);
   }
 
@@ -393,17 +453,52 @@
     s.houseConnPrev = houseConn;
 
     // Подпитка берется из сетевой обратки до задвижки V2 (узел 4) через обратный клапан.
-    const makeupSource = s.nodes[4];
+    const cfg = sim.config || defaultConfig();
+    const P_node4 = s.nodes[4];
+    let makeupSource = P_node4;            // располагаемое давление на линии подпитки
+    let mpWater = s.fill[4] > 0.5;          // есть ли вода у источника
+    if (cfg.makeupType === 'pumped') {
+      // Насосная станция подпитки: Нп (+2.5 бар) и реле давления РД 3.2…3.6 бар.
+      const suctionOk = s.fill[4] > 0.1 && P_node4 >= C.MP_MIN_SUCTION;
+      if (c.MAKEUP_AUTO) {
+        if (s.mpTrip && suctionOk) s.mpTrip = false;                 // давление на всасе вернулось
+        if (s.P21 < C.RD_ON) s.mpRunning = true;
+        else if (s.P21 >= C.RD_OFF) s.mpRunning = false;
+        if (s.mpTrip) s.mpRunning = false;
+      } else {
+        s.mpTrip = false;
+        s.mpRunning = !!c.MAKEUP_PUMP;
+      }
+      if (s.mpRunning && !suctionOk) s.mpDryTime += dt; else s.mpDryTime = 0;
+      // Защита от сухого хода (в автомате, если включена защита насосов)
+      if (c.MAKEUP_AUTO && env.pumpProtection && s.mpDryTime > C.MP_DRY_TRIP_S) {
+        s.mpRunning = false; s.mpTrip = true; s.mpDryTime = 0;
+      }
+      if (s.mpRunning) {
+        makeupSource = suctionOk ? P_node4 + C.MP_HEAD : 0;
+        mpWater = suctionOk;
+        // Если участок до V2 отсечен от сети, работающий насос откачивает его и уходит в сухой ход
+        const seg4d = prim.segs.find(g => g.nodes.includes(4));
+        if (seg4d && seg4d.src === null) seg4d.nodes.forEach(n => { s.nodes[n] = Math.max(0, s.nodes[n] - C.MP_SUCTION_DRAW * dt); });
+      } else if (c.MAKEUP_AUTO) {
+        makeupSource = 0;      // в автомате РД держит электромагнитный клапан закрытым, пока Нп стоит
+      } else {
+        makeupSource = P_node4; // ручной режим: самотек через остановленный насос
+      }
+    } else {
+      s.mpRunning = false; s.mpDryTime = 0;
+    }
+    const P_makeup_avail = mpWater ? makeupSource : 0;
     let dP21 = 0;
     let makeupFlow = 0;
-    if (isOpen(c.MAKEUP) && makeupSource > s.P21 && s.fill[4] > 0.5) {
-      makeupFlow = C.K_MAKEUP * (c.MAKEUP / 100) * (makeupSource - s.P21);
+    if (isOpen(c.MAKEUP) && makeupSource > s.P21 && mpWater) {
+      makeupFlow = C.K_MAKEUP * (c.MAKEUP / 100) * (makeupSource - s.P21) * (s.mpRunning ? C.MP_FLOW_K : 1);
       dP21 += makeupFlow;
       // Если сетевой участок отсечен от теплосети, подпитка берет воду из его малого объема:
       // давление в нем быстро падает, и подпитать дом нечем (нужно открыть V2).
       const seg4 = prim.segs.find(g => g.nodes.includes(4));
       if (seg4 && seg4.src === null) {
-        seg4.nodes.forEach(n => { s.nodes[n] = Math.max(0, s.nodes[n] - 4 * makeupFlow * dt); });
+        seg4.nodes.forEach(n => { s.nodes[n] = Math.max(0, s.nodes[n] - (s.mpRunning ? 10 : 4) * makeupFlow * dt); });
       }
     }
 
@@ -579,7 +674,9 @@
       dP_pump: P11 - s.P21,
       pumpRunning, cavitation,
       reliefOpen: s.reliefOpen,
-      makeupFlow, drainFlow, reliefFlow
+      makeupFlow, drainFlow, reliefFlow,
+      makeupType: cfg.makeupType, mpRunning: s.mpRunning, mpDryTime: s.mpDryTime, mpTrip: !!s.mpTrip,
+      P_makeup_avail, P_node4: s.nodes[4],
     };
     return sim.out;
   }
@@ -720,6 +817,22 @@
         detail: `Заполнение ${Math.round(o.houseFill * 100)} %, P внизу дома ${f2(o.P_house)} бар`
       });
     }
+    if (o.makeupType === 'pumped' && o.mpRunning && (o.nodes[4] < C.MP_MIN_SUCTION || o.fill[4] <= 0.1) && o.mpDryTime > C.MP_DRY_TRIP_S) {
+      list.push({
+        id: 'makeup_dry_run', level: 'alarm',
+        title: 'Сухой ход подпиточного насоса Нп',
+        text: 'На всасе линии подпитки (узел до V2) нет давления. Немедленно выключите Нп или откройте задвижку V2!',
+        detail: `P на всасе Нп = ${f2(o.nodes[4])} бар, сухой ход ${o.mpDryTime.toFixed(1)} с`
+      });
+    }
+    if (c.MAKEUP >= C.CLOSED_PCT && o.P21 < 3.1 && o.P_makeup_avail <= o.P21 + 0.05) {
+      list.push({
+        id: 'makeup_need_pump', level: 'warn',
+        title: 'Недостаточный напор для подпитки',
+        text: 'Давление в обратке сети (P2) ниже статического давления дома. Безнасосная подпитка невозможна — требуется подпиточный насос Нп.',
+        detail: `Располагаемое давление подпитки ${f2(o.P_makeup_avail)} бар, P21 = ${f2(o.P21_disp)} бар`
+      });
+    }
     if (o.pumpTripped && !c.PUMP) {
       list.push({
         id: 'pump_trip', level: 'alarm',
@@ -820,6 +933,8 @@
     cleanStrainer,
     setKZR,
     defaultEnv,
+    defaultConfig,
+    setConfig,
     graphT1, graphT11, graphT2max,
     kvOf
   });

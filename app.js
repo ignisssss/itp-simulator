@@ -147,6 +147,22 @@
         <p class="mt-2">Заполняют дом снизу подпиткой через открытый кран обратки, с открытыми воздушниками; когда из них пошла вода — закрывают
         и поднимают давление до ≈ 3.5 бар. Насос пускают только в полностью заполненную систему.</p>`
     },
+    makeupPump: {
+      icon: 'pump', title: 'Станция подпитки: насос Нп и реле давления РД',
+      body: `<p><b>Почему без насоса не обойтись.</b> Вода из сети идет в дом сама только туда, где давление ниже. Безнасосная подпитка
+        берет воду из сетевой обратки через обратный клапан, поэтому поднять давление в доме можно не выше <b>P2</b>. Дому нужно
+        ≈ 3.5 бар: 27 м водяного столба (2.65 бар) и запас для 9 этажа. Если в обратке сети <b>P2 = 2.5 бар</b>, вода дойдет лишь
+        до ≈ 2.5 бар — верхние этажи останутся без воды и завоздушатся, а обратный клапан не даст воде уйти обратно в сеть.</p>
+        <p class="mt-2"><b>Насос Нп</b> добавляет к давлению на всасе свой напор 2.5 бар: из обратки 2.5 бар получается до 5.0 бар —
+        хватает, чтобы поднять дом до нормы.</p>
+        <p class="mt-2"><b>Реле давления РД</b> включает Нп при <b>P21 &lt; 3.2 бар</b> и выключает при <b>P21 ≥ 3.6 бар</b>. Разница 0.4 бар —
+        гистерезис: без него насос включался бы и выключался десятки раз в минуту. Вместе с насосом РД открывает электромагнитный клапан
+        на линии подпитки, чтобы в паузах вода не шла самотеком.</p>
+        <p class="mt-2"><b>Ручной режим опасен:</b> если забыть выключить Нп при нормальном P2 = 4.5 бар, он поднимет давление
+        до 4.5 + 2.5 = 7 бар, и сработает предохранительный клапан ПК.</p>
+        <p class="mt-2"><b>Сухой ход.</b> Если V2 закрыта, работающий Нп быстро выкачивает отсеченный участок до V2 и начинает крутиться
+        без воды: торцевое уплотнение и подшипники перегреваются за минуты. Нп выключают или открывают V2.</p>`
+    },
     pump: {
       icon: 'pump', title: 'Циркуляционные насосы Н1 и Н2',
       body: `<p>Крутит воду по стоякам и радиаторам дома. Важно: насос <b>не создает статического давления, а только перепад</b>
@@ -394,7 +410,7 @@
   }
 
   // Переключатели: <button data-toggle="КЛЮЧ" data-on="…" data-off="…" data-tone="green|amber|slate" data-inverse="1">
-  const TONES = { green: 'tb-green', amber: 'tb-amber', red: 'tb-red', off: '' };
+  const TONES = { green: 'tb-green', amber: 'tb-amber', red: 'tb-red', blue: 'tb-blue', off: '' };
   const toggleEls = Array.from(document.querySelectorAll('[data-toggle]'));
   toggleEls.forEach(b => { b.dataset.base = b.className; });
   function renderToggles() {
@@ -447,6 +463,36 @@
     syncControlsUI();
     render();
   });
+
+  // ---------------------------------------------------------------------------
+  // Конфигуратор схемы (свободный режим)
+  // ---------------------------------------------------------------------------
+  const cfgBtns = Array.from(document.querySelectorAll('[data-cfg]'));
+  const CFG_NOTE = {
+    direct: 'Подпитка самотеком из обратки сети через обратный клапан: давление в доме можно поднять не выше P2.',
+    pumped: 'Подпитка насосом Нп (+2.5 бар) по реле давления РД: включение ниже 3.2 бар, отключение на 3.6 бар.'
+  };
+  function cfgLocked() {
+    return (window.ITPLessons && window.ITPLessons.active()) || (window.ITPLevels && window.ITPLevels.inLevel());
+  }
+  function renderConfig() {
+    const cfg = sim.config;
+    const locked = cfgLocked();
+    $('configPanel').hidden = !!locked;
+    cfgBtns.forEach(b => b.classList.toggle('is-active', cfg[b.dataset.cfg] === b.dataset.val));
+    $('configNote').textContent = CFG_NOTE[cfg.makeupType] + (cfg.network === 'low' ? ' Сейчас напор сети понижен: P2 = 2.5 бар — ниже статики дома.' : '');
+  }
+  cfgBtns.forEach(b => b.addEventListener('click', () => {
+    if (b.disabled || cfgLocked()) return;
+    const key = b.dataset.cfg, val = b.dataset.val;
+    if (sim.config[key] === val) return;
+    P.setConfig(sim, { [key]: val });
+    const names = { direct: 'безнасосная подпитка', pumped: 'насосная станция подпитки Нп + РД', normal: 'штатный напор сети 6.5 / 4.5 бар', low: 'пониженный напор сети 4.5 / 2.5 бар', none: 'без ГВС' };
+    log(`Конфигурация: ${names[val] || val}`, 'op');
+    syncControlsUI();
+    renderConfig();
+    render();
+  }));
 
   function setSpeed(s) {
     speed = s;
@@ -692,6 +738,25 @@
     $('pipeH2').style.stroke = tempColor(o.T21);
     setFlow('flowH2', o.p2Running && o.G2 > 0 ? o.G2 : 0, 4);
 
+    // Станция подпитки Нп + РД
+    const pumped = o.makeupType === 'pumped';
+    $('svgMakeupPumpGroup').toggleAttribute('hidden', !pumped);
+    $('mpControls').hidden = !pumped;
+    if (pumped) {
+      const dry = o.mpRunning && o.mpDryTime > 0;
+      $('mpRotor').classList.toggle('spin', o.mpRunning && !dry);
+      $('mpRotor').setAttribute('opacity', o.mpRunning ? '1' : '0');
+      $('mpRotor').setAttribute('stroke', dry ? '#DC2626' : '#16A34A');
+      $('mpBody').setAttribute('fill', dry ? '#FEE2E2' : o.mpRunning ? '#DCFCE7' : '#F1F5F9');
+      $('mpBody').setAttribute('stroke', dry ? '#DC2626' : o.mpRunning ? '#16A34A' : '#64748B');
+      $('rdModeChip').setAttribute('fill', c.MAKEUP_AUTO ? '#0369A1' : '#D97706');
+      $('rdModeTxt').textContent = c.MAKEUP_AUTO ? 'АВТО' : 'РУЧН';
+      $('rdRunLed').setAttribute('fill', o.mpRunning ? (dry ? '#DC2626' : '#16A34A') : '#CBD5E1');
+      $('mpPumpBtn').disabled = !!c.MAKEUP_AUTO;
+      $('mpStatus').textContent = `Нп: ${o.mpRunning ? (dry ? 'СУХОЙ ХОД' : 'РАБОТА') : (o.mpTrip ? 'ОТКЛ. ЗАЩИТОЙ' : 'ОЖИДАНИЕ')} · всас ${fmt(o.P_node4, 2)} бар · P21 ${fmt(o.P21_disp, 2)} бар`;
+    }
+    renderConfig();
+
     // Дом: краны, спуск, воздушники, заполнение
     setValve('vHS', c.HOUSE_SUP ? 100 : 0);
     setValve('vHR', c.HOUSE_RET ? 100 : 0);
@@ -722,6 +787,8 @@
       ['ΔP грязевика', fmt(o.dP_strainer, 2) + ' бар'],
       ['КЗР задание / положение', Math.round(c.KZRcmd) + ' / ' + Math.round(c.KZR) + ' %' + (c.KZR_MANUAL ? ' (ручн.)' : '')],
       ['P21 всас / P11 нагнет.', fmt(o.P21_disp, 2) + ' / ' + fmt(o.P11, 2)],
+      ['P1 / P2 сети', fmt(o.P1, 1) + ' / ' + fmt(o.P2, 1) + ' бар'],
+      ['Подпитка', (o.makeupType === 'pumped' ? 'Нп ' + (o.mpRunning ? 'работа' : 'ожид.') + ' · ' : 'самотек · ') + fmt(o.P_makeup_avail, 2) + ' бар'],
       ['ΔP насоса (P11 − P21)', fmt(o.P11 - o.P21_disp, 2) + ' бар'],
       ['ΔP в ПТО (дом)', fmt(o.dP_hex_sec, 2) + ' бар'],
       ['P подача / обратка дома', fmt(o.P_house_supply, 2) + ' / ' + fmt(o.P_house_return, 2)],
