@@ -120,6 +120,11 @@
     .alarm-card.ok .a-title    { color: #166534; }
     .alarm-card.info .a-title  { color: #075985; }
 
+    /* --- Арматура узла ГВС --- */
+    .arm-box { border: 1px solid var(--line-soft); border-radius: 4px; padding: 8px 10px; background: #FFFFFF; }
+    .arm-h { font-size: 10px; letter-spacing: .05em; text-transform: uppercase; color: var(--ink-3); margin: 8px 0 4px; }
+    .tbtn-sm { font-size: 11px !important; padding-top: 4px !important; padding-bottom: 4px !important; }
+
     /* --- Плашка «Энергобаланс узла ГВС» --- */
     .energy-box { border: 1px solid var(--line-soft); border-left: 3px solid #0369A1; border-radius: 4px; background: #F8FAFC; padding: 6px 10px; }
     .energy-h { font-size: 10.5px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: #334155; margin-bottom: 3px; }
@@ -364,8 +369,8 @@
             </linearGradient>
           </defs>
           <!-- Лист чертежа: фон, сетка, рамка -->
-          <rect width="1000" height="760" fill="#FAFBFD"/>
-          <rect width="1000" height="760" fill="url(#gridMajor)"/>
+          <rect width="1000" height="920" fill="#FAFBFD"/>
+          <rect width="1000" height="920" fill="url(#gridMajor)"/>
           <rect id="sheetFrameA" x="3" y="3" width="994" height="514" fill="none" stroke="#94A3B8" stroke-width="1"/>
           <rect id="sheetFrameB" x="6" y="6" width="988" height="508" fill="none" stroke="#CBD5E1" stroke-width="0.6"/>
 
@@ -396,8 +401,8 @@
           <!-- Дренаж и воздушник сетевого участка -->
           <!-- 2-ступ. ГВС: общая обратка после I ступени поднимается к V2 -->
           <g id="svgDhw2StageNet" hidden>
-            <path id="pipeSt1Out" class="pipe" style="stroke-width:6" d="M210 600 H242 V430 H234"/>
-            <path id="flowSt1Out" class="flow" style="stroke-width:2" d="M210 600 H242 V430 H20"/>
+            <path id="pipeSt1Out" class="pipe" style="stroke-width:6" d="M170 740 H242 V628 A8 8 0 0 1 242 612 V430 H234"/>
+            <path id="flowSt1Out" class="flow" style="stroke-width:2" d="M170 740 H242 V628 A8 8 0 0 1 242 612 V430 H20"/>
           </g>
           <path id="pipeNetDr" class="pipe-thin" d="M300 430 V478"/>
           <path id="pipeVent" class="pipe-thin" d="M410 90 V56"/>
@@ -624,130 +629,82 @@
           </g>
 
 
-          <!-- ========== ГВС (нижняя зона листа, y = 520…760). Общая часть для 1- и 2-ступенчатой схемы ========== -->
+          <!-- ========== ГВС (нижняя зона листа, y = 528…910). Общая часть для 1- и 2-ступенчатой схемы ========== -->
           <g id="svgDhwGroup" hidden>
             <line x1="10" y1="528" x2="990" y2="528" stroke="#94A3B8" stroke-width="0.8" stroke-dasharray="6 4"/>
             <text x="20" y="546" class="lbl-s" style="letter-spacing:.06em;fill:#334155;font-weight:600">КОНТУР ГВС</text>
             <text id="dhwSchemeLbl" x="20" y="559" class="lbl-s" style="letter-spacing:.04em">1-ступ. параллельная схема</text>
 
-            <!-- Сетевая ветка ГВС: врезка после грязевика (T1) → КЗР ГВС → ПТО ГВС (во 2-ступ. схеме — II ступень) -->
-            <path id="pipeDhwS" class="pipe" style="stroke-width:6" d="M296 90 V380 H270 V422 A8 8 0 0 1 270 438 V600 H420"/>
-            <path id="flowDhwS" class="flow" style="stroke-width:2" d="M296 90 V380 H270 V422 A8 8 0 0 1 270 438 V600 H420"/>
+            <!-- Сеть: врезка после грязевика (T1) → Кс1 → КЗР ГВС → ПТО ГВС (II ст.) → Кс2 → обратка -->
+            <path id="pipeDhwS" class="pipe" style="stroke-width:6" d="M296 90 V380 H270 V422 A8 8 0 0 1 270 438 V600 H480"/><path id="flowDhwS" class="flow" style="stroke-width:2" d="M296 90 V380 H270 V422 A8 8 0 0 1 270 438 V600 H480"/>
             <circle cx="296" cy="90" r="4" fill="#334155"/>
+            <path id="pipeDhwR" class="pipe" style="stroke-width:6" d="M480 720 H256"/><path id="flowDhwR" class="flow" style="stroke-width:2" d="M480 720 H256"/>
+            <g class="node" data-info="dhwValves"><rect class="hl" x="256" y="544" width="28" height="32" rx="3"/><path id="vDhwNetSup" class="valve-body valve-open" d="M262 548 L278 572 L262 572 L278 548 Z"/><text x="282" y="556" text-anchor="start" class="lbl-s" style="fill:#334155;font-weight:600">Кс1</text></g>
+            <g class="node" data-info="dhwValves"><rect class="hl" x="414" y="706" width="32" height="28" rx="3"/><path id="vDhwNetRet" class="valve-body valve-open" d="M418 712 L442 728 L442 712 L418 728 Z"/><text x="430" y="708" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Кс2</text></g>
+            <g class="node" data-info="dhwKzr"><rect class="hl" x="340" y="548" width="64" height="66" rx="3"/><line x1="370" y1="600" x2="370" y2="578" class="eq-line" stroke-width="1.8"/><rect x="358" y="560" width="24" height="18" rx="2" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1.4"/><text id="dhwKzrMode" x="370" y="573" text-anchor="middle" style="fill:#0F172A;font-size:10px;font-weight:700;font-family:var(--mono)">A</text><path id="vDhwKzr" class="valve-body valve-part" d="M357 591 L383 609 L383 591 L357 609 Z"/><text x="352" y="572" text-anchor="end" class="lbl" style="font-size:10.5px">КЗР ГВС</text><text id="txtDhwKzr" x="388" y="590" class="tag-val" style="font-size:11px">25%</text></g>
+            <path d="M665 582 V552 H392 V569 H382" fill="none" stroke="#475569" stroke-width="0.9" stroke-dasharray="4 3"/>
+            <g class="node" data-info="dhwKzr"><rect class="hl" x="653" y="566" width="24" height="36" rx="3"/><line x1="665" y1="600" x2="665" y2="589" stroke="#1E293B" stroke-width="1.4"/><circle cx="665" cy="581" r="8" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.2"/><text x="665" y="584" text-anchor="middle" style="fill:#0F172A;font-size:6.5px;font-weight:700;font-family:var(--mono)">TE</text></g>
+            <g class="node" data-info="dhwHex"><rect class="hl" x="474" y="574" width="112" height="172" rx="4"/><rect x="480" y="580" width="100" height="160" rx="3" fill="#F1F5F9" stroke="#1E293B" stroke-width="1.8"/><rect x="480" y="580" width="100" height="10" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/><rect x="480" y="730" width="100" height="10" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/><g stroke="#94A3B8" stroke-width="1.1"><line x1="500" y1="594" x2="500" y2="726"/><line x1="510" y1="594" x2="510" y2="726"/><line x1="550" y1="594" x2="550" y2="726"/><line x1="560" y1="594" x2="560" y2="726"/></g><path id="flowDhwHexP" class="flow thin" d="M490 600 V720"/><path id="flowDhwHexS" class="flow thin" d="M570 720 V600"/><rect x="512.0" y="632.0" width="36" height="56" rx="2" fill="#FFFFFF" stroke="#334155" stroke-width="1"/><rect x="512.0" y="632.0" width="36" height="11" fill="#334155"/><text id="dhwQhead" x="530.0" y="640.5" text-anchor="middle" class="tag-head" style="font-size:7px">Q ГВС</text><text id="txtQdhw" x="530.0" y="666.0" text-anchor="middle" class="tag-val" style="font-size:13px">0</text><text x="530.0" y="680.0" text-anchor="middle" class="tag-name">кВт</text><text id="dhwHexLbl" x="530.0" y="572" text-anchor="middle" class="lbl" style="font-size:10px;letter-spacing:.06em">ПТО ГВС</text></g>
 
-            <!-- КЗР ГВС -->
-            <g class="node" data-info="dhwKzr">
-              <rect class="hl" x="318" y="548" width="72" height="64" rx="3"/>
-              <line x1="340" y1="600" x2="340" y2="578" class="eq-line" stroke-width="1.8"/>
-              <rect x="328" y="560" width="24" height="18" rx="2" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1.4"/>
-              <text id="dhwKzrMode" x="340" y="573" text-anchor="middle" style="fill:#0F172A;font-size:10px;font-weight:700;font-family:var(--mono)">A</text>
-              <path id="vDhwKzr" class="valve-body valve-part" d="M327 591 L353 609 L353 591 L327 609 Z"/>
-              <text x="340" y="556" text-anchor="middle" class="lbl" style="font-size:10.5px">КЗР ГВС</text>
-              <text id="txtDhwKzr" x="358" y="574" class="tag-val" style="font-size:11px">25%</text>
-            </g>
-
-            <!-- ПТО ГВС (во 2-ступ. схеме — II ступень) -->
-            <g class="node" data-info="dhwHex">
-              <rect class="hl" x="414" y="574" width="112" height="152" rx="4"/>
-              <rect x="420" y="580" width="100" height="140" rx="3" fill="#F1F5F9" stroke="#1E293B" stroke-width="1.8"/>
-              <rect x="420" y="580" width="100" height="10" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/>
-              <rect x="420" y="710" width="100" height="10" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/>
-              <g stroke="#94A3B8" stroke-width="1.1"><line x1="440" y1="594" x2="440" y2="706"/><line x1="450" y1="594" x2="450" y2="706"/><line x1="490" y1="594" x2="490" y2="706"/><line x1="500" y1="594" x2="500" y2="706"/></g>
-              <path id="flowDhwHexP" class="flow thin" d="M430 600 V700"/>
-              <path id="flowDhwHexS" class="flow thin" d="M510 700 V600"/>
-              <rect x="452" y="622" width="36" height="56" rx="2" fill="#FFFFFF" stroke="#334155" stroke-width="1"/>
-              <rect x="452" y="622" width="36" height="11" fill="#334155"/>
-              <text id="dhwQhead" x="470" y="630.5" text-anchor="middle" class="tag-head" style="font-size:7px">Q ГВС</text>
-              <text id="txtQdhw" x="470" y="656" text-anchor="middle" class="tag-val" style="font-size:13px">0</text>
-              <text x="470" y="670" text-anchor="middle" class="tag-name">кВт</text>
-              <text id="dhwHexLbl" x="470" y="740" text-anchor="middle" class="lbl" style="font-size:10px;letter-spacing:.06em">ПТО ГВС</text>
-            </g>
-
-            <!-- Водопроводная сторона: подача T3 в дом и циркуляция T4 из дома -->
-            <path id="pipeDhwT3" class="pipe" style="stroke-width:6" d="M520 600 H940"/>
-            <path id="pipeDhwT4" class="pipe" style="stroke-width:5" d="M940 650 H620 V700"/>
-            <path id="flowDhwT3" class="flow" style="stroke-width:2" d="M520 600 H940"/>
-            <path id="flowDhwT4" class="flow" style="stroke-width:2" d="M940 650 H620 V700"/>
+            <!-- Водопровод: T3 в дом, циркуляция T4 из дома, точка смешения перед II ступенью -->
+            <path id="pipeDhwT3" class="pipe" style="stroke-width:6" d="M580 600 H940"/><path id="flowDhwT3" class="flow" style="stroke-width:2" d="M580 600 H940"/>
+            <g class="node" data-info="dhwValves"><rect class="hl" x="604" y="586" width="32" height="28" rx="3"/><path id="vDhwHex2Out" class="valve-body valve-open" d="M608 592 L632 608 L632 592 L608 608 Z"/><text x="620" y="588" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Кв4</text></g>
+            <path id="pipeDhwT4" class="pipe" style="stroke-width:5" d="M940 660 H680 V720"/><path id="flowDhwT4" class="flow" style="stroke-width:2" d="M940 660 H680 V720"/>
+            <path id="pipeDhwMix" class="pipe" style="stroke-width:6" d="M680 720 H580"/><path id="flowDhwMix" class="flow" style="stroke-width:2" d="M680 720 H580"/>
+            <g class="node" data-info="dhwValves"><rect class="hl" x="624" y="706" width="32" height="28" rx="3"/><path id="vDhwHex2In" class="valve-body valve-open" d="M628 712 L652 728 L652 712 L628 728 Z"/><text x="640" y="708" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Кв3</text></g>
+            <g class="node" data-info="dhwRelief"><rect class="hl" x="595" y="716" width="44" height="34" rx="3"/><path d="M605 720 V734" stroke="#1E293B" stroke-width="2"/><path id="rvDhw2" d="M599 746 L611 746 L605 734 Z" fill="#E2E8F0" stroke="#1E293B" stroke-width="1.3"/><path d="M611 740.0 H623" stroke="#1E293B" stroke-width="1.5"/><path d="M620 737.0 L624 740.0 L620 743.0" fill="none" stroke="#1E293B" stroke-width="1.2"/><text x="627" y="743.0" class="lbl-s" style="fill:#334155;font-weight:600">ПК2</text><text id="txtPlock2" x="627" y="753.0" class="lbl-s" style="font-family:var(--mono);font-size:8.5px">4.0 бар</text></g>
             <path d="M940 593 L952 600 L940 607 Z" fill="#334155"/>
             <text x="946" y="590" class="lbl-s" style="fill:#334155">в дом</text>
-            <text x="946" y="645" class="lbl-s">из дома</text>
+            <text x="946" y="652" class="lbl-s">из дома</text>
+            <g class="node" data-info="dhwFilters"><rect class="hl" x="883" y="644" width="34" height="40" rx="3"/><rect x="889" y="653" width="22" height="14" class="eq"/><path d="M903 667 L911 677 L916 673 L908 665" class="eq"/><rect id="circDirt" x="890" y="654" width="0" height="12" fill="#92400E" fill-opacity=".75"/><path d="M891 665 L909 655 M896 665 L909 658" stroke="#64748B" stroke-width="0.9"/><text x="900" y="649" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Фн</text></g>
+            <g class="node" data-info="dhwValves"><rect class="hl" x="844" y="646" width="32" height="28" rx="3"/><path id="vDhwCircIn" class="valve-body valve-open" d="M848 652 L872 668 L872 652 L848 668 Z"/><text x="860" y="648" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Кн1</text></g>
+            <g class="node" data-info="dhwPump"><rect class="hl" x="790" y="636" width="40" height="40" rx="3"/><circle id="dhwPumpBody" cx="810" cy="660" r="11" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.8"/><g id="dhwPumpRotor"><path d="M810 660 L810 652 M810 660 L817 664 M810 660 L803 664" stroke="#1E293B" stroke-width="1.8" stroke-linecap="round"/></g><text x="810" y="644" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Нц</text></g>
+            <g transform="translate(765 660) rotate(0)"><path d="M7 -6 L-7 0 L7 6 Z" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.3"/><line x1="-7" y1="-6" x2="-7" y2="6" stroke="#1E293B" stroke-width="1.8"/></g>
+            <g class="node" data-info="dhwValves"><rect class="hl" x="704" y="646" width="32" height="28" rx="3"/><path id="vDhwCircOut" class="valve-body valve-open" d="M708 652 L732 668 L732 652 L708 668 Z"/><text x="720" y="648" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Кн2</text></g>
+            <circle cx="680" cy="720" r="4" fill="#334155"/>
 
-            <!-- Насос циркуляции Нц и обратный клапан на линии T4 -->
-            <g class="node" data-info="dhwPump">
-              <rect class="hl" x="720" y="626" width="40" height="40" rx="3"/>
-              <circle id="dhwPumpBody" cx="740" cy="650" r="11" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.8"/>
-              <g id="dhwPumpRotor">
-                <path d="M740 650 L740 642 M740 650 L747 654 M740 650 L733 654" stroke="#1E293B" stroke-width="1.8" stroke-linecap="round"/>
-              </g>
-              <text x="740" y="634" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Нц</text>
-            </g>
-            <g transform="translate(680 650)">
-              <path d="M7 -6 L-7 0 L7 6 Z" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.3"/>
-              <line x1="-7" y1="-6" x2="-7" y2="6" stroke="#1E293B" stroke-width="1.8"/>
-            </g>
+            <!-- Ввод ХВС: В1 → фильтр Фх → водосчетчик → обратный клапан -->
+            <path id="pipeDhwB1" class="pipe" style="stroke-width:6" d="M980 880 H680"/><path id="flowDhwB1" class="flow" style="stroke-width:2" d="M980 880 H680"/>
+            <g class="node" data-info="dhwHex"><rect class="hl" x="924" y="866" width="32" height="28" rx="3"/><path id="vB1" class="valve-body valve-open" d="M928 872 L952 888 L952 872 L928 888 Z"/><text x="940" y="868" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">В1</text></g>
+            <text x="964" y="872" class="lbl-s">ХВС</text>
+            <g class="node" data-info="dhwFilters"><rect class="hl" x="873" y="864" width="34" height="40" rx="3"/><rect x="879" y="873" width="22" height="14" class="eq"/><path d="M893 887 L901 897 L906 893 L898 885" class="eq"/><rect id="cwDirt" x="880" y="874" width="0" height="12" fill="#92400E" fill-opacity=".75"/><path d="M881 885 L899 875 M886 885 L899 878" stroke="#64748B" stroke-width="0.9"/><text x="890" y="869" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Фх</text></g>
+            <text id="txtCwDp" x="890" y="906" text-anchor="middle" class="lbl-s" style="font-family:var(--mono);font-size:8.5px">ΔP 0.00</text>
+            <g class="node" data-info="dhwFilters"><rect class="hl" x="814" y="864" width="32" height="32" rx="3"/><rect x="818" y="871" width="24" height="18" rx="2" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.3"/><text x="830" y="883.5" text-anchor="middle" style="fill:#0F172A;font-size:7.5px;font-weight:700;font-family:var(--mono)">FQ</text><text x="830" y="866" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Сч</text></g>
+            <g transform="translate(780 880) rotate(0)"><path d="M7 -6 L-7 0 L7 6 Z" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.3"/><line x1="-7" y1="-6" x2="-7" y2="6" stroke="#1E293B" stroke-width="1.8"/></g>
+            <text x="780" y="870" text-anchor="middle" class="lbl-s">ОК</text>
 
-            <!-- ===== Только 1-ступ. параллельная схема ===== -->
+            <!-- ===== Только 1-ступ.: холодная вода сразу в точку смешения, обратка ветки — в обратку перед V2 ===== -->
             <g id="svgDhw1StageGroup" hidden>
-              <!-- обратка ПТО ГВС — в общую обратку перед V2 -->
-              <path id="pipeDhwR" class="pipe" style="stroke-width:6" d="M420 700 H252 V430"/>
-              <path id="flowDhwR" class="flow" style="stroke-width:2" d="M420 700 H252 V430"/>
-              <circle cx="252" cy="430" r="4" fill="#334155"/>
-              <!-- ХВС В1 справа прямо в ПТО ГВС, циркуляция подмешивается в точке 620 -->
-              <path id="pipeDhwB1" class="pipe" style="stroke-width:6" d="M940 700 H520"/>
-              <path id="flowDhwB1" class="flow" style="stroke-width:2" d="M940 700 H520"/>
-              <text x="946" y="695" class="lbl-s">ХВС</text>
-              <g class="node" data-info="dhwHex">
-                <rect class="hl" x="882" y="672" width="36" height="40" rx="3"/>
-                <path id="vB1" class="valve-body valve-open" d="M887 691 L913 709 L913 691 L887 709 Z"/>
-                <text x="900" y="684" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">В1</text>
-              </g>
+              <path id="pipeDhwB1a" class="pipe" style="stroke-width:6" d="M680 880 V720"/><path id="flowDhwB1a" class="flow" style="stroke-width:2" d="M680 880 V720"/>
+              <path id="pipeDhwR1" class="pipe" style="stroke-width:6" d="M256 720 V430"/><path id="flowDhwR1" class="flow" style="stroke-width:2" d="M256 720 V430"/>
+              <circle cx="256" cy="430" r="4" fill="#334155"/>
               <g id="dhw1Tags"></g>
             </g>
 
             <!-- ===== Только 2-ступ. смешанная схема ===== -->
             <g id="svgDhw2StageGroup" hidden>
-              <!-- обратка II ступени сливается с обраткой системы отопления, затем вся вода идет в I ступень -->
-              <path id="pipeDhwR2" class="pipe" style="stroke-width:6" d="M420 700 H256"/>
-              <path id="flowDhwR2" class="flow" style="stroke-width:2" d="M420 700 H256"/>
-              <path id="pipeSt1In" class="pipe" style="stroke-width:6" d="M256 700 H210"/>
-              <path id="flowSt1In" class="flow" style="stroke-width:2" d="M256 700 H210"/>
-              <circle cx="256" cy="700" r="4" fill="#334155"/>
-
-              <!-- I ступень ПТО ГВС на общей обратке -->
-              <g class="node" data-info="dhw2stage">
-                <rect class="hl" x="104" y="574" width="112" height="152" rx="4"/>
-                <rect x="110" y="580" width="100" height="140" rx="3" fill="#F1F5F9" stroke="#1E293B" stroke-width="1.8"/>
-                <rect x="110" y="580" width="100" height="10" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/>
-                <rect x="110" y="710" width="100" height="10" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/>
-                <g stroke="#94A3B8" stroke-width="1.1"><line x1="130" y1="594" x2="130" y2="706"/><line x1="140" y1="594" x2="140" y2="706"/><line x1="180" y1="594" x2="180" y2="706"/><line x1="190" y1="594" x2="190" y2="706"/></g>
-                <path id="flowSt1HexP" class="flow thin" d="M200 700 V600"/>
-                <path id="flowSt1HexS" class="flow thin" d="M120 600 V700"/>
-                <rect x="142" y="622" width="36" height="56" rx="2" fill="#FFFFFF" stroke="#334155" stroke-width="1"/>
-                <rect x="142" y="622" width="36" height="11" fill="#334155"/>
-                <text x="160" y="630.5" text-anchor="middle" class="tag-head" style="font-size:7px">Q I ст.</text>
-                <text id="txtQst1" x="160" y="656" text-anchor="middle" class="tag-val" style="font-size:13px">0</text>
-                <text x="160" y="670" text-anchor="middle" class="tag-name">кВт</text>
-                <text x="160" y="574" text-anchor="middle" class="lbl" style="font-size:10px;letter-spacing:.06em">ПТО ГВС · I ст.</text>
-              </g>
-
-              <!-- ХВС В1 с левого края → I ступень (сверху вниз, противоток) -->
-              <path id="pipeDhwB1b" class="pipe" style="stroke-width:6" d="M20 600 H110"/>
-              <path id="flowDhwB1b" class="flow" style="stroke-width:2" d="M20 600 H110"/>
-              <text x="22" y="592" class="lbl-s">ХВС</text>
-              <g class="node" data-info="dhw2stage">
-                <rect class="hl" x="56" y="574" width="36" height="40" rx="3"/>
-                <path id="vB1b" class="valve-body valve-open" d="M61 591 L87 609 L87 591 L61 609 Z"/>
-                <text x="74" y="584" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">В1</text>
-              </g>
-
-              <!-- Подогретая в I ступени вода T_меж → точка смешения с циркуляцией T4 → II ступень -->
-              <path id="pipeDhwMid" class="pipe" style="stroke-width:6" d="M110 700 H90 V742 H620 V700"/>
-              <path id="flowDhwMid" class="flow" style="stroke-width:2" d="M110 700 H90 V742 H620 V700"/>
-              <path id="pipeDhwMix" class="pipe" style="stroke-width:6" d="M620 700 H520"/>
-              <path id="flowDhwMix" class="flow" style="stroke-width:2" d="M620 700 H520"/>
+              <!-- обратка II ступени поднимается к точке слияния с обраткой системы отопления; дальше — в I ступень -->
+              <path id="pipeDhwR2" class="pipe" style="stroke-width:6" d="M256 720 V620"/><path id="flowDhwR2" class="flow" style="stroke-width:2" d="M256 720 V620"/>
+              <path id="pipeSt1In" class="pipe" style="stroke-width:6" d="M256 620 H170"/><path id="flowSt1In" class="flow" style="stroke-width:2" d="M256 620 H170"/>
+              <circle cx="256" cy="620" r="4" fill="#334155"/>
+              <path id="pipeSt1Byp" class="pipe" style="stroke-width:5" d="M222 620 V740"/><path id="flowSt1Byp" class="flow" style="stroke-width:2" d="M222 620 V740"/>
+              <circle cx="222" cy="620" r="4" fill="#334155"/><circle cx="222" cy="740" r="4" fill="#334155"/>
+              <g class="node" data-info="dhwValves"><rect class="hl" x="184" y="606" width="32" height="28" rx="3"/><path id="vSt1In" class="valve-body valve-open" d="M188 612 L212 628 L212 612 L188 628 Z"/><text x="200" y="608" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Кс3</text></g>
+              <g class="node" data-info="dhwValves"><rect class="hl" x="184" y="726" width="32" height="28" rx="3"/><path id="vSt1Out" class="valve-body valve-open" d="M188 732 L212 748 L212 732 L188 748 Z"/><text x="200" y="760" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Кс4</text></g>
+              <g class="node" data-info="dhwValves"><rect class="hl" x="208" y="664" width="28" height="32" rx="3"/><path id="vSt1Byp" class="valve-body valve-closed" d="M214 668 L230 692 L214 692 L230 668 Z"/><text x="210" y="684" text-anchor="end" class="lbl-s" style="fill:#334155;font-weight:600">Кс5</text></g>
+              <g class="node" data-info="dhw2stage"><rect class="hl" x="84" y="594" width="92" height="172" rx="4"/><rect x="90" y="600" width="80" height="160" rx="3" fill="#F1F5F9" stroke="#1E293B" stroke-width="1.8"/><rect x="90" y="600" width="80" height="10" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/><rect x="90" y="750" width="80" height="10" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/><g stroke="#94A3B8" stroke-width="1.1"><line x1="110" y1="614" x2="110" y2="746"/><line x1="120" y1="614" x2="120" y2="746"/><line x1="140" y1="614" x2="140" y2="746"/><line x1="150" y1="614" x2="150" y2="746"/></g><path id="flowSt1HexP" class="flow thin" d="M160 620 V740"/><path id="flowSt1HexS" class="flow thin" d="M100 740 V620"/><rect x="112.0" y="652.0" width="36" height="56" rx="2" fill="#FFFFFF" stroke="#334155" stroke-width="1"/><rect x="112.0" y="652.0" width="36" height="11" fill="#334155"/><text x="130.0" y="660.5" text-anchor="middle" class="tag-head" style="font-size:7px">Q I ст.</text><text id="txtQst1" x="130.0" y="686.0" text-anchor="middle" class="tag-val" style="font-size:13px">0</text><text x="130.0" y="700.0" text-anchor="middle" class="tag-name">кВт</text><text id="st1Lbl" x="130.0" y="592" text-anchor="middle" class="lbl" style="font-size:10px;letter-spacing:.06em">ПТО ГВС · I ст.</text></g>
+              <!-- холодная вода: продолжение ввода к I ступени, обвод Кв5, ПК1 -->
+              <path id="pipeDhwB1b" class="pipe" style="stroke-width:6" d="M680 880 H120 V760"/><path id="flowDhwB1b" class="flow" style="stroke-width:2" d="M680 880 H120 V760"/>
+              <g class="node" data-info="dhwValves"><rect class="hl" x="224" y="866" width="32" height="28" rx="3"/><path id="vSt1WIn" class="valve-body valve-open" d="M228 872 L252 888 L252 872 L228 888 Z"/><text x="240" y="868" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Кв1</text></g>
+              <g class="node" data-info="dhwRelief"><rect class="hl" x="160" y="850" width="44" height="34" rx="3"/><path d="M170 880 V866" stroke="#1E293B" stroke-width="2"/><path id="rvDhw1" d="M164 854 L176 854 L170 866 Z" fill="#E2E8F0" stroke="#1E293B" stroke-width="1.3"/><path d="M176 860.0 H188" stroke="#1E293B" stroke-width="1.5"/><path d="M185 857.0 L189 860.0 L185 863.0" fill="none" stroke="#1E293B" stroke-width="1.2"/><text x="192" y="863.0" class="lbl-s" style="fill:#334155;font-weight:600">ПК1</text><text id="txtPlock1" x="192" y="873.0" class="lbl-s" style="font-family:var(--mono);font-size:8.5px">4.0 бар</text></g>
+              <!-- подогретая вода T_меж: из I ступени через Кв2 к точке смешения с T4 -->
+              <path id="pipeDhwMid" class="pipe" style="stroke-width:6" d="M90 620 H40 V820 H112 A8 8 0 0 1 128 820 H680 V720"/><path id="flowDhwMid" class="flow" style="stroke-width:2" d="M90 620 H40 V820 H112 A8 8 0 0 1 128 820 H680 V720"/>
+              <g class="node" data-info="dhwValves"><rect class="hl" x="224" y="806" width="32" height="28" rx="3"/><path id="vSt1WOut" class="valve-body valve-open" d="M228 812 L252 828 L252 812 L228 828 Z"/><text x="240" y="808" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Кв2</text></g>
+              <path id="pipeSt1WByp" class="pipe" style="stroke-width:5" d="M320 880 V820"/><path id="flowSt1WByp" class="flow" style="stroke-width:2" d="M320 880 V820"/>
+              <circle cx="320" cy="820" r="4" fill="#334155"/><circle cx="320" cy="880" r="4" fill="#334155"/>
+              <g class="node" data-info="dhwValves"><rect class="hl" x="306" y="834" width="28" height="32" rx="3"/><path id="vSt1WByp" class="valve-body valve-closed" d="M312 838 L328 862 L312 862 L328 838 Z"/><text x="334" y="854" text-anchor="start" class="lbl-s" style="fill:#334155;font-weight:600">Кв5</text></g>
               <g id="dhw2Tags"></g>
             </g>
-            <circle cx="620" cy="700" r="4" fill="#334155"/>
 
             <!-- Шильдики ГВС (строятся из app.js) -->
             <g id="dhwTags"></g>
@@ -975,6 +932,46 @@
                   <button id="dhwPumpBtn" data-toggle="DHW_PUMP" data-on="Нц: ВКЛ" data-off="Нц: ВЫКЛ" data-tone="green" data-label="Насос циркуляции ГВС Нц" class="tbtn"></button></div>
                 <div class="flex flex-col gap-1"><span class="text-[11px] faint">Ввод ХВС В1</span>
                   <button id="dhwB1Btn" data-toggle="DHW_B1_VALVE" data-on="В1: ОТКР" data-off="В1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Ввод ХВС В1" class="tbtn"></button></div>
+              </div>
+              <div class="arm-box">
+                <div class="flex items-center gap-2 mb-2"><span class="energy-h" style="margin:0">Арматура узла ГВС</span><button class="qbtn ml-auto" data-info="dhwValves">?</button></div>
+                <div class="arm-h">Сеть</div>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <button data-toggle="DHW_NET_SUP" data-on="Кс1: ОТКР" data-off="Кс1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран врезки ветки ГВС Кс1" class="tbtn tbtn-sm"></button>
+                  <button data-toggle="DHW_NET_RET" data-on="Кс2: ОТКР" data-off="Кс2: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран возврата ветки ГВС Кс2" class="tbtn tbtn-sm"></button>
+                </div>
+                <div class="dhw2-only" hidden>
+                  <div class="arm-h">I ступень по сети</div>
+                  <div class="grid grid-cols-3 gap-1.5">
+                    <button data-toggle="DHW_ST1_IN" data-on="Кс3: ОТКР" data-off="Кс3: ЗАКР" data-tone="slate" data-inverse="1" data-label="Вход сети в I ступень Кс3" class="tbtn tbtn-sm"></button>
+                    <button data-toggle="DHW_ST1_OUT" data-on="Кс4: ОТКР" data-off="Кс4: ЗАКР" data-tone="slate" data-inverse="1" data-label="Выход сети из I ступени Кс4" class="tbtn tbtn-sm"></button>
+                    <button data-toggle="DHW_ST1_BYP" data-on="Обвод Кс5: ОТКР" data-off="Обвод Кс5: ЗАКР" data-tone="amber" data-label="Обвод I ступени по сети Кс5" class="tbtn tbtn-sm"></button>
+                  </div>
+                  <div class="arm-h">I ступень по воде</div>
+                  <div class="grid grid-cols-3 gap-1.5">
+                    <button data-toggle="DHW_ST1_WIN" data-on="Кв1: ОТКР" data-off="Кв1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Вход воды в I ступень Кв1" class="tbtn tbtn-sm"></button>
+                    <button data-toggle="DHW_ST1_WOUT" data-on="Кв2: ОТКР" data-off="Кв2: ЗАКР" data-tone="slate" data-inverse="1" data-label="Выход воды из I ступени Кв2" class="tbtn tbtn-sm"></button>
+                    <button data-toggle="DHW_ST1_WBYP" data-on="Обвод Кв5: ОТКР" data-off="Обвод Кв5: ЗАКР" data-tone="amber" data-label="Обвод I ступени по воде Кв5" class="tbtn tbtn-sm"></button>
+                  </div>
+                </div>
+                <div class="arm-h">II ступень по воде · циркуляция</div>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <button data-toggle="DHW_HEX2_WIN" data-on="Кв3: ОТКР" data-off="Кв3: ЗАКР" data-tone="slate" data-inverse="1" data-label="Вход воды во II ступень Кв3" class="tbtn tbtn-sm"></button>
+                  <button data-toggle="DHW_HEX2_WOUT" data-on="Кв4: ОТКР" data-off="Кв4: ЗАКР" data-tone="slate" data-inverse="1" data-label="Выход T3 в дом Кв4" class="tbtn tbtn-sm"></button>
+                  <button data-toggle="DHW_CIRC_IN" data-on="Кн1: ОТКР" data-off="Кн1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран до насоса Нц Кн1" class="tbtn tbtn-sm"></button>
+                  <button data-toggle="DHW_CIRC_OUT" data-on="Кн2: ОТКР" data-off="Кн2: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран после насоса Нц Кн2" class="tbtn tbtn-sm"></button>
+                </div>
+                <div class="arm-h flex items-center gap-1">Фильтры <button class="qbtn" data-info="dhwFilters">?</button></div>
+                <div class="flex items-center gap-2 text-[11px]"><span class="mono w-20">Фх (ХВС)</span><div class="meter flex-1"><div id="cwFoulBar" style="width:0%;background:#92400E"></div></div><span id="cwFoulVal" class="mono w-9 text-right">0%</span></div>
+                <div class="grid grid-cols-2 gap-1.5 mt-1 mb-2">
+                  <button id="cwFoulBtn" class="btn btn-sm btn-warn">Засорить +10%</button>
+                  <button id="cwCleanBtn" class="btn btn-sm">Промыть Фх</button>
+                </div>
+                <div class="flex items-center gap-2 text-[11px]"><span class="mono w-20">Фн (Нц)</span><div class="meter flex-1"><div id="circFoulBar" style="width:0%;background:#92400E"></div></div><span id="circFoulVal" class="mono w-9 text-right">0%</span></div>
+                <div class="grid grid-cols-2 gap-1.5 mt-1">
+                  <button id="circFoulBtn" class="btn btn-sm btn-warn">Засорить +10%</button>
+                  <button id="circCleanBtn" class="btn btn-sm">Промыть Фн</button>
+                </div>
               </div>
               <div id="dhwStatus" class="mono text-[10.5px] faint"></div>
               <div class="energy-box">

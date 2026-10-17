@@ -101,6 +101,16 @@
     DHW_ST1_KV: 28,        // Kv I ступени ПТО ГВС по сетевой стороне
     DHW_ST1_EFF: 0.78,     // эффективность I ступени
     TAU_DHW_ST1: 2.5,      // с, инерция I ступени
+    DHW_ST1_BYP_KV: 40,    // Kv обвода I ступени по сетевой воде (задвижка открыта)
+    // Обвязка узла ГВС
+    CW_FILTER_KV: 15,      // Kv чистого фильтра ХВС на вводе
+    CW_SYS_KV: 4.5,        // Kv водопроводного тракта дома (ПТО, стояки, смесители)
+    CW_HEAD: 2.5,          // бар, располагаемый напор водопровода на водоразбор
+    CW_FILTER_DP_WARN: 0.6, // бар, перепад на фильтре ХВС — пора промывать
+    CIRC_FILTER_KV: 6,     // Kv чистого фильтра перед насосом Нц
+    CIRC_FILTER_WARN: 60,  // %, засор фильтра Нц — циркуляция заметно падает
+    DHW_LOCK_K: 0.4,       // бар/°C, рост давления запертой воды в ПТО ГВС при ее нагреве
+    DHW_RELIEF_SET: 6.0,   // бар, настройка предохранительного клапана ГВС
     HOUSE_FILL_K: 0.03,    // заполнение дома: доля объема на 1 бар/с подпитки
 
     // Нормативы
@@ -201,6 +211,22 @@
       DHW_PUMP: true,        // ГВС: циркуляционный насос Нц
       DHW_B1_VALVE: true,    // ГВС: вводной кран холодной воды В1
       DHW_DRAW: 1.5,         // ГВС: водоразбор жильцов, т/ч
+      // Обвязка узла ГВС (true — открыт). Сеть: краны ветки ГВС; I ступень и ее обвод
+      DHW_NET_SUP: true,     // Кс1 — кран на врезке ветки ГВС (сеть, подача)
+      DHW_NET_RET: true,     // Кс2 — кран на возврате ветки ГВС (сеть, обратка II ступени)
+      DHW_ST1_IN: true,      // Кс3 — вход сетевой воды в I ступень
+      DHW_ST1_OUT: true,     // Кс4 — выход сетевой воды из I ступени
+      DHW_ST1_BYP: false,    // Кс5 — обвод I ступени по сети (нормально закрыт)
+      // Водопровод: I ступень и ее обвод, II ступень, насос Нц
+      DHW_ST1_WIN: true,     // Кв1 — вход холодной воды в I ступень
+      DHW_ST1_WOUT: true,    // Кв2 — выход воды из I ступени
+      DHW_ST1_WBYP: false,   // Кв5 — обвод I ступени по воде (нормально закрыт)
+      DHW_HEX2_WIN: true,    // Кв3 — вход воды во II ступень (ПТО ГВС)
+      DHW_HEX2_WOUT: true,   // Кв4 — выход горячей воды T3 в дом
+      DHW_CIRC_IN: true,     // Кн1 — кран до насоса Нц
+      DHW_CIRC_OUT: true,    // Кн2 — кран после насоса Нц
+      dhwCwFoul: 0,          // засор фильтра ХВС, %
+      dhwCircFoul: 0,        // засор фильтра Нц, %
       DRAIN: false,
       NET_DRAIN: false,      // дренаж сетевого участка (нижняя точка, перед V2)
       NET_VENT: false,       // воздушник сетевого участка (верхняя точка, вход ПТО)
@@ -286,7 +312,8 @@
       reliefOpen: false,
       mpRunning: false, mpDryTime: 0, mpTrip: false,
       DHW_KZR: 25, T3: C.T3_SET, T4: C.T3_SET - C.CIRC_DT - 1, T2_dhw: 35.0, dhwEprev: 0, G_draw: 1.5,
-      T_dhw_mid: 32.0, T2_after_stage1: 38.0
+      T_dhw_mid: 32.0, T2_after_stage1: 38.0,
+      P_lock1: C.P_B1, P_lock2: C.P_B1, dhwMeter: 0, T_st1w: 40, lockRef1: null, lockRef2: null
     };
     applyConfig(sim);
     settle(sim, 180);
@@ -318,6 +345,11 @@
       C.KV_HEX,
       kvOf(c.V2, C.KVS_V2)
     ];
+    // 2-ступ. ГВС: I ступень (с обводом) стоит на общей обратке между узлом 4 (врезки подпитки и дренажа)
+    // и V2 — последовательно с задвижкой. Перекрыта без обвода — для ПТО это то же, что закрытая V2.
+    if (st1Kv !== null && st1Kv !== undefined) {
+      kv[4] = (kv[4] > 0 && st1Kv > 0) ? 1 / Math.sqrt(1 / (kv[4] * kv[4]) + 1 / (st1Kv * st1Kv)) : 0;
+    }
     const open = kv.map(k => k > 0);
     const nodes = s.nodes.slice();
     const fill = s.fill;
@@ -405,15 +437,13 @@
     let G1 = 0;
     let kvEq = 0;
     let G1_dhw = 0;
-    if (dhwKv > 0 || st1Kv > 0) {
+    if (dhwKv > 0) {
       // Две параллельные ветки между узлами 2 и 4: отопление (КЗР + ПТО) и ГВС (КЗР ГВС + ПТО ГВС).
       // Через V1, грязевик и V2 идет их суммарный расход.
-      // В двухступенчатой схеме обратки обеих веток сливаются и проходят I ступень ПТО ГВС (st1Kv) перед узлом 4.
       const kvCo = open[2] ? 1 / Math.sqrt(1 / (kv[2] * kv[2]) + 1 / (kv[3] * kv[3])) : 0;
       const kvPar = kvCo + dhwKv;
       if (kvPar > 0 && open[0] && open[1] && open[4] && allFull) {
-        let inv = 1 / (kv[0] * kv[0]) + 1 / (kv[1] * kv[1]) + 1 / (kvPar * kvPar) + 1 / (kv[4] * kv[4]);
-        if (st1Kv > 0) inv += 1 / (st1Kv * st1Kv);
+        const inv = 1 / (kv[0] * kv[0]) + 1 / (kv[1] * kv[1]) + 1 / (kvPar * kvPar) + 1 / (kv[4] * kv[4]);
         kvEq = 1 / Math.sqrt(inv);
         const Gt = kvEq * Math.sqrt(Math.max(0, P1 - P2));
         const dPpar = (Gt / kvPar) ** 2;
@@ -421,9 +451,8 @@
         G1_dhw = dhwKv * Math.sqrt(dPpar);
         nodes[1] = P1 - (Gt / kv[0]) ** 2;
         nodes[2] = nodes[1] - (Gt / kv[1]) ** 2;
-        const pJ = nodes[2] - dPpar;          // точка слияния обраток
-        nodes[4] = st1Kv > 0 ? pJ - (Gt / st1Kv) ** 2 : pJ;
-        nodes[3] = G1 > 0 ? nodes[2] - (G1 / kv[2]) ** 2 : pJ;
+        nodes[4] = nodes[2] - dPpar;
+        nodes[3] = G1 > 0 ? nodes[2] - (G1 / kv[2]) ** 2 : nodes[4];
         nodes[NODE_COUNT - 1] = P2;
       }
     } else if (open.every(Boolean) && allFull) {
@@ -445,6 +474,29 @@
       kv, kvEq, G1, G1_dhw, nodes, P_after_strainer: nodes[2], P_hex_net,
       segs: segInfo, drainLeak, ventSpray, netDrainFlow, netVentFlow, v1Leak
     };
+  }
+
+  /** Засорить фильтр ГВС на 10 % ('cw' — фильтр ХВС на вводе, 'circ' — фильтр перед Нц). */
+  function foulDhwFilter(sim, which) {
+    const k = which === 'circ' ? 'dhwCircFoul' : 'dhwCwFoul';
+    sim.controls[k] = Math.min(90, sim.controls[k] + 10);
+    return sim.controls[k];
+  }
+  /** Промывка фильтра ГВС: только на отключенном участке. Возвращает { ok, level, msg }. */
+  function cleanDhwFilter(sim, which) {
+    const c = sim.controls;
+    if (which === 'circ') {
+      if (c.DHW_CIRC_IN || c.DHW_CIRC_OUT) {
+        return { ok: false, level: 'alarm', msg: 'Фильтр Нц под давлением: сначала выключите Нц и закройте краны Кн1 и Кн2.' };
+      }
+      c.dhwCircFoul = 0;
+      return { ok: true, level: 'ok', msg: 'Фильтр перед насосом Нц промыт. Откройте Кн1, Кн2 и включите Нц.' };
+    }
+    if (c.DHW_B1_VALVE) {
+      return { ok: false, level: 'alarm', msg: 'Фильтр ХВС под давлением водопровода 4 бар: сначала закройте ввод В1.' };
+    }
+    c.dhwCwFoul = 0;
+    return { ok: true, level: 'ok', msg: 'Сетка фильтра ХВС промыта. Откройте ввод В1.' };
   }
 
   /**
@@ -513,11 +565,16 @@
       const d = c.DHW_KZRcmd - s.DHW_KZR;
       s.DHW_KZR = Math.abs(d) <= rate ? c.DHW_KZRcmd : s.DHW_KZR + Math.sign(d) * rate;
       const kvK = kvOf(s.DHW_KZR, C.DHW_KVS);
-      dhwKv = kvK > 0 ? 1 / Math.sqrt(1 / (kvK * kvK) + 1 / (C.DHW_HEX_KV * C.DHW_HEX_KV)) : 0;
+      const netOpen = c.DHW_NET_SUP && c.DHW_NET_RET;   // краны ветки ГВС на врезке и возврате
+      dhwKv = (kvK > 0 && netOpen) ? 1 / Math.sqrt(1 / (kvK * kvK) + 1 / (C.DHW_HEX_KV * C.DHW_HEX_KV)) : 0;
     }
+    // I ступень по сети: своя пара кранов + обвод. Доля сетевой воды, идущей через сам теплообменник:
+    const st1NetOpen = dhw2 && c.DHW_ST1_IN && c.DHW_ST1_OUT;
+    const st1Kv = (st1NetOpen ? C.DHW_ST1_KV : 0) + (dhw2 && c.DHW_ST1_BYP ? C.DHW_ST1_BYP_KV : 0);
+    const st1NetFrac = st1Kv > 0 && st1NetOpen ? C.DHW_ST1_KV / st1Kv : 0;
 
     // 1. Сетевой контур
-    const prim = solvePrimary(c, s, dt, env, dhwKv, dhw2 ? C.DHW_ST1_KV : 0);
+    const prim = solvePrimary(c, s, dt, env, dhwKv, dhw2 ? st1Kv : null);
     s.nodes = prim.nodes;
     const G1 = prim.G1;
 
@@ -699,12 +756,29 @@
     // ПТО ГВС: вторичный контур — холодная вода В1 (водоразбор) + циркуляция T4 (насос Нц)
     const G1_dhw = prim.G1_dhw || 0;
     let G_draw = 0, G_circ = 0, G_dhw_sec = 0, Q_dhw = 0, T_dhw_in = 20, Q_st1 = 0, T2_net = s.T2;
+    let waterOK = false, G_drawCap = 0, dP_cwFilter = 0, circDeadhead = false, G_st1n = 0, G_st1w = 0;
+    let relief1 = false, relief2 = false;
     if (dhwOn) {
-      const drawTarget = c.DHW_B1_VALVE ? Math.max(0, c.DHW_DRAW) : 0;
+      // Водопроводный тракт: В1 → фильтр → водосчетчик → обратный клапан → (I ступень или ее обвод) → II ступень → T3
+      const st1W = dhw2 && c.DHW_ST1_WIN && c.DHW_ST1_WOUT;
+      const st1Path = !dhw2 || st1W || c.DHW_ST1_WBYP;
+      const hex2W = c.DHW_HEX2_WIN && c.DHW_HEX2_WOUT;
+      waterOK = c.DHW_B1_VALVE && st1Path && hex2W;
+      // Засор фильтра ХВС ограничивает возможный водоразбор
+      const kvF = C.CW_FILTER_KV * Math.max(0.02, 1 - c.dhwCwFoul / 100);
+      G_drawCap = waterOK ? Math.sqrt(C.CW_HEAD) / Math.sqrt(1 / (kvF * kvF) + 1 / (C.CW_SYS_KV * C.CW_SYS_KV)) : 0;
+      const drawTarget = Math.min(Math.max(0, c.DHW_DRAW), G_drawCap);
       s.G_draw += (dt / C.TAU_DRAW) * (drawTarget - s.G_draw);
       if (drawTarget === 0 && s.G_draw < 0.02) s.G_draw = 0;
       G_draw = s.G_draw;
-      G_circ = c.DHW_PUMP ? C.G_CIRC : 0;
+      dP_cwFilter = (G_draw / kvF) ** 2;
+      s.dhwMeter += G_draw * dt / 3600;          // показания водосчетчика, м³
+      // Циркуляция: насос Нц, его краны и фильтр; кольцо идет через II ступень
+      const circValves = c.DHW_CIRC_IN && c.DHW_CIRC_OUT;
+      const kvC = C.CIRC_FILTER_KV * Math.max(0.02, 1 - c.dhwCircFoul / 100);
+      const circK = Math.sqrt((1 + (C.G_CIRC / C.CIRC_FILTER_KV) ** 2) / (1 + (C.G_CIRC / kvC) ** 2));
+      G_circ = (c.DHW_PUMP && circValves && hex2W) ? C.G_CIRC * circK : 0;
+      circDeadhead = c.DHW_PUMP && !(circValves && hex2W);
       G_dhw_sec = G_draw + G_circ;
       // 2-ступ.: холодная вода приходит во II ступень уже подогретой в I ступени (T_dhw_mid),
       // циркуляция T4 подмешивается между ступенями
@@ -735,24 +809,51 @@
       const Gt = G1 + G1_dhw;
       T2_net = Gt > 0 ? (G1 * s.T2 + G1_dhw * s.T2_dhw) / Gt : s.T2;
       if (dhw2) {
-        // I ступень: греющая — общая обратка (отопление + II ступень), нагреваемая — только холодная вода В1
+        // I ступень: греющая — общая обратка (отопление + II ступень), нагреваемая — только холодная вода В1.
+        // Открытые обводы забирают часть потока мимо теплообменника.
         const Wt = Gt * C.C_WATER, Wdr = G_draw * C.C_WATER;
+        G_st1n = Gt * st1NetFrac;
+        G_st1w = st1W ? G_draw * (c.DHW_ST1_WBYP ? 0.5 : 1) : 0;
         let TmidEq, T2st1Eq, tauMid = C.TAU_DHW_ST1;
-        if (Gt > 0 && G_draw > 0 && T2_net > C.T_B1) {
-          Q_st1 = C.DHW_ST1_EFF * Math.min(Wt, Wdr) * (T2_net - C.T_B1);
+        if (G_st1n > 0 && G_st1w > 0 && T2_net > C.T_B1) {
+          Q_st1 = C.DHW_ST1_EFF * Math.min(G_st1n, G_st1w) * C.C_WATER * (T2_net - C.T_B1);
           TmidEq = C.T_B1 + Q_st1 / Wdr;
           T2st1Eq = T2_net - Q_st1 / Wt;
-        } else if (Gt > 0) {
-          TmidEq = T2_net; T2st1Eq = T2_net;       // разбора нет — I ступень не работает
-        } else if (G_draw > 0) {
-          TmidEq = C.T_B1; T2st1Eq = 15;           // сеть стоит — холодная вода выхолаживает I ступень
         } else {
-          TmidEq = 20; T2st1Eq = C.T_STAGNANT; tauMid = 60;
+          if (G_draw > 0) TmidEq = C.T_B1;            // холодная вода проходит, не нагреваясь
+          else if (G_st1n > 0) TmidEq = T2_net;       // разбора нет — вода в I ступени стоит и прогревается
+          else { TmidEq = 20; tauMid = 60; }
+          if (Gt > 0) T2st1Eq = T2_net;               // I ступень не работает (нет разбора или она в обводе)
+          else if (G_draw > 0) T2st1Eq = 15;          // сеть стоит — холодная вода выхолаживает I ступень
+          else { T2st1Eq = C.T_STAGNANT; tauMid = 60; }
         }
         s.T_dhw_mid += (dt / tauMid) * (TmidEq - s.T_dhw_mid);
         s.T2_after_stage1 += (dt / tauMid) * (T2st1Eq - s.T2_after_stage1);
         T2_net = s.T2_after_stage1;
       }
+
+      // Температура воды внутри I ступени (по водопроводной стороне)
+      if (dhw2) {
+        let Tw = Math.min(s.T_st1w, 20), tauW = 60;   // все стоит: горячая вода остывает, холодная не греется
+        if (G_st1w > 0) { Tw = C.T_B1 + Q_st1 / (G_st1w * C.C_WATER); tauW = C.TAU_DHW_ST1; }
+        else if (G_st1n > 0) { Tw = T2_net; tauW = 15; }   // вода стоит, греющая идет — прогревается
+        s.T_st1w += (dt / tauW) * (Tw - s.T_st1w);
+      }
+      // Предохранительные клапаны ГВС: ПТО, отсеченный по воде с двух сторон, при нагреве запертой воды
+      // набирает давление (вода почти не сжимается). При настройке ПК клапан стравливает воду в дренаж.
+      const lockStep = (locked, T, Tprev, refKey, pKey) => {
+        if (!locked) { s[refKey] = null; s[pKey] = C.P_B1; return false; }
+        if (s[refKey] === null) s[refKey] = T;                     // температура в момент отсечения
+        const span = (C.DHW_RELIEF_SET - C.P_B1) / C.DHW_LOCK_K;  // нагрев до срабатывания ПК, °C
+        if (T - s[refKey] > span) s[refKey] = T - span;            // ПК стравил расширившуюся воду
+        s[pKey] = Math.max(0.3, C.P_B1 + C.DHW_LOCK_K * (T - s[refKey]));
+        return s[pKey] >= C.DHW_RELIEF_SET - 1e-9 && T > Tprev + 1e-5;  // ПК открыт, пока вода греется
+      };
+      const lock2 = !c.DHW_HEX2_WIN && !c.DHW_HEX2_WOUT;
+      relief2 = lockStep(lock2, s.T3, s.T3prev === undefined ? s.T3 : s.T3prev, 'lockRef2', 'P_lock2');
+      const lock1 = dhw2 && !c.DHW_ST1_WIN && !c.DHW_ST1_WOUT;
+      relief1 = lockStep(lock1, s.T_st1w, s.Tst1prev === undefined ? s.T_st1w : s.Tst1prev, 'lockRef1', 'P_lock1');
+      s.T3prev = s.T3; s.Tst1prev = s.T_st1w;
     }
 
     // Радиаторы и здание. Теплоотдача радиаторов Q_rad = K·(Tср − Tвн)^1.3;
@@ -818,6 +919,9 @@
       dhwOn, dhw2, G1_dhw, G1_total: G1 + G1_dhw, G_draw, G_circ, G_dhw_total: G_dhw_sec,
       Q_dhw: Q_dhw + Q_st1, Q_dhw_stage1: Q_st1, Q_dhw_stage2: Q_dhw, T_dhw_in,
       T_dhw_mid: dhw2 ? s.T_dhw_mid : C.T_B1, T2_after_stage1: s.T2_after_stage1,
+      dhwWaterOK: waterOK, G_drawCap, dP_cwFilter, cwFoul: c.dhwCwFoul, circFoul: c.dhwCircFoul, circDeadhead,
+      G_st1_net: G_st1n, G_st1_w: G_st1w, st1Blocked: dhw2 && st1Kv === 0, st1Bypass: dhw2 && !!c.DHW_ST1_BYP,
+      P_lock1: s.P_lock1, P_lock2: s.P_lock2, dhwRelief1: relief1, dhwRelief2: relief2, dhwMeter: s.dhwMeter,
       T3: s.T3, T4: s.T4, T2_dhw: s.T2_dhw, DHW_KZR: s.DHW_KZR, P_B1: C.P_B1, T_B1: C.T_B1,
       makeupType: cfg.makeupType, mpRunning: s.mpRunning, mpDryTime: s.mpDryTime, mpTrip: !!s.mpTrip,
       P_makeup_avail, P_node4: s.nodes[4],
@@ -962,7 +1066,7 @@
       });
     }
     if (o.dhwOn) {
-      if (o.T3 > C.DHW_SCALD) {
+      if (o.T3 > C.DHW_SCALD && o.dhwWaterOK) {
         list.push({
           id: 'dhw_scald', level: 'alarm',
           title: 'ОПАСНОСТЬ ОЖОГА: Перегрев ГВС (T3 > 75 °C)!',
@@ -970,7 +1074,7 @@
           detail: `T3 = ${f1(o.T3)} °C, КЗР ГВС ${Math.round(o.DHW_KZR)} %, водоразбор ${f1(o.G_draw)} т/ч`
         });
       }
-      if (c.DHW_B1_VALVE && o.T3 < C.DHW_LOW) {
+      if (o.dhwWaterOK && o.T3 < C.DHW_LOW) {
         list.push({
           id: 'dhw_low_temp', level: 'warn',
           title: 'Нарушение СанПиН: Недогрев ГВС (T3 < 55 °C)',
@@ -978,12 +1082,75 @@
           detail: `T3 = ${f1(o.T3)} °C, КЗР ГВС ${Math.round(o.DHW_KZR)} %, G1 ГВС ${f2(o.G1_dhw)} т/ч`
         });
       }
-      if (!c.DHW_PUMP && c.DHW_DRAW < 0.2) {
+      if (o.G_circ === 0 && c.DHW_DRAW < 0.2) {
         list.push({
           id: 'dhw_no_circ', level: 'warn',
-          title: 'Остановлена циркуляция ГВС (насос Нц выключен)',
-          text: 'В отсутствие водоразбора стояки ГВС и полотенцесушители в доме остывают (T4 падает), а из кранов пойдет остывшая вода.',
-          detail: `T4 = ${f1(o.T4)} °C`
+          title: 'Остановлена циркуляция ГВС',
+          text: 'Насос Нц выключен или кольцо циркуляции перекрыто кранами. Без водоразбора стояки ГВС и полотенцесушители остывают (T4 падает), а из кранов пойдет остывшая вода.',
+          detail: `T4 = ${f1(o.T4)} °C, Нц ${c.DHW_PUMP ? 'вкл' : 'выкл'}`
+        });
+      }
+      if (o.circDeadhead) {
+        list.push({
+          id: 'dhw_circ_deadhead', level: 'warn',
+          title: 'Насос Нц работает на закрытую арматуру',
+          text: 'Кран до или после насоса циркуляции (Кн1, Кн2) или краны II ступени по воде (Кв3, Кв4) закрыты, а Нц включен. Вода в насосе греется, уплотнение изнашивается. Выключите Нц перед тем, как перекрывать кольцо.',
+          detail: `Кн1 ${c.DHW_CIRC_IN ? 'откр' : 'закр'}, Кн2 ${c.DHW_CIRC_OUT ? 'откр' : 'закр'}, Кв3 ${c.DHW_HEX2_WIN ? 'откр' : 'закр'}, Кв4 ${c.DHW_HEX2_WOUT ? 'откр' : 'закр'}`
+        });
+      }
+      if (!o.dhwWaterOK && c.DHW_DRAW >= 0.2) {
+        list.push({
+          id: 'dhw_no_water', level: 'warn',
+          title: 'ЖАЛОБЫ ЖИЛЬЦОВ: Нет горячей воды',
+          text: 'Водопроводный тракт ГВС перекрыт: закрыт ввод В1, краны II ступени по воде или I ступень отключена по воде без открытого обвода Кв5.',
+          detail: `В1 ${c.DHW_B1_VALVE ? 'откр' : 'закр'}, Кв3/Кв4 ${c.DHW_HEX2_WIN ? 'откр' : 'закр'}/${c.DHW_HEX2_WOUT ? 'откр' : 'закр'}` +
+            (o.dhw2 ? `, Кв1/Кв2 ${c.DHW_ST1_WIN ? 'откр' : 'закр'}/${c.DHW_ST1_WOUT ? 'откр' : 'закр'}, обвод Кв5 ${c.DHW_ST1_WBYP ? 'откр' : 'закр'}` : '')
+        });
+      } else if (o.dhwWaterOK && c.DHW_DRAW > o.G_drawCap + 0.05) {
+        list.push({
+          id: 'dhw_low_flow', level: 'warn',
+          title: 'ЖАЛОБЫ ЖИЛЬЦОВ: Слабый напор горячей воды',
+          text: 'Водопровод не пропускает нужный расход: засорен сетчатый фильтр ХВС на вводе. Отключите В1 и промойте фильтр.',
+          detail: `Нужно ${f1(c.DHW_DRAW)} т/ч, проходит ${f1(o.G_drawCap)} т/ч, засор фильтра ${Math.round(o.cwFoul)} %`
+        });
+      }
+      if (o.dP_cwFilter > C.CW_FILTER_DP_WARN) {
+        list.push({
+          id: 'dhw_cw_filter', level: 'warn',
+          title: 'Засорен фильтр ХВС на вводе ГВС',
+          text: 'Большой перепад на сетчатом фильтре холодной воды. Окалина и песок из водопровода копятся на сетке; дальше они забьют пластины ПТО ГВС.',
+          detail: `ΔP фильтра = ${f2(o.dP_cwFilter)} бар при ${f1(o.G_draw)} т/ч, засор ${Math.round(o.cwFoul)} %`
+        });
+      }
+      if (o.circFoul >= C.CIRC_FILTER_WARN && c.DHW_PUMP) {
+        list.push({
+          id: 'dhw_circ_filter', level: 'warn',
+          title: 'Засорен фильтр перед насосом Нц',
+          text: 'Циркуляция ГВС упала: T4 и температура в дальних стояках снижаются. Выключите Нц, закройте Кн1 и Кн2, промойте фильтр.',
+          detail: `G циркуляции = ${f2(o.G_circ)} т/ч из ${f1(C.G_CIRC)}, засор ${Math.round(o.circFoul)} %`
+        });
+      }
+      if (o.dhwRelief1 || o.dhwRelief2) {
+        list.push({
+          id: 'dhw_relief', level: 'alarm',
+          title: `АВАРИЯ: Сработал предохранительный клапан ГВС (${o.dhwRelief2 ? 'II' : 'I'} ступень, ${f1(C.DHW_RELIEF_SET)} бар)!`,
+          text: 'ПТО ГВС закрыт по воде с двух сторон, а греющая сетевая вода продолжает идти: запертая вода нагревается, расширяется, и давление растет. ПК сбрасывает ее в дренаж. Порядок вывода ПТО в ремонт: сначала отключить по сети (КЗР ГВС или краны сетевой стороны), потом по воде.',
+          detail: `P в отсеченном ПТО: I ст. ${f2(o.P_lock1)} бар, II ст. ${f2(o.P_lock2)} бар`
+        });
+      } else if (Math.max(o.P_lock1, o.P_lock2) > C.P_B1 + 1.0) {
+        list.push({
+          id: 'dhw_lock_pressure', level: 'warn',
+          title: 'Растет давление в отсеченном ПТО ГВС',
+          text: 'Теплообменник ГВС закрыт по воде с двух сторон и продолжает нагреваться. Перекройте подачу греющей воды или откройте кран по воде, иначе сработает предохранительный клапан.',
+          detail: `P: I ст. ${f2(o.P_lock1)} бар, II ст. ${f2(o.P_lock2)} бар (ПК ${f1(C.DHW_RELIEF_SET)} бар)`
+        });
+      }
+      if (o.st1Blocked && isOpen(c.V1) && isOpen(c.V2)) {
+        list.push({
+          id: 'dhw_st1_blocked', level: 'alarm',
+          title: 'АВАРИЯ: Перекрыта обратка сети на I ступени ГВС!',
+          text: 'Краны I ступени по сети (Кс3, Кс4) закрыты, а обвод Кс5 закрыт. Через I ступень идет вся обратка — расход сети встал, отопление и ГВС без тепла, ПТО под давлением подачи. Сначала откройте обвод Кс5, потом закрывайте краны I ступени.',
+          detail: `P в ПТО (сеть) = ${f2(o.P_hex_net)} бар, G1 = ${f2(o.G1)} т/ч`
         });
       }
     }
@@ -1093,7 +1260,7 @@
   }
 
   global.ITPPhysics = Object.freeze({
-    CONST: C,
+    CONST: C, foulDhwFilter, cleanDhwFilter,
     createSimulator,
     resetNominal,
     settle,

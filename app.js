@@ -165,6 +165,41 @@
         СП 510.1325800). У нашего дома ≈ 380/490 ≈ 0.8, поэтому по норме для него лучше двухступенчатая — ее можно выбрать
         в конфигураторе («2-ступ.»).</p>`
     },
+    dhwValves: {
+      icon: 'valve', title: 'Арматура узла ГВС',
+      body: `<p>Каждый теплообменник ГВС можно отключить с обеих сторон — по сети и по воде, — чтобы промыть или заменить пластины,
+        не останавливая все остальное.</p>
+        <p class="mt-2"><b>Сеть:</b> Кс1 — кран на врезке ветки ГВС (после грязевика), Кс2 — на возврате ветки в обратку.
+        Во 2-ступ. схеме: Кс3 и Кс4 — краны I ступени на общей обратке, Кс5 — ее обвод (нормально закрыт). Через I ступень идет
+        вся обратка сети, поэтому без обвода закрывать Кс3/Кс4 нельзя — встанет и отопление, а ПТО окажутся под давлением подачи.
+        Порядок: открыть Кс5 → закрыть Кс3 и Кс4.</p>
+        <p class="mt-2"><b>Водопровод:</b> В1 — ввод холодной воды, Кв3 и Кв4 — вход и выход II ступени (Кв4 — выход T3 в дом).
+        Во 2-ступ. схеме: Кв1 и Кв2 — I ступень, Кв5 — ее обвод: при ремонте I ступени холодная вода идет сразу во II ступень,
+        и та догревает ее от 5 °C (КЗР ГВС открывается сильнее).</p>
+        <p class="mt-2"><b>Циркуляция:</b> Кн1 и Кн2 — краны до и после насоса Нц. Нц выключают до того, как их закрыть.</p>
+        <p class="mt-2"><b>Главное правило вывода ПТО в ремонт:</b> сначала отключить греющую сторону (сеть), потом нагреваемую (воду).
+        Наоборот — запертая вода продолжит нагреваться, и сработает предохранительный клапан.</p>`
+    },
+    dhwFilters: {
+      icon: 'filter', title: 'Фильтры и водосчетчик ГВС',
+      body: `<p><b>Фх — сетчатый фильтр на вводе ХВС.</b> Задерживает песок и окалину из водопровода, иначе они оседают в пластинах
+        ПТО ГВС. По мере засора растет перепад ΔP на фильтре, а при сильном засоре водопровод уже не пропускает пиковый
+        водоразбор — жильцы жалуются на слабый напор. Промывка: закрыть В1, вскрыть фильтр, промыть сетку, открыть В1.</p>
+        <p class="mt-2"><b>Фн — фильтр перед насосом Нц.</b> Защищает насос. Засоренный фильтр уменьшает циркуляцию: T4 и вода
+        в дальних стояках остывают. Промывка: выключить Нц, закрыть Кн1 и Кн2.</p>
+        <p class="mt-2"><b>Сч — водосчетчик (FQ)</b> на холодной воде, идущей на приготовление ГВС: по нему считают объем
+        горячей воды. <b>ОК — обратный клапан</b> после счетчика: при падении давления в водопроводе горячая вода не уйдет
+        обратно в холодный ввод.</p>`
+    },
+    dhwRelief: {
+      icon: 'shield', title: 'Предохранительные клапаны ГВС (ПК1, ПК2)',
+      body: `<p>Стоят на водопроводной стороне каждой ступени между запорным краном и теплообменником, настройка 6.0 бар.</p>
+        <p class="mt-2">Если закрыть ПТО ГВС по воде с двух сторон, а греющая сетевая вода продолжает идти, запертая вода
+        нагревается и расширяется. Вода почти не сжимается: в модели каждый градус нагрева добавляет ≈ 0.4 бар. Без ПК
+        за несколько градусов давление разорвало бы уплотнения пластин. ПК стравливает лишнюю воду в дренаж.</p>
+        <p class="mt-2">Цвет ПК на схеме: серый — закрыт, желтый — давление растет, красный — сбрасывает. Если запертая вода
+        остывает, давление в ней, наоборот, падает.</p>`
+    },
     dhw2stage: {
       icon: 'hex', title: 'ГВС: двухступенчатая смешанная схема',
       body: `<p>Горячую воду греют в два приема. <b>II ступень</b> подключена к подаче теплосети T1 через КЗР ГВС — как одноступенчатый
@@ -183,7 +218,9 @@
         ≈ 38 °C вместо ≈ 46 °C: сетевая вода охлаждается глубже, и ТЭЦ или котельная вырабатывают больше энергии на том же расходе.</p>
         <p class="mt-2"><b>Цена.</b> Через I ступень идет вся сетевая вода, она добавляет сопротивление на вводе: у системы отопления
         немного меньше напора (G1 ≈ 9.6 т/ч вместо ≈ 10 т/ч, T11 на ≈ 1 °C ниже). Без водоразбора I ступень не работает,
-        и T2 такая же, как без ГВС.</p>`
+        и T2 такая же, как без ГВС.</p>
+        <p class="mt-2"><b>Ремонт I ступени без отключения отопления:</b> открыть обвод по сети Кс5, закрыть Кс3 и Кс4; открыть обвод
+        по воде Кв5, закрыть Кв1 и Кв2. Схема на это время работает как одноступенчатая: II ступень греет воду от 5 °C.</p>`
     },
     dhwKzr: {
       icon: 'gauge', title: 'КЗР ГВС и регулятор температуры',
@@ -303,17 +340,16 @@
     { x: 736, y: 372, w: 88, head: 'ОБРАТКА ДОМА', m: 'cold', rows: [['T21', 'T21', '°C', 1]] },
     { x: 806, y: 16, w: 120, head: 'ВЫХОД ИТП', m: 'hot', rows: [['P подача', 'P_house_supply', 'бар', 2]] },
     { x: 694, y: 184, w: 128, head: 'ДОМ', m: 'gen', rows: [['P 9 эт.', 'P_top', 'бар', 2], ['ΔP дома', 'dP_house', 'бар', 2], ['P низ дома', 'P_house', 'бар', 2], ['T кварт.', 'T_room', '°C', 1]] },
-    // ГВС: общие для обеих схем
-    { g: 'dhwTags', x: 600, y: 542, w: 108, head: 'ПОДАЧА ГВС', m: 'hot', rows: [['T3', 'T3', '°C', 1], ['G гвс', 'G_draw', 'т/ч', 1]] },
-    { g: 'dhwTags', x: 790, y: 656, w: 88, head: 'ЦИРКУЛЯЦИЯ', m: 'cold', rows: [['T4', 'T4', '°C', 1]] },
-    // ГВС: только одноступенчатая схема
-    { g: 'dhw1Tags', x: 110, y: 640, w: 118, head: 'СЕТЬ · ГВС', m: 'gen', rows: [['G1 гвс', 'G1_dhw', 'т/ч', 2], ['T2 гвс', 'T2_dhw', '°C', 1]] },
-    { g: 'dhw1Tags', x: 760, y: 712, w: 96, head: 'ХВС В1 · 4 бар', m: 'cold', rows: [['T хвс', 'T_B1', '°C', 1]] },
+    // ГВС: общие для обеих схем. pt — точка измерения на трубе (к ней идет выноска)
+    { g: 'dhwTags', x: 730, y: 548, w: 98, head: 'TI · ПОДАЧА ГВС', m: 'hot', pt: [720, 600], rows: [['T3', 'T3', '°C', 1]] },
+    { g: 'dhwTags', x: 850, y: 690, w: 104, head: 'TI · ЦИРКУЛЯЦИЯ', m: 'cold', pt: [950, 660], rows: [['T4', 'T4', '°C', 1], ['G ц', 'G_circ', 'т/ч', 2]] },
+    { g: 'dhwTags', x: 296, y: 630, w: 96, head: 'FI · СЕТЬ ГВС', m: 'gen', pt: [440, 600], rows: [['G1 гвс', 'G1_dhw', 'т/ч', 2]] },
+    { g: 'dhwTags', x: 296, y: 672, w: 96, head: 'TI · ОБРАТКА II', m: 'cold', pt: [380, 720], rows: [['T2 ГВС', 'T2_dhw', '°C', 1]] },
+    { g: 'dhwTags', x: 712, y: 770, w: 112, head: 'FQ · ВОДОСЧЕТЧИК', m: 'cold', pt: [830, 880], rows: [['G гвс', 'G_draw', 'т/ч', 2], ['V', 'dhwMeter', 'м³', 3]] },
+    { g: 'dhwTags', x: 864, y: 790, w: 100, head: 'ВВОД ХВС', m: 'cold', pt: [962, 880], rows: [['T хвс', 'T_B1', '°C', 1], ['P хвс', 'P_B1', 'бар', 1]] },
     // ГВС: только двухступенчатая схема
-    { g: 'dhw2Tags', x: 290, y: 624, w: 116, head: 'СЕТЬ · II СТ.', m: 'gen', rows: [['G1 гвс', 'G1_dhw', 'т/ч', 2], ['T2 II ст.', 'T2_dhw', '°C', 1]] },
-    { g: 'dhw2Tags', x: 20, y: 616, w: 84, head: 'ХВС В1', m: 'cold', rows: [['T хвс', 'T_B1', '°C', 1]] },
-    { g: 'dhw2Tags', x: 104, y: 440, w: 92, head: 'T2 · I СТУПЕНЬ', m: 'cold', rows: [['до', 'T2_mix', '°C', 1], ['после', 'T2_after_stage1', '°C', 1]] },
-    { g: 'dhw2Tags', x: 640, y: 706, w: 104, head: 'МЕЖДУ СТУПЕНЯМИ', m: 'cold', rows: [['T меж', 'T_dhw_mid', '°C', 1]] }
+    { g: 'dhw2Tags', x: 104, y: 440, w: 92, head: 'TI · T2 I СТ.', m: 'cold', rows: [['после', 'T2_after_stage1', '°C', 1, [242, 467]], ['до', 'T2_mix', '°C', 1, [256, 485]]] },
+    { g: 'dhw2Tags', x: 400, y: 766, w: 96, head: 'TI · ПОСЛЕ I СТ.', m: 'cold', pt: [440, 820], rows: [['T меж', 'T_dhw_mid', '°C', 1]] }
   ];
   const tagEls = {};
   const tagFrames = [];   // { frame, keys }
@@ -326,9 +362,19 @@
   }
 
   (function buildTags() {
+    // Выноска: тонкая пунктирная линия от шильдика к точке измерения на трубе
+    const leader = (g, x1, y1, px, py) => {
+      svgEl('line', { x1, y1, x2: px, y2: py, stroke: '#64748B', 'stroke-width': 0.8, 'stroke-dasharray': '2 2' }, g);
+      svgEl('circle', { cx: px, cy: py, r: 3.2, fill: '#FFFFFF', stroke: '#334155', 'stroke-width': 1.2 }, g);
+    };
     TAGS.forEach(t => {
       const g = $(t.g || 'tags');
       const h = 13 + t.rows.length * 18 + 4;
+      if (t.pt) {
+        const nx = Math.min(Math.max(t.pt[0], t.x), t.x + t.w), ny = Math.min(Math.max(t.pt[1], t.y), t.y + h);
+        leader(g, nx, ny, t.pt[0], t.pt[1]);
+      }
+      t.rows.forEach((r, i) => { if (r[4]) leader(g, t.x + t.w, t.y + 13 + 11 + i * 18, r[4][0], r[4][1]); });
       const frame = svgEl('rect', { x: t.x, y: t.y, width: t.w, height: h, rx: 1.5, class: 'tag-box' }, g);
       svgEl('rect', { x: t.x + 0.5, y: t.y + 0.5, width: t.w - 1, height: 12, fill: MEDIUM[t.m] }, g);
       svgEl('text', { x: t.x + 5, y: t.y + 9.5, class: 'tag-head' }, g).textContent = t.head;
@@ -523,6 +569,18 @@
     sim.controls.strainerFouling = Math.min(90, sim.controls.strainerFouling + 10);
     log(`Инструктор: грязевик засорен до ${Math.round(sim.controls.strainerFouling)} %`, 'op');
   });
+  [['cw', 'cwFoulBtn', 'cwCleanBtn', 'фильтр ХВС Фх'], ['circ', 'circFoulBtn', 'circCleanBtn', 'фильтр Нц Фн']].forEach(([w, fb, cb, name]) => {
+    $(fb).addEventListener('click', () => {
+      const v = P.foulDhwFilter(sim, w);
+      log(`Инструктор: ${name} засорен до ${Math.round(v)} %`, 'op');
+      render();
+    });
+    $(cb).addEventListener('click', () => {
+      const r = P.cleanDhwFilter(sim, w);
+      log(r.msg, r.level);
+      render();
+    });
+  });
   $('cleanBtn').addEventListener('click', () => {
     const r = P.cleanStrainer(sim);
     log(r.msg, r.level);
@@ -578,19 +636,20 @@
   }
 
   // Обратка сети: во 2-ступ. схеме она опускается к I ступени ПТО ГВС и возвращается к V2 снизу
-  const P2A_D = { base: 'M440 430 H234', st2: 'M440 430 H256 V700' };
-  const FLOWP2_D = { base: 'M440 430 H20', st2: 'M440 430 H256 V700' };
+  const P2A_D = { base: 'M440 430 H234', st2: 'M440 430 H256 V620' };
+  const FLOWP2_D = { base: 'M440 430 H20', st2: 'M440 430 H256 V620' };
   let dhwLayout = null;
   function renderConfig() {
     const cfg = sim.config;
     const dhw = cfg.dhwScheme === '1stage' || cfg.dhwScheme === '2stage';
     const two = cfg.dhwScheme === '2stage';
-    setSheetHeight(dhw ? 760 : 520);
+    setSheetHeight(dhw ? 920 : 520);
     $('svgDhwGroup').toggleAttribute('hidden', !dhw);
     $('svgDhw1StageGroup').toggleAttribute('hidden', !(dhw && !two));
     $('svgDhw2StageGroup').toggleAttribute('hidden', !two);
     $('svgDhw2StageNet').toggleAttribute('hidden', !two);
     $('dhwControls').toggleAttribute('hidden', !dhw);
+    document.querySelectorAll('.dhw2-only').forEach(el => el.toggleAttribute('hidden', !two));
     const layout = cfg.dhwScheme;
     if (dhwLayout !== layout) {
       dhwLayout = layout;
@@ -598,9 +657,7 @@
       $('flowP2').setAttribute('d', two ? FLOWP2_D.st2 : FLOWP2_D.base);
       $('dhwSchemeLbl').textContent = two ? '2-ступ. смешанная схема' : '1-ступ. параллельная схема';
       $('dhwQhead').textContent = two ? 'Q II ст.' : 'Q ГВС';
-      const lbl = $('dhwHexLbl');
-      lbl.textContent = two ? 'ПТО ГВС · II ст.' : 'ПТО ГВС';
-      lbl.setAttribute('y', two ? '574' : '740');
+      $('dhwHexLbl').textContent = two ? 'ПТО ГВС · II ст.' : 'ПТО ГВС';
       $('dhwSecTitle').textContent = two ? 'Контур ГВС (2-ступ.)' : 'Контур ГВС (1-ступ.)';
       $('dhwSecInfo').dataset.info = two ? 'dhw2stage' : 'dhwHex';
     }
@@ -876,12 +933,24 @@
       dm.textContent = c.DHW_KZR_AUTO ? 'A' : 'Р';
       dm.style.fill = c.DHW_KZR_AUTO ? '#0F172A' : '#B45309';
       setValve('vDhwKzr', o.DHW_KZR >= 99.5 ? 100 : o.DHW_KZR);
-      setValve('vB1', c.DHW_B1_VALVE ? 100 : 0);
+      const vOpen = (id, on) => setValve(id, on ? 100 : 0);
+      vOpen('vB1', c.DHW_B1_VALVE);
+      vOpen('vDhwNetSup', c.DHW_NET_SUP); vOpen('vDhwNetRet', c.DHW_NET_RET);
+      vOpen('vDhwHex2In', c.DHW_HEX2_WIN); vOpen('vDhwHex2Out', c.DHW_HEX2_WOUT);
+      vOpen('vDhwCircIn', c.DHW_CIRC_IN); vOpen('vDhwCircOut', c.DHW_CIRC_OUT);
+      $('cwDirt').setAttribute('width', (20 * o.cwFoul / 100).toFixed(1));
+      $('circDirt').setAttribute('width', (20 * o.circFoul / 100).toFixed(1));
+      $('txtCwDp').textContent = 'ΔP ' + fmt(o.dP_cwFilter, 2);
+      // ПК ГВС: серый — закрыт, желтый — давление растет, красный — сбрасывает
+      const rvColor = (vent, Pl) => vent ? '#FCA5A5' : (Pl > o.P_B1 + 1 ? '#FDE68A' : '#E2E8F0');
+      $('rvDhw2').setAttribute('fill', rvColor(o.dhwRelief2, o.P_lock2));
+      $('txtPlock2').textContent = fmt(o.P_lock2, 1) + ' бар';
       const dhwSupT = c.V1 >= C.CLOSED_PCT ? o.T1 : o.T2_dhw;
       $('pipeDhwS').style.stroke = tempColor(dhwSupT);
       $('pipeDhwR').style.stroke = tempColor(o.T2_dhw);
       $('pipeDhwT3').style.stroke = tempColor(o.T3);
       $('pipeDhwT4').style.stroke = tempColor(o.T4);
+      $('pipeDhwMix').style.stroke = tempColor(o.T_dhw_in);
       $('pipeDhwB1').style.stroke = tempColor(o.T_B1);
       setFlow('flowDhwS', o.G1_dhw, 6);
       setFlow('flowDhwR', o.G1_dhw, 6);
@@ -889,25 +958,36 @@
       setFlow('flowDhwHexS', o.G_dhw_total, 6);
       setFlow('flowDhwT3', o.G_dhw_total, 6);
       setFlow('flowDhwT4', o.G_circ, 10);
+      setFlow('flowDhwMix', o.G_dhw_total, 6);
       setFlow('flowDhwB1', o.G_draw, 8);
-      if (o.dhw2) {
+      if (!o.dhw2) {
+        $('pipeDhwB1a').style.stroke = tempColor(o.T_B1);
+        $('pipeDhwR1').style.stroke = tempColor(o.T2_dhw);
+        setFlow('flowDhwB1a', o.G_draw, 8);
+        setFlow('flowDhwR1', o.G1_dhw, 6);
+      } else {
         $('txtQst1').textContent = Math.round(o.Q_dhw_stage1);
-        setValve('vB1b', c.DHW_B1_VALVE ? 100 : 0);
+        vOpen('vSt1In', c.DHW_ST1_IN); vOpen('vSt1Out', c.DHW_ST1_OUT); vOpen('vSt1Byp', c.DHW_ST1_BYP);
+        vOpen('vSt1WIn', c.DHW_ST1_WIN); vOpen('vSt1WOut', c.DHW_ST1_WOUT); vOpen('vSt1WByp', c.DHW_ST1_WBYP);
+        $('rvDhw1').setAttribute('fill', rvColor(o.dhwRelief1, o.P_lock1));
+        $('txtPlock1').textContent = fmt(o.P_lock1, 1) + ' бар';
         const f4 = o.fill[4] < 0.2;
         $('pipeDhwR2').style.stroke = tempColor(o.T2_dhw);
         $('pipeSt1In').style.stroke = f4 ? EMPTY : tempColor(o.T2_mix);
+        $('pipeSt1Byp').style.stroke = f4 ? EMPTY : tempColor(o.T2_mix);
         $('pipeSt1Out').style.stroke = f4 ? EMPTY : tempColor(o.T2);
         $('pipeDhwB1b').style.stroke = tempColor(o.T_B1);
+        $('pipeSt1WByp').style.stroke = tempColor(o.T_B1);
         $('pipeDhwMid').style.stroke = tempColor(o.T_dhw_mid);
-        $('pipeDhwMix').style.stroke = tempColor(o.T_dhw_in);
         setFlow('flowDhwR2', o.G1_dhw, 6);
         setFlow('flowSt1In', o.G1_total, 4);
+        setFlow('flowSt1Byp', Math.max(0, o.G1_total - o.G_st1_net), 4);
         setFlow('flowSt1Out', o.G1_total, 4);
-        setFlow('flowSt1HexP', o.G1_total, 4);
-        setFlow('flowSt1HexS', o.G_draw, 8);
+        setFlow('flowSt1HexP', o.G_st1_net, 4);
+        setFlow('flowSt1HexS', o.G_st1_w, 8);
         setFlow('flowDhwB1b', o.G_draw, 8);
+        setFlow('flowSt1WByp', Math.max(0, o.G_draw - o.G_st1_w), 8);
         setFlow('flowDhwMid', o.G_draw, 8);
-        setFlow('flowDhwMix', o.G_dhw_total, 6);
       }
       const pr = $('dhwPumpBody');
       $('dhwPumpRotor').classList.toggle('spin', c.DHW_PUMP);
@@ -920,7 +1000,11 @@
         row.querySelector('[data-val]').textContent = Math.round(c.DHW_KZRcmd) + '%';
       }
       $('dhwKzrPos').textContent = `положение ${Math.round(o.DHW_KZR)} %` + (c.DHW_KZR_AUTO ? ' · регулятор' : ' · вручную');
-      $('dhwStatus').textContent = `T3 ${fmt(o.T3, 1)} °C · T4 ${fmt(o.T4, 1)} °C · Q ${Math.round(o.Q_dhw)} кВт · G1 ГВС ${fmt(o.G1_dhw, 2)} т/ч`;
+      $('dhwStatus').textContent = `T3 ${fmt(o.T3, 1)} °C · T4 ${fmt(o.T4, 1)} °C · Q ${Math.round(o.Q_dhw)} кВт · G1 ГВС ${fmt(o.G1_dhw, 2)} т/ч · водосчетчик ${fmt(o.dhwMeter, 3)} м³`;
+      $('cwFoulVal').textContent = Math.round(c.dhwCwFoul) + '%';
+      $('cwFoulBar').style.width = (c.dhwCwFoul / 90 * 100).toFixed(0) + '%';
+      $('circFoulVal').textContent = Math.round(c.dhwCircFoul) + '%';
+      $('circFoulBar').style.width = (c.dhwCircFoul / 90 * 100).toFixed(0) + '%';
       // Энергобаланс узла ГВС: откуда берется мощность и что уходит в сеть
       const qTot = Math.round(o.Q_dhw), q1 = Math.round(o.Q_dhw_stage1), q2 = Math.round(o.Q_dhw_stage2);
       const share = o.dhw2
