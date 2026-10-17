@@ -97,6 +97,10 @@
     TAU_T4_COOL: 12.0,     // с, остывание стоящей циркуляции
     DHW_SCALD: 75.0,       // °C, выше — опасность ожога (верхняя граница СанПиН)
     DHW_LOW: 55.0,         // °C, ниже — недогрев
+    // ГВС, двухступенчатая смешанная схема: I ступень на общей обратке перед V2
+    DHW_ST1_KV: 28,        // Kv I ступени ПТО ГВС по сетевой стороне
+    DHW_ST1_EFF: 0.78,     // эффективность I ступени
+    TAU_DHW_ST1: 2.5,      // с, инерция I ступени
     HOUSE_FILL_K: 0.03,    // заполнение дома: доля объема на 1 бар/с подпитки
 
     // Нормативы
@@ -281,7 +285,8 @@
       strainerAlarmUntil: -1,
       reliefOpen: false,
       mpRunning: false, mpDryTime: 0, mpTrip: false,
-      DHW_KZR: 25, T3: C.T3_SET, T4: C.T3_SET - C.CIRC_DT - 1, T2_dhw: 35.0, dhwEprev: 0, G_draw: 1.5
+      DHW_KZR: 25, T3: C.T3_SET, T4: C.T3_SET - C.CIRC_DT - 1, T2_dhw: 35.0, dhwEprev: 0, G_draw: 1.5,
+      T_dhw_mid: 32.0, T2_after_stage1: 38.0
     };
     applyConfig(sim);
     settle(sim, 180);
@@ -304,7 +309,7 @@
   // ---------------------------------------------------------------------------
   // Первичный (сетевой) контур
   // ---------------------------------------------------------------------------
-  function solvePrimary(c, s, dt, env, dhwKv) {
+  function solvePrimary(c, s, dt, env, dhwKv, st1Kv) {
     const P1 = env.P1, P2 = env.P2;
     const kv = [
       kvOf(c.V1, C.KVS_V1),
@@ -400,13 +405,15 @@
     let G1 = 0;
     let kvEq = 0;
     let G1_dhw = 0;
-    if (dhwKv > 0) {
+    if (dhwKv > 0 || st1Kv > 0) {
       // Две параллельные ветки между узлами 2 и 4: отопление (КЗР + ПТО) и ГВС (КЗР ГВС + ПТО ГВС).
       // Через V1, грязевик и V2 идет их суммарный расход.
+      // В двухступенчатой схеме обратки обеих веток сливаются и проходят I ступень ПТО ГВС (st1Kv) перед узлом 4.
       const kvCo = open[2] ? 1 / Math.sqrt(1 / (kv[2] * kv[2]) + 1 / (kv[3] * kv[3])) : 0;
       const kvPar = kvCo + dhwKv;
-      if (open[0] && open[1] && open[4] && allFull) {
-        const inv = 1 / (kv[0] * kv[0]) + 1 / (kv[1] * kv[1]) + 1 / (kvPar * kvPar) + 1 / (kv[4] * kv[4]);
+      if (kvPar > 0 && open[0] && open[1] && open[4] && allFull) {
+        let inv = 1 / (kv[0] * kv[0]) + 1 / (kv[1] * kv[1]) + 1 / (kvPar * kvPar) + 1 / (kv[4] * kv[4]);
+        if (st1Kv > 0) inv += 1 / (st1Kv * st1Kv);
         kvEq = 1 / Math.sqrt(inv);
         const Gt = kvEq * Math.sqrt(Math.max(0, P1 - P2));
         const dPpar = (Gt / kvPar) ** 2;
@@ -414,8 +421,9 @@
         G1_dhw = dhwKv * Math.sqrt(dPpar);
         nodes[1] = P1 - (Gt / kv[0]) ** 2;
         nodes[2] = nodes[1] - (Gt / kv[1]) ** 2;
-        nodes[4] = nodes[2] - dPpar;
-        nodes[3] = G1 > 0 ? nodes[2] - (G1 / kv[2]) ** 2 : nodes[4];
+        const pJ = nodes[2] - dPpar;          // точка слияния обраток
+        nodes[4] = st1Kv > 0 ? pJ - (Gt / st1Kv) ** 2 : pJ;
+        nodes[3] = G1 > 0 ? nodes[2] - (G1 / kv[2]) ** 2 : pJ;
         nodes[NODE_COUNT - 1] = P2;
       }
     } else if (open.every(Boolean) && allFull) {
@@ -489,8 +497,10 @@
       c.KZR = Math.abs(d) <= rate ? c.KZRcmd : c.KZR + Math.sign(d) * rate;
     }
 
-    // ГВС (одноступенчатая параллельная схема): регулятор T3 и привод КЗР ГВС
-    const dhwOn = !!(sim.config && sim.config.dhwScheme === '1stage');
+    // ГВС (1-ступ. параллельная или 2-ступ. смешанная схема): регулятор T3 и привод КЗР ГВС
+    const dhwScheme = sim.config ? sim.config.dhwScheme : 'none';
+    const dhw2 = dhwScheme === '2stage';
+    const dhwOn = dhwScheme === '1stage' || dhw2;
     let dhwKv = 0;
     if (dhwOn) {
       if (c.DHW_KZR_AUTO) {
@@ -507,7 +517,7 @@
     }
 
     // 1. Сетевой контур
-    const prim = solvePrimary(c, s, dt, env, dhwKv);
+    const prim = solvePrimary(c, s, dt, env, dhwKv, dhw2 ? C.DHW_ST1_KV : 0);
     s.nodes = prim.nodes;
     const G1 = prim.G1;
 
@@ -688,7 +698,7 @@
 
     // ПТО ГВС: вторичный контур — холодная вода В1 (водоразбор) + циркуляция T4 (насос Нц)
     const G1_dhw = prim.G1_dhw || 0;
-    let G_draw = 0, G_circ = 0, G_dhw_sec = 0, Q_dhw = 0, T_dhw_in = 20;
+    let G_draw = 0, G_circ = 0, G_dhw_sec = 0, Q_dhw = 0, T_dhw_in = 20, Q_st1 = 0, T2_net = s.T2;
     if (dhwOn) {
       const drawTarget = c.DHW_B1_VALVE ? Math.max(0, c.DHW_DRAW) : 0;
       s.G_draw += (dt / C.TAU_DRAW) * (drawTarget - s.G_draw);
@@ -696,7 +706,10 @@
       G_draw = s.G_draw;
       G_circ = c.DHW_PUMP ? C.G_CIRC : 0;
       G_dhw_sec = G_draw + G_circ;
-      if (G_dhw_sec > 0) T_dhw_in = (G_draw * C.T_B1 + G_circ * s.T4) / G_dhw_sec;
+      // 2-ступ.: холодная вода приходит во II ступень уже подогретой в I ступени (T_dhw_mid),
+      // циркуляция T4 подмешивается между ступенями
+      const T_cold = dhw2 ? s.T_dhw_mid : C.T_B1;
+      if (G_dhw_sec > 0) T_dhw_in = (G_draw * T_cold + G_circ * s.T4) / G_dhw_sec;
       const W1d = G1_dhw * C.C_WATER, W2d = G_dhw_sec * C.C_WATER;
       let T3eq, T2deq, tau3 = C.TAU_DHW;
       if (G1_dhw > 0 && G_dhw_sec > 0) {
@@ -718,6 +731,28 @@
       s.T2_dhw += (dt / C.TAU_DHW) * (T2deq - s.T2_dhw);
       if (G_circ > 0) s.T4 += (dt / C.TAU_T4) * (Math.max(20, s.T3 - C.CIRC_DT) - s.T4);
       else s.T4 += (dt / C.TAU_T4_COOL) * (22 - s.T4);
+
+      const Gt = G1 + G1_dhw;
+      T2_net = Gt > 0 ? (G1 * s.T2 + G1_dhw * s.T2_dhw) / Gt : s.T2;
+      if (dhw2) {
+        // I ступень: греющая — общая обратка (отопление + II ступень), нагреваемая — только холодная вода В1
+        const Wt = Gt * C.C_WATER, Wdr = G_draw * C.C_WATER;
+        let TmidEq, T2st1Eq, tauMid = C.TAU_DHW_ST1;
+        if (Gt > 0 && G_draw > 0 && T2_net > C.T_B1) {
+          Q_st1 = C.DHW_ST1_EFF * Math.min(Wt, Wdr) * (T2_net - C.T_B1);
+          TmidEq = C.T_B1 + Q_st1 / Wdr;
+          T2st1Eq = T2_net - Q_st1 / Wt;
+        } else if (Gt > 0) {
+          TmidEq = T2_net; T2st1Eq = T2_net;       // разбора нет — I ступень не работает
+        } else if (G_draw > 0) {
+          TmidEq = C.T_B1; T2st1Eq = 15;           // сеть стоит — холодная вода выхолаживает I ступень
+        } else {
+          TmidEq = 20; T2st1Eq = C.T_STAGNANT; tauMid = 60;
+        }
+        s.T_dhw_mid += (dt / tauMid) * (TmidEq - s.T_dhw_mid);
+        s.T2_after_stage1 += (dt / tauMid) * (T2st1Eq - s.T2_after_stage1);
+        T2_net = s.T2_after_stage1;
+      }
     }
 
     // Радиаторы и здание. Теплоотдача радиаторов Q_rad = K·(Tср − Tвн)^1.3;
@@ -760,7 +795,8 @@
       floodFlow, floodTime: s.floodTime, houseDrainFlow, houseFilling, v1Leak: prim.v1Leak,
       kzrFail: env.kzrFail, KZRcmd: c.KZRcmd,
       cavTime: s.cavTime, noCircTime: s.noCircTime, dryTopTime: s.dryTopTime,
-      T2: (dhwOn && G1 + G1_dhw > 0) ? (G1 * s.T2 + G1_dhw * s.T2_dhw) / (G1 + G1_dhw) : s.T2,
+      T2: dhwOn ? T2_net : s.T2,
+      T2_mix: (dhwOn && G1 + G1_dhw > 0) ? (G1 * s.T2 + G1_dhw * s.T2_dhw) / (G1 + G1_dhw) : s.T2,
       T2_co: s.T2, T11: s.T11, T21: s.T21,
       G1, G2, W1, W2, Q,
       kv: prim.kv, kvEq: prim.kvEq,
@@ -779,7 +815,9 @@
       pumpRunning, cavitation,
       reliefOpen: s.reliefOpen,
       makeupFlow, drainFlow, reliefFlow,
-      dhwOn, G1_dhw, G1_total: G1 + G1_dhw, G_draw, G_circ, G_dhw_total: G_dhw_sec, Q_dhw, T_dhw_in,
+      dhwOn, dhw2, G1_dhw, G1_total: G1 + G1_dhw, G_draw, G_circ, G_dhw_total: G_dhw_sec,
+      Q_dhw: Q_dhw + Q_st1, Q_dhw_stage1: Q_st1, Q_dhw_stage2: Q_dhw, T_dhw_in,
+      T_dhw_mid: dhw2 ? s.T_dhw_mid : C.T_B1, T2_after_stage1: s.T2_after_stage1,
       T3: s.T3, T4: s.T4, T2_dhw: s.T2_dhw, DHW_KZR: s.DHW_KZR, P_B1: C.P_B1, T_B1: C.T_B1,
       makeupType: cfg.makeupType, mpRunning: s.mpRunning, mpDryTime: s.mpDryTime, mpTrip: !!s.mpTrip,
       P_makeup_avail, P_node4: s.nodes[4],

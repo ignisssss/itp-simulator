@@ -162,7 +162,28 @@
         поэтому общая T2 в теплосеть снижается.</p>
         <p class="mt-2"><b>Когда так подключают.</b> Выбор схемы зависит от отношения максимальных нагрузок Q<sub>ГВС</sub>/Q<sub>отопл</sub>:
         при 0.2…1 рекомендуется двухступенчатая схема, при других соотношениях — одноступенчатая (СП 41-101-95, актуальная редакция —
-        СП 510.1325800). У нашего дома ≈ 380/490 ≈ 0.8, поэтому по норме для него лучше двухступенчатая — она будет на Этапе 3.</p>`
+        СП 510.1325800). У нашего дома ≈ 380/490 ≈ 0.8, поэтому по норме для него лучше двухступенчатая — ее можно выбрать
+        в конфигураторе («2-ступ.»).</p>`
+    },
+    dhw2stage: {
+      icon: 'hex', title: 'ГВС: двухступенчатая смешанная схема',
+      body: `<p>Горячую воду греют в два приема. <b>II ступень</b> подключена к подаче теплосети T1 через КЗР ГВС — как одноступенчатый
+        ПТО ГВС. <b>I ступень</b> (Kv = 28) стоит последовательно на обратке: через нее проходит вся сетевая вода — после системы
+        отопления и после II ступени, уже слитая в общую обратку перед V2. Поэтому схема и называется <b>смешанной</b>: на отопление
+        ПТО ГВС включен последовательно (I ступень), на подачу — параллельно (II ступень).</p>
+        <p class="mt-2"><b>Почему I ступень на обратке.</b> Вода, вернувшаяся из системы отопления, еще горячая (≈ 50…55 °C), а холодная вода
+        из водопровода — 5 °C. I ступень забирает это «бросовое» тепло и подогревает водопроводную воду до ≈ 40 °C, ничего не беря
+        с подачи сети. II ступени остается догреть воду только до 62 °C.</p>
+        <p class="mt-2"><b>Почему циркуляция T4 подключена между ступенями.</b> Циркуляционная вода возвращается из дома горячей (≈ 54 °C) —
+        горячее, чем обратка сети на выходе I ступени. Если подмешать ее до I ступени, вода I ступени станет теплее, и I ступень
+        почти перестанет охлаждать сетевую воду. Поэтому через I ступень идет только холодная вода В1, а T4 подмешивается к ней после I
+        ступени, перед II ступенью.</p>
+        <p class="mt-2"><b>Что это дает.</b> В утренний пик (5 т/ч) I ступень дает ≈ 220 кВт из ≈ 350 кВт. КЗР ГВС открыт ≈ 20 % вместо
+        ≈ 34 %, расход сетевой воды на ГВС ≈ 2.7 т/ч вместо ≈ 4.6 т/ч, общий расход сети меньше на ≈ 2.3 т/ч. Обратка T2 уходит в сеть
+        ≈ 38 °C вместо ≈ 46 °C: сетевая вода охлаждается глубже, и ТЭЦ или котельная вырабатывают больше энергии на том же расходе.</p>
+        <p class="mt-2"><b>Цена.</b> Через I ступень идет вся сетевая вода, она добавляет сопротивление на вводе: у системы отопления
+        немного меньше напора (G1 ≈ 9.6 т/ч вместо ≈ 10 т/ч, T11 на ≈ 1 °C ниже). Без водоразбора I ступень не работает,
+        и T2 такая же, как без ГВС.</p>`
     },
     dhwKzr: {
       icon: 'gauge', title: 'КЗР ГВС и регулятор температуры',
@@ -282,11 +303,17 @@
     { x: 736, y: 372, w: 88, head: 'ОБРАТКА ДОМА', m: 'cold', rows: [['T21', 'T21', '°C', 1]] },
     { x: 806, y: 16, w: 120, head: 'ВЫХОД ИТП', m: 'hot', rows: [['P подача', 'P_house_supply', 'бар', 2]] },
     { x: 694, y: 184, w: 128, head: 'ДОМ', m: 'gen', rows: [['P 9 эт.', 'P_top', 'бар', 2], ['ΔP дома', 'dP_house', 'бар', 2], ['P низ дома', 'P_house', 'бар', 2], ['T кварт.', 'T_room', '°C', 1]] },
-    // ГВС (видны только при одноступенчатой схеме)
+    // ГВС: общие для обеих схем
     { g: 'dhwTags', x: 600, y: 542, w: 108, head: 'ПОДАЧА ГВС', m: 'hot', rows: [['T3', 'T3', '°C', 1], ['G гвс', 'G_draw', 'т/ч', 1]] },
     { g: 'dhwTags', x: 790, y: 656, w: 88, head: 'ЦИРКУЛЯЦИЯ', m: 'cold', rows: [['T4', 'T4', '°C', 1]] },
-    { g: 'dhwTags', x: 110, y: 640, w: 118, head: 'СЕТЬ · ГВС', m: 'gen', rows: [['G1 гвс', 'G1_dhw', 'т/ч', 2], ['T2 гвс', 'T2_dhw', '°C', 1]] },
-    { g: 'dhwTags', x: 760, y: 712, w: 96, head: 'ХВС В1 · 4 бар', m: 'cold', rows: [['T хвс', 'T_B1', '°C', 1]] }
+    // ГВС: только одноступенчатая схема
+    { g: 'dhw1Tags', x: 110, y: 640, w: 118, head: 'СЕТЬ · ГВС', m: 'gen', rows: [['G1 гвс', 'G1_dhw', 'т/ч', 2], ['T2 гвс', 'T2_dhw', '°C', 1]] },
+    { g: 'dhw1Tags', x: 760, y: 712, w: 96, head: 'ХВС В1 · 4 бар', m: 'cold', rows: [['T хвс', 'T_B1', '°C', 1]] },
+    // ГВС: только двухступенчатая схема
+    { g: 'dhw2Tags', x: 290, y: 624, w: 116, head: 'СЕТЬ · II СТ.', m: 'gen', rows: [['G1 гвс', 'G1_dhw', 'т/ч', 2], ['T2 II ст.', 'T2_dhw', '°C', 1]] },
+    { g: 'dhw2Tags', x: 20, y: 616, w: 84, head: 'ХВС В1', m: 'cold', rows: [['T хвс', 'T_B1', '°C', 1]] },
+    { g: 'dhw2Tags', x: 104, y: 440, w: 92, head: 'T2 · I СТУПЕНЬ', m: 'cold', rows: [['до', 'T2_mix', '°C', 1], ['после', 'T2_after_stage1', '°C', 1]] },
+    { g: 'dhw2Tags', x: 640, y: 706, w: 104, head: 'МЕЖДУ СТУПЕНЯМИ', m: 'cold', rows: [['T меж', 'T_dhw_mid', '°C', 1]] }
   ];
   const tagEls = {};
   const tagFrames = [];   // { frame, keys }
@@ -310,7 +337,7 @@
         if (i) svgEl('line', { x1: t.x + 4, x2: t.x + t.w - 4, y1: y - 13.5, y2: y - 13.5, stroke: '#E2E8F0', 'stroke-width': 0.8 }, g);
         svgEl('text', { x: t.x + 5, y: y - 1, class: 'tag-name' }, g).textContent = r[0];
         const v = svgEl('text', { x: t.x + t.w - 5, y, 'text-anchor': 'end', class: 'tag-val' }, g);
-        tagEls[r[1]] = { el: v, unit: r[2], digits: r[3] };
+        (tagEls[r[1]] || (tagEls[r[1]] = [])).push({ el: v, unit: r[2], digits: r[3] });
       });
       tagFrames.push({ frame, keys: t.rows.map(r => r[1]) });
     });
@@ -550,24 +577,46 @@
     setTimeout(() => { if (sheetAnim && sheetAnim.target === target) stepH(t0 + dur + 1); }, dur + 120);
   }
 
+  // Обратка сети: во 2-ступ. схеме она опускается к I ступени ПТО ГВС и возвращается к V2 снизу
+  const P2A_D = { base: 'M440 430 H234', st2: 'M440 430 H256 V700' };
+  const FLOWP2_D = { base: 'M440 430 H20', st2: 'M440 430 H256 V700' };
+  let dhwLayout = null;
   function renderConfig() {
     const cfg = sim.config;
-    const dhw = cfg.dhwScheme === '1stage';
+    const dhw = cfg.dhwScheme === '1stage' || cfg.dhwScheme === '2stage';
+    const two = cfg.dhwScheme === '2stage';
     setSheetHeight(dhw ? 760 : 520);
-    $('svgDhw1StageGroup').toggleAttribute('hidden', !dhw);
+    $('svgDhwGroup').toggleAttribute('hidden', !dhw);
+    $('svgDhw1StageGroup').toggleAttribute('hidden', !(dhw && !two));
+    $('svgDhw2StageGroup').toggleAttribute('hidden', !two);
+    $('svgDhw2StageNet').toggleAttribute('hidden', !two);
     $('dhwControls').toggleAttribute('hidden', !dhw);
+    const layout = cfg.dhwScheme;
+    if (dhwLayout !== layout) {
+      dhwLayout = layout;
+      $('pipeP2a').setAttribute('d', two ? P2A_D.st2 : P2A_D.base);
+      $('flowP2').setAttribute('d', two ? FLOWP2_D.st2 : FLOWP2_D.base);
+      $('dhwSchemeLbl').textContent = two ? '2-ступ. смешанная схема' : '1-ступ. параллельная схема';
+      $('dhwQhead').textContent = two ? 'Q II ст.' : 'Q ГВС';
+      const lbl = $('dhwHexLbl');
+      lbl.textContent = two ? 'ПТО ГВС · II ст.' : 'ПТО ГВС';
+      lbl.setAttribute('y', two ? '574' : '740');
+      $('dhwSecTitle').textContent = two ? 'Контур ГВС (2-ступ.)' : 'Контур ГВС (1-ступ.)';
+      $('dhwSecInfo').dataset.info = two ? 'dhw2stage' : 'dhwHex';
+    }
     const locked = cfgLocked();
     $('configPanel').hidden = !!locked;
     cfgBtns.forEach(b => b.classList.toggle('is-active', cfg[b.dataset.cfg] === b.dataset.val));
     $('configNote').textContent = CFG_NOTE[cfg.makeupType] + (cfg.network === 'low' ? ' Сейчас напор сети понижен: P2 = 2.5 бар — ниже статики дома.' : '') +
-      (dhw ? ' ГВС: ПТО ГВС подключен к сети параллельно отоплению, регулятор держит T3 = 62 °C.' : '');
+      (two ? ' ГВС: I ступень греет холодную воду обраткой (после системы отопления и II ступени), II ступень догревает от подачи T1 до 62 °C.'
+        : dhw ? ' ГВС: ПТО ГВС подключен к сети параллельно системе отопления, регулятор держит T3 = 62 °C.' : '');
   }
   cfgBtns.forEach(b => b.addEventListener('click', () => {
     if (b.disabled || cfgLocked()) return;
     const key = b.dataset.cfg, val = b.dataset.val;
     if (sim.config[key] === val) return;
     P.setConfig(sim, { [key]: val });
-    const names = { direct: 'безнасосная подпитка', pumped: 'насосная станция подпитки Нп + РД', normal: 'штатный напор сети 6.5 / 4.5 бар', low: 'пониженный напор сети 4.5 / 2.5 бар', none: 'без ГВС', '1stage': 'ГВС по одноступенчатой параллельной схеме' };
+    const names = { direct: 'безнасосная подпитка', pumped: 'насосная станция подпитки Нп + РД', normal: 'штатный напор сети 6.5 / 4.5 бар', low: 'пониженный напор сети 4.5 / 2.5 бар', none: 'без ГВС', '1stage': 'ГВС по одноступенчатой параллельной схеме', '2stage': 'ГВС по двухступенчатой смешанной схеме' };
     log(`Конфигурация: ${names[val] || val}`, 'op');
     syncControlsUI();
     renderConfig();
@@ -715,10 +764,11 @@
     // Приборы
     const states = {};
     for (const key in tagEls) {
-      const t = tagEls[key];
       states[key] = tagState(key, o);
-      t.el.textContent = fmt(o[key], t.digits) + ' ' + t.unit;
-      t.el.setAttribute('class', 'tag-val ' + states[key]);
+      tagEls[key].forEach(t => {
+        t.el.textContent = fmt(o[key], t.digits) + ' ' + t.unit;
+        t.el.setAttribute('class', 'tag-val ' + states[key]);
+      });
     }
     // рамка шильдика подсвечивается по худшему параметру
     tagFrames.forEach(({ frame, keys }) => {
@@ -747,21 +797,21 @@
     $('pipeP1a').style.stroke = tempColor(o.T1);
     fillPipe('pipeP1b', 1, secT);
     fillPipe('pipeP1c', 3, secT);
-    fillPipe('pipeP2a', 4, o.T2);
+    fillPipe('pipeP2a', 4, o.dhwOn ? o.T2_co : o.T2);
     $('pipeP2b').style.stroke = tempColor(o.T2);
     $('pipeNetDr').style.stroke = c.NET_DRAIN ? '#D97706' : '#94A3B8';
     $('pipeVent').style.stroke = c.NET_VENT ? '#0284C7' : '#94A3B8';
     $('pipeS1').style.stroke = tempColor(o.T11);
     $('pipeS2').style.stroke = tempColor(o.T21);
-    $('pipeMk').style.stroke = tempColor(o.T2);
+    $('pipeMk').style.stroke = tempColor(o.dhwOn ? o.T2_co : o.T2);
 
     // Каналы ПТО: сеть сверху (T1) вниз (T2), дом снизу (T21) вверх (T11)
     $('gpTop').setAttribute('stop-color', o.fill[3] < 0.2 ? EMPTY : tempColor(secT));
-    $('gpBot').setAttribute('stop-color', o.fill[4] < 0.2 ? EMPTY : tempColor(o.T2));
+    $('gpBot').setAttribute('stop-color', o.fill[4] < 0.2 ? EMPTY : tempColor(o.T2_co));
     $('gsTop').setAttribute('stop-color', tempColor(o.T11));
     $('gsBot').setAttribute('stop-color', tempColor(o.T21));
     $('hexPrimTop').style.stroke = o.fill[3] < 0.2 ? EMPTY : tempColor(secT);
-    $('hexPrimBot').style.stroke = o.fill[4] < 0.2 ? EMPTY : tempColor(o.T2);
+    $('hexPrimBot').style.stroke = o.fill[4] < 0.2 ? EMPTY : tempColor(o.T2_co);
     $('hexSecTop').style.stroke = tempColor(o.T11);
     $('hexSecBot').style.stroke = tempColor(o.T21);
 
@@ -818,9 +868,9 @@
     $('pipeH2').style.stroke = tempColor(o.T21);
     setFlow('flowH2', o.p2Running && o.G2 > 0 ? o.G2 : 0, 4);
 
-    // ГВС (одноступенчатая схема)
+    // ГВС (1- и 2-ступенчатая схема)
     if (o.dhwOn) {
-      $('txtQdhw').textContent = Math.round(o.Q_dhw);
+      $('txtQdhw').textContent = Math.round(o.Q_dhw_stage2);
       $('txtDhwKzr').textContent = Math.round(o.DHW_KZR) + '%';
       const dm = $('dhwKzrMode');
       dm.textContent = c.DHW_KZR_AUTO ? 'A' : 'Р';
@@ -840,6 +890,25 @@
       setFlow('flowDhwT3', o.G_dhw_total, 6);
       setFlow('flowDhwT4', o.G_circ, 10);
       setFlow('flowDhwB1', o.G_draw, 8);
+      if (o.dhw2) {
+        $('txtQst1').textContent = Math.round(o.Q_dhw_stage1);
+        setValve('vB1b', c.DHW_B1_VALVE ? 100 : 0);
+        const f4 = o.fill[4] < 0.2;
+        $('pipeDhwR2').style.stroke = tempColor(o.T2_dhw);
+        $('pipeSt1In').style.stroke = f4 ? EMPTY : tempColor(o.T2_mix);
+        $('pipeSt1Out').style.stroke = f4 ? EMPTY : tempColor(o.T2);
+        $('pipeDhwB1b').style.stroke = tempColor(o.T_B1);
+        $('pipeDhwMid').style.stroke = tempColor(o.T_dhw_mid);
+        $('pipeDhwMix').style.stroke = tempColor(o.T_dhw_in);
+        setFlow('flowDhwR2', o.G1_dhw, 6);
+        setFlow('flowSt1In', o.G1_total, 4);
+        setFlow('flowSt1Out', o.G1_total, 4);
+        setFlow('flowSt1HexP', o.G1_total, 4);
+        setFlow('flowSt1HexS', o.G_draw, 8);
+        setFlow('flowDhwB1b', o.G_draw, 8);
+        setFlow('flowDhwMid', o.G_draw, 8);
+        setFlow('flowDhwMix', o.G_dhw_total, 6);
+      }
       const pr = $('dhwPumpBody');
       $('dhwPumpRotor').classList.toggle('spin', c.DHW_PUMP);
       pr.setAttribute('fill', c.DHW_PUMP ? '#DCFCE7' : '#F1F5F9');
@@ -852,6 +921,15 @@
       }
       $('dhwKzrPos').textContent = `положение ${Math.round(o.DHW_KZR)} %` + (c.DHW_KZR_AUTO ? ' · регулятор' : ' · вручную');
       $('dhwStatus').textContent = `T3 ${fmt(o.T3, 1)} °C · T4 ${fmt(o.T4, 1)} °C · Q ${Math.round(o.Q_dhw)} кВт · G1 ГВС ${fmt(o.G1_dhw, 2)} т/ч`;
+      // Энергобаланс узла ГВС: откуда берется мощность и что уходит в сеть
+      const qTot = Math.round(o.Q_dhw), q1 = Math.round(o.Q_dhw_stage1), q2 = Math.round(o.Q_dhw_stage2);
+      const share = o.dhw2
+        ? `I ст. от обратки: <b>${q1} кВт</b> + II ст. от подачи: <b>${q2} кВт</b>`
+        : `<b>100%</b> от подачи сети T1`;
+      $('dhwEnergy').innerHTML =
+        `<div>Мощность ГВС: <b>${qTot} кВт</b> (${share})</div>` +
+        `<div>Суммарный расход сети: <b>${fmt(o.G1_total, 2)} т/ч</b></div>` +
+        `<div>Обратка T2 в сеть: <b>${fmt(o.T2, 1)} °C</b></div>`;
     }
 
     // Станция подпитки Нп + РД
@@ -898,7 +976,12 @@
       ...(o.dhwOn ? [
         ['Сеть: отопл. + ГВС = всего', fmt(o.G1, 1) + ' + ' + fmt(o.G1_dhw, 1) + ' = ' + fmt(o.G1_total, 1) + ' т/ч'],
         ['ГВС: Q / T3 / T4', Math.round(o.Q_dhw) + ' кВт · ' + fmt(o.T3, 1) + ' / ' + fmt(o.T4, 1) + ' °C'],
-        ['T2: отопл. / ГВС / общая', fmt(o.T2_co, 1) + ' / ' + fmt(o.T2_dhw, 1) + ' / ' + fmt(o.T2, 1) + ' °C']
+        ...(o.dhw2 ? [
+          ['ГВС: Q I ст. + Q II ст.', Math.round(o.Q_dhw_stage1) + ' + ' + Math.round(o.Q_dhw_stage2) + ' кВт · T меж ' + fmt(o.T_dhw_mid, 1) + ' °C'],
+          ['T2: отопл. / II ст. / до I ст. / в сеть', fmt(o.T2_co, 1) + ' / ' + fmt(o.T2_dhw, 1) + ' / ' + fmt(o.T2_mix, 1) + ' / ' + fmt(o.T2, 1) + ' °C']
+        ] : [
+          ['T2: отопл. / ГВС / общая', fmt(o.T2_co, 1) + ' / ' + fmt(o.T2_dhw, 1) + ' / ' + fmt(o.T2, 1) + ' °C']
+        ])
       ] : []),
       ['На улице / в квартирах', fmt(o.T_out, 0) + ' / ' + fmt(o.T_room, 1) + ' °C'],
       ['T11 по графику', fmt(o.T11_target, 1) + ' °C (T2 ≤ ' + fmt(o.T2_max, 1) + ')'],
