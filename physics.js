@@ -79,6 +79,24 @@
     MP_DRY_TRIP_S: 2.0,    // с, защита отключает Нп после сухого хода
     MP_FLOW_K: 0.12,       // производительность Нп относительно безнасосной подпитки (небольшой насос, ~1 м3/ч)
     MP_SUCTION_DRAW: 0.15, // бар/с — работающий Нп откачивает отсеченный участок до V2
+    // ГВС, одноступенчатая параллельная схема
+    DHW_KVS: 10,           // Kvs клапана КЗР ГВС
+    DHW_HEX_KV: 18,        // Kv ПТО ГВС по сетевой стороне
+    DHW_EFF: 0.85,         // эффективность ПТО ГВС
+    T3_SET: 62.0,          // °C, уставка регулятора ГВС
+    DHW_KZR_RATE: 8.0,     // %/с, скорость привода КЗР ГВС
+    DHW_KP: 4.0,           // %/°C, пропорциональная часть регулятора ГВС
+    DHW_KI: 0.6,           // %/(°C·с), интегральная часть
+    G_CIRC: 1.8,           // т/ч, циркуляция ГВС (насос Нц)
+    T_B1: 5.0,             // °C, холодная вода
+    P_B1: 4.0,             // бар, давление в водопроводе
+    CIRC_DT: 8.0,          // °C, остывание в стояках и полотенцесушителях
+    TAU_DHW: 2.0,          // с, инерция ПТО ГВС
+    TAU_DRAW: 10.0,        // с, водоразбор жильцов меняется плавно (краны открывают и закрывают постепенно)
+    TAU_T4: 6.0,           // с, инерция циркуляционной линии
+    TAU_T4_COOL: 12.0,     // с, остывание стоящей циркуляции
+    DHW_SCALD: 75.0,       // °C, выше — опасность ожога (верхняя граница СанПиН)
+    DHW_LOW: 55.0,         // °C, ниже — недогрев
     HOUSE_FILL_K: 0.03,    // заполнение дома: доля объема на 1 бар/с подпитки
 
     // Нормативы
@@ -174,6 +192,11 @@
       MAKEUP: 0,
       MAKEUP_AUTO: false,    // насосная подпитка: автоматика по реле давления РД
       MAKEUP_PUMP: false,    // насосная подпитка: ручной пуск Нп (когда РД не в автомате)
+      DHW_KZR_AUTO: true,    // ГВС: регулятор температуры T3 (уставка 62 °C)
+      DHW_KZRcmd: 25,        // ГВС: задание КЗР ГВС, %
+      DHW_PUMP: true,        // ГВС: циркуляционный насос Нц
+      DHW_B1_VALVE: true,    // ГВС: вводной кран холодной воды В1
+      DHW_DRAW: 1.5,         // ГВС: водоразбор жильцов, т/ч
       DRAIN: false,
       NET_DRAIN: false,      // дренаж сетевого участка (нижняя точка, перед V2)
       NET_VENT: false,       // воздушник сетевого участка (верхняя точка, вход ПТО)
@@ -257,7 +280,8 @@
       fill: [1, 1, 1, 1, 1, 1],
       strainerAlarmUntil: -1,
       reliefOpen: false,
-      mpRunning: false, mpDryTime: 0, mpTrip: false
+      mpRunning: false, mpDryTime: 0, mpTrip: false,
+      DHW_KZR: 25, T3: C.T3_SET, T4: C.T3_SET - C.CIRC_DT - 1, T2_dhw: 35.0, dhwEprev: 0, G_draw: 1.5
     };
     applyConfig(sim);
     settle(sim, 180);
@@ -280,7 +304,7 @@
   // ---------------------------------------------------------------------------
   // Первичный (сетевой) контур
   // ---------------------------------------------------------------------------
-  function solvePrimary(c, s, dt, env) {
+  function solvePrimary(c, s, dt, env, dhwKv) {
     const P1 = env.P1, P2 = env.P2;
     const kv = [
       kvOf(c.V1, C.KVS_V1),
@@ -304,6 +328,15 @@
       else { segs.push(cur); cur = [i + 1]; }
     }
     segs.push(cur);
+    // Ветка ГВС соединяет узел 2 (после грязевика) и узел 4 (перед V2) параллельно КЗР + ПТО отопления
+    if (dhwKv > 0) {
+      const a = segs.findIndex(g => g.includes(2)), b = segs.findIndex(g => g.includes(4));
+      if (a !== b) {
+        const merged = segs[a].concat(segs[b]).sort((x, y) => x - y);
+        segs.splice(Math.max(a, b), 1);
+        segs.splice(Math.min(a, b), 1, merged);
+      }
+    }
 
     let allFull = true;
     let drainLeak = false;   // дренаж открыт на участке, соединенном с теплосетью
@@ -366,7 +399,26 @@
 
     let G1 = 0;
     let kvEq = 0;
-    if (open.every(Boolean) && allFull) {
+    let G1_dhw = 0;
+    if (dhwKv > 0) {
+      // Две параллельные ветки между узлами 2 и 4: отопление (КЗР + ПТО) и ГВС (КЗР ГВС + ПТО ГВС).
+      // Через V1, грязевик и V2 идет их суммарный расход.
+      const kvCo = open[2] ? 1 / Math.sqrt(1 / (kv[2] * kv[2]) + 1 / (kv[3] * kv[3])) : 0;
+      const kvPar = kvCo + dhwKv;
+      if (open[0] && open[1] && open[4] && allFull) {
+        const inv = 1 / (kv[0] * kv[0]) + 1 / (kv[1] * kv[1]) + 1 / (kvPar * kvPar) + 1 / (kv[4] * kv[4]);
+        kvEq = 1 / Math.sqrt(inv);
+        const Gt = kvEq * Math.sqrt(Math.max(0, P1 - P2));
+        const dPpar = (Gt / kvPar) ** 2;
+        G1 = kvCo * Math.sqrt(dPpar);
+        G1_dhw = dhwKv * Math.sqrt(dPpar);
+        nodes[1] = P1 - (Gt / kv[0]) ** 2;
+        nodes[2] = nodes[1] - (Gt / kv[1]) ** 2;
+        nodes[4] = nodes[2] - dPpar;
+        nodes[3] = G1 > 0 ? nodes[2] - (G1 / kv[2]) ** 2 : nodes[4];
+        nodes[NODE_COUNT - 1] = P2;
+      }
+    } else if (open.every(Boolean) && allFull) {
       // Последовательная цепь: 1/Kv_eq² = Σ 1/Kv_i²
       const inv = kv.reduce((a, k) => a + 1 / (k * k), 0);
       kvEq = 1 / Math.sqrt(inv);
@@ -382,7 +434,7 @@
 
     const P_hex_net = G1 > 0 ? (nodes[3] + nodes[4]) / 2 : nodes[3];
     return {
-      kv, kvEq, G1, nodes, P_after_strainer: nodes[2], P_hex_net,
+      kv, kvEq, G1, G1_dhw, nodes, P_after_strainer: nodes[2], P_hex_net,
       segs: segInfo, drainLeak, ventSpray, netDrainFlow, netVentFlow, v1Leak
     };
   }
@@ -437,8 +489,25 @@
       c.KZR = Math.abs(d) <= rate ? c.KZRcmd : c.KZR + Math.sign(d) * rate;
     }
 
+    // ГВС (одноступенчатая параллельная схема): регулятор T3 и привод КЗР ГВС
+    const dhwOn = !!(sim.config && sim.config.dhwScheme === '1stage');
+    let dhwKv = 0;
+    if (dhwOn) {
+      if (c.DHW_KZR_AUTO) {
+        // ПИ-регулятор в скоростной форме: открывает при T3 < 62 °C, прикрывает при T3 > 62 °C
+        const e = C.T3_SET - s.T3;
+        c.DHW_KZRcmd = Math.min(100, Math.max(0, c.DHW_KZRcmd + C.DHW_KP * (e - s.dhwEprev) + C.DHW_KI * e * dt));
+        s.dhwEprev = e;
+      } else s.dhwEprev = C.T3_SET - s.T3;
+      const rate = C.DHW_KZR_RATE * dt;
+      const d = c.DHW_KZRcmd - s.DHW_KZR;
+      s.DHW_KZR = Math.abs(d) <= rate ? c.DHW_KZRcmd : s.DHW_KZR + Math.sign(d) * rate;
+      const kvK = kvOf(s.DHW_KZR, C.DHW_KVS);
+      dhwKv = kvK > 0 ? 1 / Math.sqrt(1 / (kvK * kvK) + 1 / (C.DHW_HEX_KV * C.DHW_HEX_KV)) : 0;
+    }
+
     // 1. Сетевой контур
-    const prim = solvePrimary(c, s, dt, env);
+    const prim = solvePrimary(c, s, dt, env, dhwKv);
     s.nodes = prim.nodes;
     const G1 = prim.G1;
 
@@ -617,6 +686,40 @@
     s.T11 += (dt / C.TAU_T) * (T11eq - s.T11);
     s.T2 += (dt / C.TAU_T) * (T2eq - s.T2);
 
+    // ПТО ГВС: вторичный контур — холодная вода В1 (водоразбор) + циркуляция T4 (насос Нц)
+    const G1_dhw = prim.G1_dhw || 0;
+    let G_draw = 0, G_circ = 0, G_dhw_sec = 0, Q_dhw = 0, T_dhw_in = 20;
+    if (dhwOn) {
+      const drawTarget = c.DHW_B1_VALVE ? Math.max(0, c.DHW_DRAW) : 0;
+      s.G_draw += (dt / C.TAU_DRAW) * (drawTarget - s.G_draw);
+      if (drawTarget === 0 && s.G_draw < 0.02) s.G_draw = 0;
+      G_draw = s.G_draw;
+      G_circ = c.DHW_PUMP ? C.G_CIRC : 0;
+      G_dhw_sec = G_draw + G_circ;
+      if (G_dhw_sec > 0) T_dhw_in = (G_draw * C.T_B1 + G_circ * s.T4) / G_dhw_sec;
+      const W1d = G1_dhw * C.C_WATER, W2d = G_dhw_sec * C.C_WATER;
+      let T3eq, T2deq, tau3 = C.TAU_DHW;
+      if (G1_dhw > 0 && G_dhw_sec > 0) {
+        Q_dhw = C.DHW_EFF * Math.min(W1d, W2d) * Math.max(0, T1 - T_dhw_in);
+        T3eq = T_dhw_in + Q_dhw / W2d;
+        T2deq = T1 - Q_dhw / W1d;
+      } else if (G1_dhw > 0) {
+        // разбора и циркуляции нет — стоячая вода в ПТО ГВС перегревается к T1;
+        // скорость нагрева пропорциональна расходу греющей воды (при большом расходе — за секунды)
+        T3eq = T1; T2deq = T1 - 1;
+        tau3 = C.TAU_DHW * Math.min(30, Math.max(1, 4 / G1_dhw));
+      } else if (G_dhw_sec > 0) {
+        T3eq = T_dhw_in; T2deq = C.T_STAGNANT;   // греющей воды нет — через ПТО идет ненагретая вода
+      } else {
+        T3eq = 20; T2deq = C.T_STAGNANT;          // все стоит — вода в ПТО ГВС медленно остывает
+        tau3 = 60;
+      }
+      s.T3 += (dt / tau3) * (T3eq - s.T3);
+      s.T2_dhw += (dt / C.TAU_DHW) * (T2deq - s.T2_dhw);
+      if (G_circ > 0) s.T4 += (dt / C.TAU_T4) * (Math.max(20, s.T3 - C.CIRC_DT) - s.T4);
+      else s.T4 += (dt / C.TAU_T4_COOL) * (22 - s.T4);
+    }
+
     // Радиаторы и здание. Теплоотдача радиаторов Q_rad = K·(Tср − Tвн)^1.3;
     // при завоздушивании верхние этажи греют хуже.
     const airFactor = topFloorDry ? 0.6 : (P_top < C.TOP_FLOOR_MIN_P ? 0.85 : 1);
@@ -657,7 +760,8 @@
       floodFlow, floodTime: s.floodTime, houseDrainFlow, houseFilling, v1Leak: prim.v1Leak,
       kzrFail: env.kzrFail, KZRcmd: c.KZRcmd,
       cavTime: s.cavTime, noCircTime: s.noCircTime, dryTopTime: s.dryTopTime,
-      T2: s.T2, T11: s.T11, T21: s.T21,
+      T2: (dhwOn && G1 + G1_dhw > 0) ? (G1 * s.T2 + G1_dhw * s.T2_dhw) / (G1 + G1_dhw) : s.T2,
+      T2_co: s.T2, T11: s.T11, T21: s.T21,
       G1, G2, W1, W2, Q,
       kv: prim.kv, kvEq: prim.kvEq,
       nodes: s.nodes.slice(),
@@ -675,6 +779,8 @@
       pumpRunning, cavitation,
       reliefOpen: s.reliefOpen,
       makeupFlow, drainFlow, reliefFlow,
+      dhwOn, G1_dhw, G1_total: G1 + G1_dhw, G_draw, G_circ, G_dhw_total: G_dhw_sec, Q_dhw, T_dhw_in,
+      T3: s.T3, T4: s.T4, T2_dhw: s.T2_dhw, DHW_KZR: s.DHW_KZR, P_B1: C.P_B1, T_B1: C.T_B1,
       makeupType: cfg.makeupType, mpRunning: s.mpRunning, mpDryTime: s.mpDryTime, mpTrip: !!s.mpTrip,
       P_makeup_avail, P_node4: s.nodes[4],
     };
@@ -816,6 +922,32 @@
         text: o.houseFilling ? (c.HOUSE_VENT ? 'Воздух выходит через воздушники верхнего этажа.' : 'Без открытых воздушников воздух не выйдет — заполнится только 90 %.') : 'В стояках нет воды. Циркуляция невозможна.',
         detail: `Заполнение ${Math.round(o.houseFill * 100)} %, P внизу дома ${f2(o.P_house)} бар`
       });
+    }
+    if (o.dhwOn) {
+      if (o.T3 > C.DHW_SCALD) {
+        list.push({
+          id: 'dhw_scald', level: 'alarm',
+          title: 'ОПАСНОСТЬ ОЖОГА: Перегрев ГВС (T3 > 75 °C)!',
+          text: 'Температура горячей воды в кранах жильцов критически завышена! Прикройте КЗР ГВС или переведите регулятор ГВС в режим АВТО.',
+          detail: `T3 = ${f1(o.T3)} °C, КЗР ГВС ${Math.round(o.DHW_KZR)} %, водоразбор ${f1(o.G_draw)} т/ч`
+        });
+      }
+      if (c.DHW_B1_VALVE && o.T3 < C.DHW_LOW) {
+        list.push({
+          id: 'dhw_low_temp', level: 'warn',
+          title: 'Нарушение СанПиН: Недогрев ГВС (T3 < 55 °C)',
+          text: 'Вода в системе ГВС ниже норматива (в местах водоразбора — не ниже 60 °C). Увеличьте подачу теплоносителя через КЗР ГВС или проверьте перепад давления в сети.',
+          detail: `T3 = ${f1(o.T3)} °C, КЗР ГВС ${Math.round(o.DHW_KZR)} %, G1 ГВС ${f2(o.G1_dhw)} т/ч`
+        });
+      }
+      if (!c.DHW_PUMP && c.DHW_DRAW < 0.2) {
+        list.push({
+          id: 'dhw_no_circ', level: 'warn',
+          title: 'Остановлена циркуляция ГВС (насос Нц выключен)',
+          text: 'В отсутствие водоразбора стояки ГВС и полотенцесушители в доме остывают (T4 падает), а из кранов пойдет остывшая вода.',
+          detail: `T4 = ${f1(o.T4)} °C`
+        });
+      }
     }
     if (o.makeupType === 'pumped' && o.mpRunning && (o.nodes[4] < C.MP_MIN_SUCTION || o.fill[4] <= 0.1) && o.mpDryTime > C.MP_DRY_TRIP_S) {
       list.push({

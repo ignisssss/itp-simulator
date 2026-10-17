@@ -260,9 +260,10 @@
       <span class="cfg-label">Контур ГВС</span>
       <div class="seg-group" role="group" aria-label="Схема ГВС">
         <button class="seg-btn" data-cfg="dhwScheme" data-val="none">Без ГВС</button>
-        <button class="seg-btn" data-cfg="dhwScheme" data-val="1stage" disabled title="Будет добавлено на Этапах 2 и 3">1-ступ. (скоро)</button>
-        <button class="seg-btn" data-cfg="dhwScheme" data-val="2stage" disabled title="Будет добавлено на Этапах 2 и 3">2-ступ. (скоро)</button>
+        <button class="seg-btn" data-cfg="dhwScheme" data-val="1stage" title="Одноступенчатая параллельная схема">1-ступ.</button>
+        <button class="seg-btn" data-cfg="dhwScheme" data-val="2stage" disabled title="Будет добавлено на Этапе 3">2-ступ. (скоро)</button>
       </div>
+      <button class="qbtn" data-info="dhwHex">?</button>
     </div>
     <div class="flex items-center gap-2 flex-wrap">
       <span class="cfg-label">Напор сети</span>
@@ -357,10 +358,10 @@
             </linearGradient>
           </defs>
           <!-- Лист чертежа: фон, сетка, рамка -->
-          <rect width="1000" height="520" fill="#FAFBFD"/>
-          <rect width="1000" height="520" fill="url(#gridMajor)"/>
-          <rect x="3" y="3" width="994" height="514" fill="none" stroke="#94A3B8" stroke-width="1"/>
-          <rect x="6" y="6" width="988" height="508" fill="none" stroke="#CBD5E1" stroke-width="0.6"/>
+          <rect width="1000" height="760" fill="#FAFBFD"/>
+          <rect width="1000" height="760" fill="url(#gridMajor)"/>
+          <rect id="sheetFrameA" x="3" y="3" width="994" height="514" fill="none" stroke="#94A3B8" stroke-width="1"/>
+          <rect id="sheetFrameB" x="6" y="6" width="988" height="508" fill="none" stroke="#CBD5E1" stroke-width="0.6"/>
 
           <!-- Зоны -->
           <text x="20" y="510" class="lbl-s" style="letter-spacing:.06em">ПЕРВИЧНЫЙ КОНТУР (ТЕПЛОСЕТЬ)</text>
@@ -611,6 +612,87 @@
             <text x="420" y="50" class="lbl-s">Возд.</text>
           </g>
 
+
+          <!-- ========== ГВС: одноступенчатая параллельная схема (нижняя зона листа, y = 520…760) ========== -->
+          <g id="svgDhw1StageGroup" hidden>
+            <line x1="10" y1="528" x2="990" y2="528" stroke="#94A3B8" stroke-width="0.8" stroke-dasharray="6 4"/>
+            <text x="20" y="546" class="lbl-s" style="letter-spacing:.06em;fill:#334155;font-weight:600">КОНТУР ГВС</text>
+            <text x="20" y="559" class="lbl-s" style="letter-spacing:.04em">1-ступ. параллельная схема</text>
+
+            <!-- Сетевая ветка ГВС: врезка после грязевика → КЗР ГВС → ПТО ГВС → в обратку перед V2 -->
+            <path id="pipeDhwS" class="pipe" style="stroke-width:6" d="M310 90 V380 H270 V422 A8 8 0 0 1 270 438 V600 H420"/>
+            <path id="pipeDhwR" class="pipe" style="stroke-width:6" d="M420 700 H252 V430"/>
+            <path id="flowDhwS" class="flow" style="stroke-width:2" d="M310 90 V380 H270 V422 A8 8 0 0 1 270 438 V600 H420"/>
+            <path id="flowDhwR" class="flow" style="stroke-width:2" d="M420 700 H252 V430"/>
+            <circle cx="310" cy="90" r="4" fill="#334155"/>
+            <circle cx="252" cy="430" r="4" fill="#334155"/>
+
+            <!-- КЗР ГВС -->
+            <g class="node" data-info="dhwKzr">
+              <rect class="hl" x="318" y="548" width="72" height="64" rx="3"/>
+              <line x1="340" y1="600" x2="340" y2="578" class="eq-line" stroke-width="1.8"/>
+              <rect x="328" y="560" width="24" height="18" rx="2" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1.4"/>
+              <text id="dhwKzrMode" x="340" y="573" text-anchor="middle" style="fill:#0F172A;font-size:10px;font-weight:700;font-family:var(--mono)">A</text>
+              <path id="vDhwKzr" class="valve-body valve-part" d="M327 591 L353 609 L353 591 L327 609 Z"/>
+              <text x="340" y="556" text-anchor="middle" class="lbl" style="font-size:10.5px">КЗР ГВС</text>
+              <text id="txtDhwKzr" x="358" y="574" class="tag-val" style="font-size:11px">25%</text>
+            </g>
+
+            <!-- ПТО ГВС -->
+            <g class="node" data-info="dhwHex">
+              <rect class="hl" x="414" y="574" width="112" height="152" rx="4"/>
+              <rect x="420" y="580" width="100" height="140" rx="3" fill="#F1F5F9" stroke="#1E293B" stroke-width="1.8"/>
+              <rect x="420" y="580" width="100" height="10" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/>
+              <rect x="420" y="710" width="100" height="10" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/>
+              <g stroke="#94A3B8" stroke-width="1.1"><line x1="440" y1="594" x2="440" y2="706"/><line x1="450" y1="594" x2="450" y2="706"/><line x1="490" y1="594" x2="490" y2="706"/><line x1="500" y1="594" x2="500" y2="706"/></g>
+              <path id="flowDhwHexP" class="flow thin" d="M430 600 V700"/>
+              <path id="flowDhwHexS" class="flow thin" d="M510 700 V600"/>
+              <rect x="452" y="622" width="36" height="56" rx="2" fill="#FFFFFF" stroke="#334155" stroke-width="1"/>
+              <rect x="452" y="622" width="36" height="11" fill="#334155"/>
+              <text x="470" y="630.5" text-anchor="middle" class="tag-head" style="font-size:7px">Q ГВС</text>
+              <text id="txtQdhw" x="470" y="656" text-anchor="middle" class="tag-val" style="font-size:13px">0</text>
+              <text x="470" y="670" text-anchor="middle" class="tag-name">кВт</text>
+              <text x="470" y="740" text-anchor="middle" class="lbl" style="font-size:10px;letter-spacing:.06em">ПТО ГВС</text>
+            </g>
+
+            <!-- Водопроводная сторона: В1 (ХВС) + циркуляция T4 → ПТО ГВС → T3 в дом -->
+            <path id="pipeDhwT3" class="pipe" style="stroke-width:6" d="M520 600 H940"/>
+            <path id="pipeDhwT4" class="pipe" style="stroke-width:5" d="M940 650 H620 V700"/>
+            <path id="pipeDhwB1" class="pipe" style="stroke-width:6" d="M940 700 H520"/>
+            <path id="flowDhwT3" class="flow" style="stroke-width:2" d="M520 600 H940"/>
+            <path id="flowDhwT4" class="flow" style="stroke-width:2" d="M940 650 H620 V700"/>
+            <path id="flowDhwB1" class="flow" style="stroke-width:2" d="M940 700 H520"/>
+            <circle cx="620" cy="700" r="4" fill="#334155"/>
+            <path d="M940 593 L952 600 L940 607 Z" fill="#334155"/>
+            <text x="946" y="590" class="lbl-s" style="fill:#334155">в дом</text>
+            <text x="946" y="645" class="lbl-s">из дома</text>
+            <text x="946" y="695" class="lbl-s">ХВС</text>
+
+            <!-- Насос циркуляции Нц и обратный клапан на линии T4 -->
+            <g class="node" data-info="dhwPump">
+              <rect class="hl" x="720" y="626" width="40" height="40" rx="3"/>
+              <circle id="dhwPumpBody" cx="740" cy="650" r="11" fill="#DCFCE7" stroke="#16A34A" stroke-width="1.8"/>
+              <g id="dhwPumpRotor">
+                <path d="M740 650 L740 642 M740 650 L747 654 M740 650 L733 654" stroke="#1E293B" stroke-width="1.8" stroke-linecap="round"/>
+              </g>
+              <text x="740" y="634" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Нц</text>
+            </g>
+            <g transform="translate(680 650)">
+              <path d="M7 -6 L-7 0 L7 6 Z" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.3"/>
+              <line x1="-7" y1="-6" x2="-7" y2="6" stroke="#1E293B" stroke-width="1.8"/>
+            </g>
+
+            <!-- Вводной кран ХВС В1 -->
+            <g class="node" data-info="dhwHex">
+              <rect class="hl" x="882" y="672" width="36" height="40" rx="3"/>
+              <path id="vB1" class="valve-body valve-open" d="M887 691 L913 709 L913 691 L887 709 Z"/>
+              <text x="900" y="684" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">В1</text>
+            </g>
+
+            <!-- Шильдики ГВС (строятся из app.js) -->
+            <g id="dhwTags"></g>
+          </g>
+
           <!-- Показания приборов КИПиА (шильдики) добавляются из app.js -->
           <g id="tags"></g>
           <!-- Подсветка шага урока -->
@@ -794,6 +876,47 @@
                 <button class="qbtn" data-info="drain">?</button>
                 <button id="drainBtn" data-toggle="DRAIN" data-on="ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Дренаж ИТП" class="tbtn ml-auto w-32"></button>
               </div>
+            </div>
+          </section>
+
+          <!-- 4. Контур ГВС (только при одноступенчатой схеме) -->
+          <section id="dhwControls" hidden>
+            <div class="sec-h"><span class="num">04</span>Контур ГВС (1-ступ.)<button class="qbtn ml-auto" data-info="dhwHex">?</button></div>
+            <div class="flex flex-col gap-3">
+              <div class="ctl" data-ctl="DHW_DRAW" data-unit="т/ч" data-digits="1">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-sm font-semibold mono">G гвс</span>
+                  <span class="text-xs muted">Водоразбор жильцами</span>
+                  <span class="mono text-sm w-16 text-right ml-auto" data-val>1.5 т/ч</span>
+                </div>
+                <input type="range" min="0" max="6" step="0.1" value="1.5" aria-label="Водоразбор горячей воды, т/ч">
+                <div class="grid grid-cols-3 gap-1.5 mt-2">
+                  <button class="btn btn-sm" data-draw="0">Ночь · 0</button>
+                  <button class="btn btn-sm" data-draw="1.5">День · 1.5</button>
+                  <button class="btn btn-sm" data-draw="5.5">Пик · 5.5</button>
+                </div>
+              </div>
+
+              <div class="ctl" data-ctl="DHW_KZRcmd">
+                <div class="flex items-center gap-2 mb-1.5">
+                  <span class="text-sm font-semibold mono">КЗР ГВС</span>
+                  <button class="qbtn" data-info="dhwKzr">?</button>
+                  <span class="mono text-sm w-12 text-right ml-auto" data-val>25%</span>
+                </div>
+                <input type="range" min="0" max="100" step="1" value="25" aria-label="Задание КЗР ГВС">
+                <div class="flex items-center gap-2 mt-2">
+                  <span id="dhwKzrPos" class="mono text-[10.5px] faint"></span>
+                  <button id="dhwAutoBtn" data-toggle="DHW_KZR_AUTO" data-on="АВТО 62 °C" data-off="РУЧНОЙ" data-tone="blue" data-label="Регулятор ГВС" class="tbtn ml-auto"></button>
+                </div>
+              </div>
+
+              <div class="grid grid-cols-2 gap-2">
+                <div class="flex flex-col gap-1"><span class="text-[11px] faint flex items-center gap-1">Циркуляция Нц (T4) <button class="qbtn" data-info="dhwPump">?</button></span>
+                  <button id="dhwPumpBtn" data-toggle="DHW_PUMP" data-on="Нц: ВКЛ" data-off="Нц: ВЫКЛ" data-tone="green" data-label="Насос циркуляции ГВС Нц" class="tbtn"></button></div>
+                <div class="flex flex-col gap-1"><span class="text-[11px] faint">Ввод ХВС В1</span>
+                  <button id="dhwB1Btn" data-toggle="DHW_B1_VALVE" data-on="В1: ОТКР" data-off="В1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Ввод ХВС В1" class="tbtn"></button></div>
+              </div>
+              <div id="dhwStatus" class="mono text-[10.5px] faint"></div>
             </div>
           </section>
 

@@ -147,6 +147,42 @@
         <p class="mt-2">Заполняют дом снизу подпиткой через открытый кран обратки, с открытыми воздушниками; когда из них пошла вода — закрывают
         и поднимают давление до ≈ 3.5 бар. Насос пускают только в полностью заполненную систему.</p>`
     },
+    dhwHex: {
+      icon: 'hex', title: 'ГВС: одноступенчатая параллельная схема',
+      body: `<p>Горячая вода для кранов (ГВС) готовится в отдельном пластинчатом <b>ПТО ГВС</b>. Его греющая сторона подключена к теплосети
+        <b>параллельно</b> теплообменнику отопления: сетевая вода после грязевика делится на две ветки — через КЗР отопления и через КЗР ГВС —
+        и после теплообменников снова сливается в общую обратку перед V2.</p>
+        <p class="mt-2">Нагреваемая сторона — водопровод: холодная вода из ввода <b>В1</b> (≈ 5 °C зимой, ≈ 4 бар) вместе с циркуляционной водой
+        <b>T4</b> проходит ПТО ГВС снизу вверх и уходит в дом как горячая вода <b>T3</b>. Пока в доме разбирают воду, через ПТО идет и
+        холодная вода, поэтому нужная мощность сильно зависит от водоразбора: днем ≈ 120 кВт, в утренний пик ≈ 380 кВт.</p>
+        <p class="mt-2"><b>Норматив:</b> температура в местах водоразбора — не ниже 60 °C и не выше 75 °C (СанПиН; ниже 60 °C в воде
+        размножаются бактерии, выше 75 °C — риск ожога). Поэтому на выходе ИТП держат ≈ 60–65 °C, здесь уставка 62 °C.</p>
+        <p class="mt-2"><b>Влияние на ввод.</b> Через V1, грязевик и V2 идет суммарный расход двух веток. В пик водоразбора он растет,
+        растут и потери на вводе — у отопления остается меньше напора (особенно при засоренном грязевике). Обратка ГВС холодная (≈ 30 °C),
+        поэтому общая T2 в теплосеть снижается.</p>
+        <p class="mt-2"><b>Когда так подключают.</b> Выбор схемы зависит от отношения максимальных нагрузок Q<sub>ГВС</sub>/Q<sub>отопл</sub>:
+        при 0.2…1 рекомендуется двухступенчатая схема, при других соотношениях — одноступенчатая (СП 41-101-95, актуальная редакция —
+        СП 510.1325800). У нашего дома ≈ 380/490 ≈ 0.8, поэтому по норме для него лучше двухступенчатая — она будет на Этапе 3.</p>`
+    },
+    dhwKzr: {
+      icon: 'gauge', title: 'КЗР ГВС и регулятор температуры',
+      body: `<p>Клапан на сетевой стороне ПТО ГВС (Kvs = 10) меняет расход греющей воды. <b>Регулятор</b> (буква A на приводе) сравнивает
+        T3 с уставкой 62 °C: вода холоднее — приоткрывает клапан, горячее — прикрывает. Привод ходит со скоростью 8 %/с.</p>
+        <p class="mt-2">Нагрузка ГВС меняется быстро и сильно: ночью клапан почти закрыт (≈ 3 %), днем ≈ 13 %, в утренний пик ≈ 37 %.
+        Ползунок КЗР ГВС в режиме АВТО показывает, как автоматика сама крутит клапан.</p>
+        <p class="mt-2">В <b>ручном режиме</b> положение не подстраивается: если оставить клапан открытым на 60 %, а водоразбор упадет до нуля
+        (ночь), T3 поднимется выше 75 °C — опасность ожога, а горячая обратка ГВС поднимет общую T2.</p>`
+    },
+    dhwPump: {
+      icon: 'pump', title: 'Циркуляция ГВС: насос Нц и линия T4',
+      body: `<p>Если горячую воду никто не разбирает, она стоит в стояках и остывает. Тогда из крана сначала долго течет холодная вода,
+        а в остывающей воде размножаются бактерии. Поэтому горячую воду постоянно гоняют по кольцу: подача T3 → стояки и полотенцесушители
+        → обратно в ИТП по линии <b>T4</b>. Это делает насос циркуляции <b>Нц</b> (здесь 1.8 т/ч); обратный клапан не дает холодной воде
+        уйти в линию циркуляции.</p>
+        <p class="mt-2">В стояках вода теряет ≈ 8 °C (≈ 17 кВт), поэтому даже ночью ПТО ГВС немного греет. Циркуляционная вода T4 смешивается
+        с холодной водой В1 перед ПТО ГВС.</p>
+        <p class="mt-2">Если Нц выключен и разбора нет — T4 падает, в квартирах из кранов идет остывшая вода.</p>`
+    },
     makeupPump: {
       icon: 'pump', title: 'Станция подпитки: насос Нп и реле давления РД',
       body: `<p><b>Почему без насоса не обойтись.</b> Вода из сети идет в дом сама только туда, где давление ниже. Безнасосная подпитка
@@ -245,7 +281,12 @@
     { x: 664, y: 452, w: 88, head: 'ВСАС', m: 'cold', rows: [['P21', 'P21_disp', 'бар', 2]] },
     { x: 736, y: 372, w: 88, head: 'ОБРАТКА ДОМА', m: 'cold', rows: [['T21', 'T21', '°C', 1]] },
     { x: 806, y: 16, w: 120, head: 'ВЫХОД ИТП', m: 'hot', rows: [['P подача', 'P_house_supply', 'бар', 2]] },
-    { x: 694, y: 184, w: 128, head: 'ДОМ', m: 'gen', rows: [['P 9 эт.', 'P_top', 'бар', 2], ['ΔP дома', 'dP_house', 'бар', 2], ['P низ дома', 'P_house', 'бар', 2], ['T кварт.', 'T_room', '°C', 1]] }
+    { x: 694, y: 184, w: 128, head: 'ДОМ', m: 'gen', rows: [['P 9 эт.', 'P_top', 'бар', 2], ['ΔP дома', 'dP_house', 'бар', 2], ['P низ дома', 'P_house', 'бар', 2], ['T кварт.', 'T_room', '°C', 1]] },
+    // ГВС (видны только при одноступенчатой схеме)
+    { g: 'dhwTags', x: 600, y: 542, w: 108, head: 'ПОДАЧА ГВС', m: 'hot', rows: [['T3', 'T3', '°C', 1], ['G гвс', 'G_draw', 'т/ч', 1]] },
+    { g: 'dhwTags', x: 790, y: 656, w: 88, head: 'ЦИРКУЛЯЦИЯ', m: 'cold', rows: [['T4', 'T4', '°C', 1]] },
+    { g: 'dhwTags', x: 110, y: 640, w: 118, head: 'СЕТЬ · ГВС', m: 'gen', rows: [['G1 гвс', 'G1_dhw', 'т/ч', 2], ['T2 гвс', 'T2_dhw', '°C', 1]] },
+    { g: 'dhwTags', x: 760, y: 712, w: 96, head: 'ХВС В1 · 4 бар', m: 'cold', rows: [['T хвс', 'T_B1', '°C', 1]] }
   ];
   const tagEls = {};
   const tagFrames = [];   // { frame, keys }
@@ -258,8 +299,8 @@
   }
 
   (function buildTags() {
-    const g = $('tags');
     TAGS.forEach(t => {
+      const g = $(t.g || 'tags');
       const h = 13 + t.rows.length * 18 + 4;
       const frame = svgEl('rect', { x: t.x, y: t.y, width: t.w, height: h, rx: 1.5, class: 'tag-box' }, g);
       svgEl('rect', { x: t.x + 0.5, y: t.y + 0.5, width: t.w - 1, height: 12, fill: MEDIUM[t.m] }, g);
@@ -294,6 +335,8 @@
       case 'P11': return o.reliefOpen ? 'bad' : '';
       case 'P_top': return o.P_top < C.TOP_FLOOR_MIN_P ? (o.topFloorDry ? 'bad' : 'warn') : '';
       case 'dP_house': return (sim.controls.PUMP && o.dP_house < 0.1) ? 'warn' : '';
+      case 'T3': return o.T3 > C.DHW_SCALD ? 'bad' : (o.T3 < C.DHW_LOW ? 'warn' : '');
+      case 'T4': return (!sim.controls.DHW_PUMP && o.T4 < 45) ? 'warn' : '';
       case 'G1': return (!sim.controls.PUMP && o.G1 > 1) ? 'bad' : '';
       default: return '';
     }
@@ -404,7 +447,7 @@
       const key = row.dataset.ctl;
       const val = sim.controls[key];
       row.querySelector('input').value = val;
-      row.querySelector('[data-val]').textContent = Math.round(val) + '%';
+      row.querySelector('[data-val]').textContent = row.dataset.unit ? Number(val).toFixed(Number(row.dataset.digits || 1)) + ' ' + row.dataset.unit : Math.round(val) + '%';
     });
     renderToggles();
   }
@@ -444,6 +487,11 @@
     sim.controls.KZRcmd = Math.min(100, Math.max(0, sim.controls.KZRcmd + Number(b.dataset.step)));
     syncControlsUI();
   }));
+  document.querySelectorAll('[data-draw]').forEach(b => b.addEventListener('click', () => {
+    sim.controls.DHW_DRAW = Number(b.dataset.draw);
+    log(`Водоразбор ГВС: ${b.textContent.trim()} т/ч`, 'op');
+    syncControlsUI();
+  }));
   $('foulBtn').addEventListener('click', () => {
     sim.controls.strainerFouling = Math.min(90, sim.controls.strainerFouling + 10);
     log(`Инструктор: грязевик засорен до ${Math.round(sim.controls.strainerFouling)} %`, 'op');
@@ -475,19 +523,51 @@
   function cfgLocked() {
     return (window.ITPLessons && window.ITPLessons.active()) || (window.ITPLevels && window.ITPLevels.inLevel());
   }
+  // Высота листа: 520 (только отопление) или 760 (с контуром ГВС), плавно
+  let sheetH = 520, sheetAnim = null;
+  function setSheetHeight(target) {
+    if (sheetAnim && sheetAnim.target === target) return;
+    if (!sheetAnim && sheetH === target) return;
+    const from = sheetH, t0 = performance.now(), dur = 450;
+    const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    sheetAnim = { target };
+    const stepH = now => {
+      const k = reduce ? 1 : Math.min(1, (now - t0) / dur);
+      sheetH = from + (target - from) * (1 - Math.pow(1 - k, 3));
+      $('scheme').setAttribute('viewBox', `0 0 1000 ${sheetH.toFixed(1)}`);
+      $('sheetFrameA').setAttribute('height', (sheetH - 6).toFixed(1));
+      $('sheetFrameB').setAttribute('height', (sheetH - 12).toFixed(1));
+      if (k < 1 && sheetAnim && sheetAnim.target === target) requestAnimationFrame(stepH);
+      else {
+        sheetH = target; sheetAnim = null;
+        $('scheme').setAttribute('viewBox', `0 0 1000 ${target}`);
+        $('sheetFrameA').setAttribute('height', String(target - 6));
+        $('sheetFrameB').setAttribute('height', String(target - 12));
+      }
+    };
+    requestAnimationFrame(stepH);
+    // запасной вариант: во вкладке в фоне requestAnimationFrame не вызывается
+    setTimeout(() => { if (sheetAnim && sheetAnim.target === target) stepH(t0 + dur + 1); }, dur + 120);
+  }
+
   function renderConfig() {
     const cfg = sim.config;
+    const dhw = cfg.dhwScheme === '1stage';
+    setSheetHeight(dhw ? 760 : 520);
+    $('svgDhw1StageGroup').toggleAttribute('hidden', !dhw);
+    $('dhwControls').toggleAttribute('hidden', !dhw);
     const locked = cfgLocked();
     $('configPanel').hidden = !!locked;
     cfgBtns.forEach(b => b.classList.toggle('is-active', cfg[b.dataset.cfg] === b.dataset.val));
-    $('configNote').textContent = CFG_NOTE[cfg.makeupType] + (cfg.network === 'low' ? ' Сейчас напор сети понижен: P2 = 2.5 бар — ниже статики дома.' : '');
+    $('configNote').textContent = CFG_NOTE[cfg.makeupType] + (cfg.network === 'low' ? ' Сейчас напор сети понижен: P2 = 2.5 бар — ниже статики дома.' : '') +
+      (dhw ? ' ГВС: ПТО ГВС подключен к сети параллельно отоплению, регулятор держит T3 = 62 °C.' : '');
   }
   cfgBtns.forEach(b => b.addEventListener('click', () => {
     if (b.disabled || cfgLocked()) return;
     const key = b.dataset.cfg, val = b.dataset.val;
     if (sim.config[key] === val) return;
     P.setConfig(sim, { [key]: val });
-    const names = { direct: 'безнасосная подпитка', pumped: 'насосная станция подпитки Нп + РД', normal: 'штатный напор сети 6.5 / 4.5 бар', low: 'пониженный напор сети 4.5 / 2.5 бар', none: 'без ГВС' };
+    const names = { direct: 'безнасосная подпитка', pumped: 'насосная станция подпитки Нп + РД', normal: 'штатный напор сети 6.5 / 4.5 бар', low: 'пониженный напор сети 4.5 / 2.5 бар', none: 'без ГВС', '1stage': 'ГВС по одноступенчатой параллельной схеме' };
     log(`Конфигурация: ${names[val] || val}`, 'op');
     syncControlsUI();
     renderConfig();
@@ -738,6 +818,42 @@
     $('pipeH2').style.stroke = tempColor(o.T21);
     setFlow('flowH2', o.p2Running && o.G2 > 0 ? o.G2 : 0, 4);
 
+    // ГВС (одноступенчатая схема)
+    if (o.dhwOn) {
+      $('txtQdhw').textContent = Math.round(o.Q_dhw);
+      $('txtDhwKzr').textContent = Math.round(o.DHW_KZR) + '%';
+      const dm = $('dhwKzrMode');
+      dm.textContent = c.DHW_KZR_AUTO ? 'A' : 'Р';
+      dm.style.fill = c.DHW_KZR_AUTO ? '#0F172A' : '#B45309';
+      setValve('vDhwKzr', o.DHW_KZR >= 99.5 ? 100 : o.DHW_KZR);
+      setValve('vB1', c.DHW_B1_VALVE ? 100 : 0);
+      const dhwSupT = c.V1 >= C.CLOSED_PCT ? o.T1 : o.T2_dhw;
+      $('pipeDhwS').style.stroke = tempColor(dhwSupT);
+      $('pipeDhwR').style.stroke = tempColor(o.T2_dhw);
+      $('pipeDhwT3').style.stroke = tempColor(o.T3);
+      $('pipeDhwT4').style.stroke = tempColor(o.T4);
+      $('pipeDhwB1').style.stroke = tempColor(o.T_B1);
+      setFlow('flowDhwS', o.G1_dhw, 6);
+      setFlow('flowDhwR', o.G1_dhw, 6);
+      setFlow('flowDhwHexP', o.G1_dhw, 6);
+      setFlow('flowDhwHexS', o.G_dhw_total, 6);
+      setFlow('flowDhwT3', o.G_dhw_total, 6);
+      setFlow('flowDhwT4', o.G_circ, 10);
+      setFlow('flowDhwB1', o.G_draw, 8);
+      const pr = $('dhwPumpBody');
+      $('dhwPumpRotor').classList.toggle('spin', c.DHW_PUMP);
+      pr.setAttribute('fill', c.DHW_PUMP ? '#DCFCE7' : '#F1F5F9');
+      pr.setAttribute('stroke', c.DHW_PUMP ? '#16A34A' : '#64748B');
+      // в автомате ползунок КЗР ГВС показывает задание, которое выставляет регулятор
+      if (c.DHW_KZR_AUTO) {
+        const row = document.querySelector('[data-ctl="DHW_KZRcmd"]');
+        row.querySelector('input').value = c.DHW_KZRcmd;
+        row.querySelector('[data-val]').textContent = Math.round(c.DHW_KZRcmd) + '%';
+      }
+      $('dhwKzrPos').textContent = `положение ${Math.round(o.DHW_KZR)} %` + (c.DHW_KZR_AUTO ? ' · регулятор' : ' · вручную');
+      $('dhwStatus').textContent = `T3 ${fmt(o.T3, 1)} °C · T4 ${fmt(o.T4, 1)} °C · Q ${Math.round(o.Q_dhw)} кВт · G1 ГВС ${fmt(o.G1_dhw, 2)} т/ч`;
+    }
+
     // Станция подпитки Нп + РД
     const pumped = o.makeupType === 'pumped';
     $('svgMakeupPumpGroup').toggleAttribute('hidden', !pumped);
@@ -779,6 +895,11 @@
       ['Расход сети G1', fmt(o.G1, 2) + ' т/ч'],
       ['Расход дома G2', fmt(o.G2, 1) + ' т/ч'],
       ['Мощность Q', Math.round(o.Q) + ' кВт'],
+      ...(o.dhwOn ? [
+        ['Сеть: отопл. + ГВС = всего', fmt(o.G1, 1) + ' + ' + fmt(o.G1_dhw, 1) + ' = ' + fmt(o.G1_total, 1) + ' т/ч'],
+        ['ГВС: Q / T3 / T4', Math.round(o.Q_dhw) + ' кВт · ' + fmt(o.T3, 1) + ' / ' + fmt(o.T4, 1) + ' °C'],
+        ['T2: отопл. / ГВС / общая', fmt(o.T2_co, 1) + ' / ' + fmt(o.T2_dhw, 1) + ' / ' + fmt(o.T2, 1) + ' °C']
+      ] : []),
       ['На улице / в квартирах', fmt(o.T_out, 0) + ' / ' + fmt(o.T_room, 1) + ' °C'],
       ['T11 по графику', fmt(o.T11_target, 1) + ' °C (T2 ≤ ' + fmt(o.T2_max, 1) + ')'],
       ['T11 подача в дом', fmt(o.T11, 1) + ' °C'],
