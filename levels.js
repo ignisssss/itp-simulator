@@ -36,6 +36,12 @@
   const sectionNormal = () => Math.min(o().fill[1], o().fill[2], o().fill[3], o().fill[4]) >= 0.999 &&
     !c().NET_DRAIN && !c().NET_VENT && !c().V1tag && !c().V2tag && c().V1 >= 100 && c().V2 >= 100;
 
+  /** Базовая схема уровней 1–5: безнасосная подпитка, без ГВС, штатный напор сети. */
+  const BASE = { makeupType: 'direct', dhwScheme: 'none', network: 'normal' };
+  const baseConfig = () => P.setConfig(sim, BASE);
+  /** Сеть недодает температуру подачи: прогреть дом по графику нельзя. */
+  const netShort = () => sim.env.T1 !== null && sim.env.T1 < P.graphT1(sim.env.T_out) - 5;
+
   /** Плавное изменение наружной температуры: ramp(от, до, секунд). */
   function ramp(from, to, seconds) {
     return (sim, t) => { sim.env.T_out = from + (to - from) * Math.min(1, t / seconds); };
@@ -48,7 +54,7 @@
     {
       id: 'l1', n: 1, title: 'Первая смена', difficulty: 'Лёгкий',
       intro: 'Обычная зимняя смена, −10 °C. Проблемы будут приходить по одной. Подсказок нет — ориентируйтесь на сообщения и приборы.',
-      setup() {},
+      setup() { baseConfig(); },
       incidents: [
         {
           id: 'cold15', title: 'Похолодание до −15 °C', at: 30,
@@ -82,7 +88,7 @@
     {
       id: 'l2', n: 2, title: 'Морозная ночь', difficulty: 'Средний',
       intro: 'Ночная смена. Принимая смену, проверьте приборы: предыдущий оператор мог что-то оставить. Ночью ожидается сильный мороз.',
-      setup() { sim.controls.MAKEUP = 3; },
+      setup() { baseConfig(); sim.controls.MAKEUP = 3; },
       incidents: [
         {
           id: 'makeupLeft', title: 'Сменщик оставил подпитку открытой', at: 0, silent: true,
@@ -118,7 +124,7 @@
     {
       id: 'l3', n: 3, title: 'Беспокойная смена', difficulty: 'Сложный',
       intro: 'Насос защищен автоматикой по низкому давлению. Проблемы будут накладываться друг на друга, часть из них не сопровождается сообщениями.',
-      setup() { sim.env.pumpProtection = true; },
+      setup() { baseConfig(); sim.env.pumpProtection = true; },
       incidents: [
         {
           id: 'v2closed', title: 'Закрыта задвижка обратки V2', at: 45, silent: true,
@@ -169,7 +175,7 @@
     {
       id: 'l4', n: 4, title: 'Отказы оборудования', difficulty: 'Очень сложный',
       intro: 'Смена, в которой отказывает оборудование. Пользуйтесь резервом: ручным режимом КЗР, резервным насосом Н2, отсекающими кранами дома.',
-      setup() {},
+      setup() { baseConfig(); },
       incidents: [
         {
           id: 'kzrfail', title: 'Отказ привода КЗР при похолодании', at: 40,
@@ -210,7 +216,7 @@
     {
       id: 'l5', n: 5, title: 'Тяжёлая смена', difficulty: 'Эксперт',
       intro: 'Сильный мороз, перебои в сети и скрытые неисправности. Не все проблемы видны сразу, не всем приборам можно верить. Насос защищен автоматикой.',
-      setup() { sim.env.pumpProtection = true; },
+      setup() { baseConfig(); sim.env.pumpProtection = true; },
       incidents: [
         {
           id: 'under', title: 'Мороз −25 °C, сеть недодает температуру', at: 30,
@@ -258,6 +264,46 @@
           fix: 'Манометр P21 «застыл». Давление на всасе можно оценить по P11 − 1.8 бар и по давлению на 9 этаже. Подпитать по этим приборам до ≈ 3.5 бар.'
         }
       ]
+    },
+
+    {
+      id: 'level6', n: 6, title: 'Смена 6. Утренний пик: двухступенчатый ГВС и насосная подпитка', difficulty: 'Высокая',
+      intro: 'ИТП с насосной станцией подпитки (Нп и реле давления РД) и двухступенчатой схемой горячего водоснабжения (ГВС). Теплосеть работает с пониженным напором: P1 = 4.8 бар, P2 = 2.6 бар — самотеком дом не подпитать. Смену принимаете перед утренним пиком водоразбора. Насос отопления защищен автоматикой.',
+      setup() {
+        P.setConfig(sim, { makeupType: 'pumped', dhwScheme: '2stage', network: 'normal' });
+        sim.env.P1 = 4.8;
+        sim.env.P2 = 2.6;
+        sim.env.pumpProtection = true;
+        P.settle(sim, 120);
+        // сменщик оставил станцию подпитки в ручном режиме и выключенной, в доме капельная течь
+        Object.assign(sim.controls, { MAKEUP: 0, MAKEUP_AUTO: false, MAKEUP_PUMP: false });
+        sim.state.P21 = 3.0;
+        sim.env.houseLeak = 0.01;
+      },
+      incidents: [
+        {
+          id: 'mp_setup', title: 'Станция подпитки не на дежурстве', at: 0, silent: true,
+          resolved: () => c().MAKEUP >= 50 && c().MAKEUP_AUTO && o().P21 >= 3.25, hold: 3, norm: 25, deadline: 75, lesson: 'makeuppump',
+          fix: 'В доме капельная течь, а P2 = 2.6 бар ниже статики дома: самотеком подпитать нельзя. Открыть кран подпитки, перевести РД в режим АВТО — станция сама поднимет P21 до 3.6 бар и будет держать 3.2…3.6 бар.'
+        },
+        {
+          id: 'morning_peak_kzr', title: 'Утренний пик, отключился регулятор ГВС', at: 20,
+          start(sim) { sim.controls.DHW_DRAW = 5.2; sim.controls.DHW_KZR_AUTO = false; sim.controls.DHW_KZRcmd = 8; },
+          reveal: t => o().T3 < 55 || t > 25,
+          message: { from: 'Жилец, кв. 81', text: 'Утром из горячего крана течет чуть теплая вода, в душ не встать!' },
+          resolved: () => o().T3 >= 58 && o().T3 <= 66, hold: 4, norm: 30, deadline: 90, lesson: 'dhw1stage',
+          fix: 'Водоразбор вырос до 5.2 т/ч, а регулятор ГВС сбросился в ручной режим с клапаном на 8 %. Вернуть КЗР ГВС в АВТО (или открыть вручную ≈ 20 %) и вывести T3 в 58…66 °C.'
+        },
+        {
+          id: 'dhw_circ_and_net_drop', title: 'Остановился Нц, сеть недодает температуру', at: 60, needsReport: true,
+          start(sim) { sim.controls.DHW_DRAW = 1.5; sim.controls.DHW_PUMP = false; sim.env.T1 = 81; },
+          message: { from: 'Автоматика ИТП', text: 'Циркуляционный насос ГВС Нц: аварийный останов.' },
+          extra: [{ at: 40, from: 'Жилец, кв. 54', text: 'Полотенцесушитель в ванной холодный, и батареи стали заметно прохладнее.' }],
+          resolved: () => c().DHW_PUMP && o().G_circ > 0 && c().KZR >= 85 && o().G2 > 0, hold: 4, norm: 35, deadline: 100, lesson: 'dhw2stage',
+          onReport(sim, lvl) { lvl.toast('Диспетчер теплосети', 'На котельной авария горелки, подача около 80 °C. Держите максимум, что возможно, восстановим в течение часа.'); },
+          fix: 'Включить циркуляционный насос ГВС Нц. Подача сети упала до 81 °C при графике 95 °C — по графику дом не прогреть: открыть КЗР отопления почти полностью (85…100 %) и сообщить диспетчеру теплосети.'
+        }
+      ]
     }
   ];
 
@@ -278,7 +324,8 @@
     pump_deadhead: { pts: 8, after: 10, text: 'Насос работал на закрытую арматуру дольше 10 с' },
     house_vent_spray: { pts: 3, after: 8, text: 'Вода из воздушников 9 этажа дольше 8 с' }
   };
-  const RATE = { t2: { per: 10, cap: 20, text: 'Обратка T2 выше графика (−1 за 10 с)' }, room: { per: 20, cap: 20, text: 'Холодно или душно в квартирах при T11 вне графика (−1 за 20 с)' }, flood: { per: 5, cap: 30, text: 'Залив квартиры (−1 за 5 с)' } };
+  const RATE = { t2: { per: 10, cap: 20, text: 'Обратка T2 выше графика (−1 за 10 с)' }, room: { per: 20, cap: 20, text: 'Холодно или душно в квартирах при T11 вне графика (−1 за 20 с)' }, flood: { per: 5, cap: 30, text: 'Залив квартиры (−1 за 5 с)' },
+    dhwCold: { per: 20, cap: 15, grace: 20, text: 'Недогрев ГВС: T3 ниже 53 °C дольше 20 с (−1 за 20 с)' } };
 
   function criticalCheck(diag, st) {
     const out = o();
@@ -289,6 +336,7 @@
     if (st.reliefTime > 20) return { title: 'Длительный сброс через ПК', text: 'Предохранительный клапан больше 20 секунд сбрасывал воду: причина не устранена. Клапан размыт, система теряет воду, верхние этажи завоздушиваются.', lesson: 'relief' };
     if (out.dryTopTime > 60) return { title: 'Оголение системы отопления', text: 'Больше минуты вода не доходила до верхних этажей. Стояки завоздушены, в мороз возможна разморозка радиаторов.', lesson: 'makeup' };
     if (st.hexOverTime > 120) return { title: 'Течь уплотнений ПТО', text: 'Теплообменник больше 2 минут стоял под давлением подачи без циркуляции. Уплотнения пластин дали течь.', lesson: 'hexpressure' };
+    if (st.scaldTime > 15) return { title: 'Ожог жильца горячей водой', text: 'Больше 15 секунд горячая вода в кранах была горячее 78 °C. Жилец обварился в душе. Температуру ГВС держит регулятор КЗР ГВС; если он в ручном режиме, клапан подстраивает оператор, иначе при падении водоразбора вода перегревается.', lesson: 'dhw1stage' };
     return null;
   }
 
@@ -327,12 +375,12 @@
     if (window.ITPLessons && window.ITPLessons.active()) window.ITPLessons.exit();
     closeMenu();
     level = lv;
-    P.resetNominal(sim, { forceBase: true });   // уровни рассчитаны на базовую схему
+    P.resetNominal(sim, { forceBase: true });   // базовая схема; уровень сам включает нужную конфигурацию в setup()
     lv.setup();
     P.step(sim, 0);
     t0 = sim.state.time;
     incs = lv.incidents.map(d => ({ d, at: d.at, state: d.manual ? 'idle' : 'pending', startT: null, repairT: 0, revealT: null, actT: null, okSince: null, doneT: null, extrasShown: 0 }));
-    lastT = 0; timers = []; penalties = {}; rateAcc = { t2: 0, room: 0 }; st = { reliefTime: 0, hexOverTime: 0 };
+    lastT = 0; timers = []; penalties = {}; rateAcc = { t2: 0, room: 0, dhwCold: 0 }; st = { reliefTime: 0, hexOverTime: 0, scaldTime: 0, dhwColdTime: 0 };
     prevDiag = new Set(); prevControls = snapControls(); timeline = []; reports = 0; finished = false;
     $('levelToasts').innerHTML = '';
     $('levelMessages').innerHTML = '';
@@ -372,8 +420,15 @@
   // Отслеживание действий оператора
   // ---------------------------------------------------------------------------
   const CTL_KEYS = ['V1cmd', 'V2cmd', 'KZRcmd', 'KZR_MANUAL', 'PUMP', 'PUMP2', 'PUMP1_ISO', 'PUMP2_ISO', 'MAKEUP', 'DRAIN',
-    'NET_DRAIN', 'NET_VENT', 'V1tag', 'V2tag', 'HOUSE_SUP', 'HOUSE_RET', 'HOUSE_DRAIN', 'HOUSE_VENT'];
-  function snapControls() { const s = {}; CTL_KEYS.forEach(k => { s[k] = sim.controls[k]; }); s.clean = sim.controls.strainerFouling; return s; }
+    'NET_DRAIN', 'NET_VENT', 'V1tag', 'V2tag', 'HOUSE_SUP', 'HOUSE_RET', 'HOUSE_DRAIN', 'HOUSE_VENT',
+    'MAKEUP_AUTO', 'MAKEUP_PUMP', 'DHW_KZR_AUTO', 'DHW_KZRcmd', 'DHW_PUMP', 'DHW_B1_VALVE', 'DHW_DRAW'];
+  function snapControls() {
+    const s = {};
+    CTL_KEYS.forEach(k => { s[k] = sim.controls[k]; });
+    if (sim.controls.DHW_KZR_AUTO) s.DHW_KZRcmd = null;   // в автомате задание КЗР ГВС двигает регулятор, а не оператор
+    s.clean = sim.controls.strainerFouling;
+    return s;
+  }
   function describe(k, v) {
     const map = {
       V1cmd: v === 'open' ? 'V1: открыть' : 'V1: закрыть', V2cmd: v === 'open' ? 'V2: открыть' : 'V2: закрыть',
@@ -384,7 +439,10 @@
       HOUSE_DRAIN: v ? 'Спуск стояков: открыть' : 'Спуск стояков: закрыть', HOUSE_VENT: v ? 'Воздушники 9 эт.: открыть' : 'Воздушники 9 эт.: закрыть',
       MAKEUP: `Подпитка → ${Math.round(v)} %`,
       DRAIN: v ? 'Дренаж дома: открыть' : 'Дренаж дома: закрыть', NET_DRAIN: v ? 'Дренаж сети: открыть' : 'Дренаж сети: закрыть',
-      NET_VENT: v ? 'Воздушник: открыть' : 'Воздушник: закрыть', V1tag: v ? 'Плакат на V1' : 'Плакат с V1 снят', V2tag: v ? 'Плакат на V2' : 'Плакат с V2 снят'
+      NET_VENT: v ? 'Воздушник: открыть' : 'Воздушник: закрыть', V1tag: v ? 'Плакат на V1' : 'Плакат с V1 снят', V2tag: v ? 'Плакат на V2' : 'Плакат с V2 снят',
+      MAKEUP_AUTO: v ? 'РД: АВТО' : 'РД: ручной', MAKEUP_PUMP: v ? 'Нп: пуск' : 'Нп: стоп',
+      DHW_KZR_AUTO: v ? 'Регулятор ГВС: АВТО' : 'Регулятор ГВС: ручной', DHW_KZRcmd: v === null ? 'КЗР ГВС: задание от регулятора' : `КЗР ГВС → ${Math.round(v)} %`,
+      DHW_PUMP: v ? 'Нц: пуск' : 'Нц: стоп', DHW_B1_VALVE: v ? 'В1: открыть' : 'В1: закрыть', DHW_DRAW: `Водоразбор → ${Number(v).toFixed(1)} т/ч`
     };
     return map[k] || k;
   }
@@ -471,13 +529,18 @@
     });
     prevDiag = ids;
     // Пока сеть недодает температуру, дом прогреть нельзя — за холод и обратку не штрафуем
-    const netShort = sim.env.T1 !== null && sim.env.T1 < P.graphT1(sim.env.T_out) - 5;
-    if (ids.has('t2_high') && !netShort) rateAcc.t2 += dt;
+    const short = netShort();
+    if (ids.has('t2_high') && !short) rateAcc.t2 += dt;
     // Холод в квартирах штрафуем, только когда и сам ИТП не держит график (здание инерционно, догоняет само)
-    if (ids.has('room') && ids.has('t11_range') && !netShort) rateAcc.room += dt;
+    if (ids.has('room') && ids.has('t11_range') && !short) rateAcc.room += dt;
     if (ids.has('flood')) rateAcc.flood = (rateAcc.flood || 0) + dt;
     st.reliefTime = o().reliefOpen ? st.reliefTime + dt : 0;
     st.hexOverTime = ids.has('hex_overpressure') ? st.hexOverTime + dt : 0;
+    // Контур ГВС (только если он есть в схеме): перегрев — критическая авария, недогрев — штраф по времени
+    const dhwLive = sim.config.dhwScheme !== 'none' && o().dhwOn && o().dhwWaterOK;
+    st.scaldTime = dhwLive && o().T3 > 78 ? (st.scaldTime || 0) + dt : 0;
+    st.dhwColdTime = dhwLive && o().T3 < 53 && !netShort() ? (st.dhwColdTime || 0) + dt : 0;
+    if (st.dhwColdTime > RATE.dhwCold.grace) rateAcc.dhwCold = (rateAcc.dhwCold || 0) + dt;
 
     const crit = criticalCheck(diag, st);
     if (crit) { fail(crit); return; }
@@ -544,6 +607,8 @@
     if (room) pen.push({ text: RATE.room.text, pts: room });
     const flood = Math.min(RATE.flood.cap, Math.floor((rateAcc.flood || 0) / RATE.flood.per));
     if (flood) pen.push({ text: RATE.flood.text, pts: flood });
+    const dhwCold = Math.min(RATE.dhwCold.cap, Math.floor((rateAcc.dhwCold || 0) / RATE.dhwCold.per));
+    if (dhwCold) pen.push({ text: RATE.dhwCold.text, pts: dhwCold });
     const totalPen = pen.reduce((a, p) => a + p.pts, 0);
     const score = Math.max(0, Math.min(100, Math.round(avg - totalPen)));
     const stars = score >= 90 ? 3 : score >= 75 ? 2 : score >= 60 ? 1 : 0;
