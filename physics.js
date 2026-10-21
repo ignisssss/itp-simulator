@@ -53,6 +53,10 @@
     // Теплотехника
     C_WATER: 1.163,        // кВт·ч/(т·К)
     HEX_EFF: 0.82,         // эффективность ПТО
+    // Сервисные узлы (регламентные и ремонтные работы)
+    KVS_KZR_BYPASS: 16,    // Kvs ручного вентиля на байпасе КЗР
+    PRESS_TARGET: 6.25,    // бар, испытательное давление опрессовки = 1.25 × рабочее
+    PRESS_RATE: 0.08,      // бар/с, опрессовочный насос (вдали от предела)
     BUILDING_DT: 30.0,     // °C, остывание воды в системе отопления дома (75 → 45, см. README)
     TAU_T: 3.0,            // с, инерция T11 и T2
     TAU_T21: 8.0,          // с, инерция обратки из дома
@@ -165,9 +169,12 @@
       pump2Fail: false,       // авария насоса Н2
       burst: 0,               // бар/с при 3.5 бар — прорыв радиатора (вода в квартиру)
       v1Passing: 0,           // 1/с — закрытая V1 пропускает воду из теплосети
-      p21Stuck: null          // число — манометр P21 «залип» на этом значении
+      p21Stuck: null,         // число — манометр P21 «залип» на этом значении
+      hexScaling: 0           // 0…1 — накипь в ПТО отопления (1 — сильная)
     };
   }
+
+  const houseFull0 = s => s.houseFill >= 0.999;
 
   function kvOf(pct, kvs) {
     return pct < C.CLOSED_PCT ? 0 : kvs * pct / 100;
@@ -231,7 +238,13 @@
       NET_DRAIN: false,      // дренаж сетевого участка (нижняя точка, перед V2)
       NET_VENT: false,       // воздушник сетевого участка (верхняя точка, вход ПТО)
       V1tag: false,          // плакат «Не открывать — работают люди» на V1
-      V2tag: false
+      V2tag: false,
+      // Сервисные узлы: в штатном положении не влияют на работу ИТП
+      KZR_ISO: true,         // отсечные краны до и после КЗР (false — КЗР отсечен для ремонта)
+      KZR_BYPASS: 0,         // ручной регулирующий вентиль на байпасе КЗР, %
+      P21_COCK: 'work',      // трехходовой кран манометра P21: 'work' — на трубе, 'zero' — на атмосфере
+      RELIEF_ISO: true,      // кран перед ПК (false — ПК отсечен на время опрессовки)
+      PRESS_PUMP: false      // опрессовочный насос
     };
   }
 
@@ -313,7 +326,9 @@
       mpRunning: false, mpDryTime: 0, mpTrip: false,
       DHW_KZR: 25, T3: C.T3_SET, T4: C.T3_SET - C.CIRC_DT - 1, T2_dhw: 35.0, dhwEprev: 0, G_draw: 1.5,
       T_dhw_mid: 32.0, T2_after_stage1: 38.0,
-      P_lock1: C.P_B1, P_lock2: C.P_B1, dhwMeter: 0, T_st1w: 40, lockRef1: null, lockRef2: null
+      P_lock1: C.P_B1, P_lock2: C.P_B1, dhwMeter: 0, T_st1w: 40, lockRef1: null, lockRef2: null,
+      hexWashed: false, pump1Replaced: false, gaugeReplaced: false, kzrRepaired: false,
+      serviceAlarmUntil: -1, serviceAlarmText: ''
     };
     applyConfig(sim);
     settle(sim, 180);
@@ -347,6 +362,12 @@
     ];
     // 2-ступ. ГВС: I ступень (с обводом) стоит на общей обратке между узлом 4 (врезки подпитки и дренажа)
     // и V2 — последовательно с задвижкой. Перекрыта без обвода — для ПТО это то же, что закрытая V2.
+    // Узел регулирования: основная ветка КЗР (если не отсечена кранами) параллельно с байпасом
+    if (c.KZR_ISO === false || c.KZR_BYPASS > 0) {
+      kv[2] = (c.KZR_ISO === false ? 0 : kv[2]) + (c.KZR_BYPASS > 0 ? kvOf(c.KZR_BYPASS, C.KVS_KZR_BYPASS) : 0);
+    }
+    // Накипь сужает каналы пластин ПТО
+    if (env.hexScaling > 0) kv[3] = C.KV_HEX * (1 - 0.5 * env.hexScaling);
     if (st1Kv !== null && st1Kv !== undefined) {
       kv[4] = (kv[4] > 0 && st1Kv > 0) ? 1 / Math.sqrt(1 / (kv[4] * kv[4]) + 1 / (st1Kv * st1Kv)) : 0;
     }
@@ -474,6 +495,59 @@
       kv, kvEq, G1, G1_dhw, nodes, P_after_strainer: nodes[2], P_hex_net,
       segs: segInfo, drainLeak, ventSpray, netDrainFlow, netVentFlow, v1Leak
     };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Регламентные и ремонтные работы. Каждая возвращает { ok, level, msg }.
+  // Попытка вскрыть оборудование под давлением — авария open_under_pressure (10 с на табло).
+  // ---------------------------------------------------------------------------
+  function underPressure(sim, msg) {
+    sim.state.serviceAlarmUntil = sim.state.time + 10;
+    sim.state.serviceAlarmText = msg;
+    return { ok: false, level: 'alarm', msg };
+  }
+
+  /** Химическая промывка ПТО: только отсеченный с обеих сторон и опорожненный по сети теплообменник. */
+  function washHEX(sim) {
+    const c = sim.controls, s = sim.state;
+    if (c.V1 > 0 || c.V2 > 0 || c.HOUSE_SUP || c.HOUSE_RET) {
+      return underPressure(sim, 'ПТО не отсечен: для промывки закрывают V1 и V2 по сети и краны дома Кд1 и Кд2 по контуру отопления. Иначе при вскрытии патрубков польется вода под давлением.');
+    }
+    if (c.PUMP || c.PUMP2) return { ok: false, level: 'warn', msg: 'Сначала остановите циркуляционные насосы: промывку ведут на неподвижном теплообменнике.' };
+    if (s.fill[3] >= 0.1 || s.nodes[3] >= 0.1) {
+      return underPressure(sim, `В ПТО по сетевой стороне еще ${Math.round(s.fill[3] * 100)} % воды при ${s.nodes[3].toFixed(2)} бар. Сбросьте давление и слейте воду дренажом сети при открытом воздушнике (и открытом КЗР).`);
+    }
+    sim.env.hexScaling = 0;
+    s.hexWashed = true;
+    return { ok: true, level: 'ok', msg: 'Химическая промывка ПТО (CIP) выполнена: раствор прокачан, накипь растворена, теплообменник промыт водой и нейтрализован.' };
+  }
+
+  /** Замена насоса Н1: только выключенный и отсеченный кранами. */
+  function replacePump1(sim) {
+    const c = sim.controls;
+    if (c.PUMP1_ISO) return underPressure(sim, 'Краны насоса Н1 открыты: при снятии насоса из фланцев ударит горячая вода под давлением ≈ 3.5 бар. Сначала закройте краны Н1.');
+    if (c.PUMP) return { ok: false, level: 'warn', msg: 'Насос Н1 включен: сначала снимите с него питание.' };
+    sim.env.pump1Fail = false;
+    sim.state.pump1Replaced = true;
+    return { ok: true, level: 'ok', msg: 'Насос Н1 заменен. Корпус пустой: при открытии кранов выпустите воздух.' };
+  }
+
+  /** Замена манометра P21: только при трехходовом кране в положении «на атмосферу». */
+  function replaceGaugeP21(sim) {
+    const c = sim.controls;
+    if (c.P21_COCK !== 'zero') return underPressure(sim, 'Трехходовой кран манометра P21 в рабочем положении: штуцер под давлением контура, при откручивании манометра ударит струя горячей воды. Переведите кран в положение «0».');
+    sim.env.p21Stuck = null;
+    sim.state.gaugeReplaced = true;
+    return { ok: true, level: 'ok', msg: 'Манометр P21 заменен. На атмосфере новый прибор показывает 0.0 бар.' };
+  }
+
+  /** Ремонт привода КЗР: только при отсеченном кранами клапане. */
+  function repairKZR(sim) {
+    const c = sim.controls;
+    if (c.KZR_ISO !== false) return underPressure(sim, 'Клапан КЗР не отсечен: при разборке узла клапана из-под крышки ударит сетевая вода 95 °C. Переведите регулирование на байпас и закройте краны КЗР.');
+    sim.env.kzrFail = false;
+    sim.state.kzrRepaired = true;
+    return { ok: true, level: 'ok', msg: 'Привод КЗР отремонтирован, обратная связь восстановлена.' };
   }
 
   /** Засорить фильтр ГВС на 10 % ('cw' — фильтр ХВС на вводе, 'circ' — фильтр перед Нц). */
@@ -669,6 +743,12 @@
       houseFilling = makeupFlow > 0;
       if (s.houseFill < 0.999) { dP21 = 0; s.P21 = 0; }
     }
+    // Опрессовочный насос: плавно поднимает давление контура к испытательному (1.25 × рабочее)
+    let pressFlow = 0;
+    if (c.PRESS_PUMP && houseFull0(s) && s.P21 < C.PRESS_TARGET) {
+      pressFlow = C.PRESS_RATE * Math.min(1, (C.PRESS_TARGET - s.P21) / 0.4);
+      dP21 += pressFlow;
+    }
     let drainFlow = 0;
     if (c.DRAIN && s.P21 > C.DRAIN_P) {
       drainFlow = C.K_DRAIN * (s.P21 - C.DRAIN_P);
@@ -684,7 +764,8 @@
     // Предохранительный клапан на подаче в дом (с гистерезисом)
     const headBefore = ((p1Flow || p2Flow) && s.P21 >= C.P21_CAVITATION) ? C.PUMP_HEAD : 0;
     const P11before = s.P21 + headBefore;
-    if (P11before > C.RELIEF_SET) s.reliefOpen = true;
+    if (c.RELIEF_ISO === false) s.reliefOpen = false;        // ПК отсечен краном — не сбрасывает
+    else if (P11before > C.RELIEF_SET) s.reliefOpen = true;
     else if (P11before < C.RELIEF_RESEAT) s.reliefOpen = false;
     let reliefFlow = 0;
     if (s.reliefOpen) {
@@ -738,7 +819,8 @@
     let Q = 0;
     let T11eq, T2eq;
     if (G1 > 0 && G2 > 0) {
-      Q = Math.max(0, C.HEX_EFF * Math.min(W1, W2) * (T1 - s.T21));
+      const eff = env.hexScaling > 0 ? C.HEX_EFF * (1 - 0.38 * env.hexScaling) : C.HEX_EFF;
+      Q = Math.max(0, eff * Math.min(W1, W2) * (T1 - s.T21));
       T2eq = T1 - Q / W1;
       T11eq = s.T21 + Q / W2;
     } else if (G1 > 0) {
@@ -890,7 +972,9 @@
       T11_max: graphT11(env.T_out) + 5,
       T2_max: graphT2max(env.T_out),
       leakFlow, pumpTripped: s.pumpTripped,
-      P21_disp: env.p21Stuck === null || env.p21Stuck === undefined ? s.P21 : env.p21Stuck,
+      // Манометр P21: залипший показывает застывшее значение; трехходовой кран в положении 'zero' — атмосфера
+      P21_disp: (env.p21Stuck !== null && env.p21Stuck !== undefined) ? env.p21Stuck : (c.P21_COCK === 'zero' ? 0 : s.P21),
+      P21_cock: c.P21_COCK, hexScaling: env.hexScaling || 0, pressFlow, reliefIso: c.RELIEF_ISO !== false,
       p1Running: q1 && pumpsOn, p2Running: q2 && pumpsOn, deadhead,
       houseFill: s.houseFill, houseConn, houseOpen, P_house: houseConn ? s.P21 : s.P_house,
       floodFlow, floodTime: s.floodTime, houseDrainFlow, houseFilling, v1Leak: prim.v1Leak,
@@ -999,7 +1083,38 @@
         detail: `G1 = ${f1(o.G1)} т/ч, T11 = ${f1(o.T11)} °C`
       });
     }
-    if (o.reliefOpen || o.P11 > C.RELIEF_SET) {
+    if (s.time < s.serviceAlarmUntil) {
+      list.push({
+        id: 'open_under_pressure', level: 'alarm',
+        title: 'АВАРИЯ: Вскрытие оборудования под давлением!',
+        text: s.serviceAlarmText,
+        detail: `P21 = ${f2(o.P21)} бар, P в ПТО (сеть) = ${f2(o.P_hex_net)} бар`
+      });
+    }
+    if (c.RELIEF_ISO === false && isOpen(c.V1) && isOpen(c.KZR)) {
+      list.push({
+        id: 'relief_isolated_alarm', level: 'alarm',
+        title: 'АВАРИЯ: Заглушен предохранительный клапан при работающем нагреве!',
+        text: 'Кран перед ПК закрыт, а в ПТО подан теплоноситель. При нагреве вода расширяется, и защиты от превышения давления нет — риск разрыва оборудования. ПК отсекают только на время гидравлических испытаний холодной системы.',
+        detail: `P11 = ${f2(o.P11)} бар, V1 = ${Math.round(c.V1)} %, КЗР = ${Math.round(c.KZR)} %`
+      });
+    } else if (c.RELIEF_ISO === false) {
+      list.push({
+        id: 'relief_isolated', level: 'warn',
+        title: 'Предохранительный клапан отсечен краном',
+        text: 'Допустимо только на время гидравлических испытаний (опрессовки) холодной системы. После испытаний кран перед ПК обязательно открывают.',
+        detail: `P21 = ${f2(o.P21)} бар`
+      });
+    }
+    if ((sim.env.hexScaling || 0) > 0.5 && o.G1 > 0) {
+      list.push({
+        id: 'hex_scaled', level: 'warn',
+        title: 'Накипь в пластинчатом теплообменнике!',
+        text: 'Теплопередача снижена, обратка T2 перегревается при недотопе дома. Требуется химическая промывка ПТО.',
+        detail: `T11 = ${f1(o.T11)} °C, T2 = ${f1(o.T2)} °C, КЗР = ${Math.round(c.KZR)} %`
+      });
+    }
+    if (o.reliefOpen || (o.P11 > C.RELIEF_SET && c.RELIEF_ISO !== false)) {
       list.push({
         id: 'relief', level: 'alarm',
         title: 'АВАРИЯ: Сработал предохранительный клапан (> 6.0 бар)!',
@@ -1260,7 +1375,7 @@
   }
 
   global.ITPPhysics = Object.freeze({
-    CONST: C, foulDhwFilter, cleanDhwFilter,
+    CONST: C, foulDhwFilter, cleanDhwFilter, washHEX, replacePump1, replaceGaugeP21, repairKZR,
     createSimulator,
     resetNominal,
     settle,

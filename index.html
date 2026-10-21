@@ -445,6 +445,7 @@
             <path id="hexPrimTop" d="M440 90 H518" fill="none" stroke-width="6"/>
             <path id="hexPrimBot" d="M518 430 H440" fill="none" stroke-width="6"/>
             <g fill="url(#gradPrim)"><rect x="451.5" y="90" width="7" height="340" rx="1"/><rect x="471.5" y="90" width="7" height="340" rx="1"/><rect x="491.5" y="90" width="7" height="340" rx="1"/><rect x="511.5" y="90" width="7" height="340" rx="1"/></g>
+            <rect id="hexScaleRect" x="446" y="84" width="88" height="352" fill="#92400E" opacity="0" pointer-events="none"/>
             <path id="flowHexP" class="flow thin" d="M455 92 V428 M475 92 V428 M495 92 V428 M515 92 V428"/>
             <path id="flowHexS" class="flow thin" d="M465 414 V106 M485 414 V106 M505 414 V106 M525 414 V106"/>
             <text x="447" y="456" class="lbl-s" style="font-size:8px;fill:#334155">сеть↓</text>
@@ -476,6 +477,25 @@
             <rect id="strainerDirt" x="200" y="82" width="0" height="16" fill="#92400E" fill-opacity=".75"/>
             <path d="M200 98 L230 82 M206 98 L230 86 M212 98 L230 90" stroke="#64748B" stroke-width="0.9"/>
             <text x="215" y="72" text-anchor="middle" class="lbl">Гр</text>
+          </g>
+
+          <!-- ========== Байпас КЗР: обводная линия с ручным вентилем и отсечные краны КЗР ========== -->
+          <g class="node" data-info="kzrBypass">
+            <path id="pipeKzrByp" class="pipe" style="stroke-width:5;stroke:#94A3B8" d="M288 90 V22 H388 V90"/>
+            <path id="flowKzrByp" class="flow" style="stroke-width:2" d="M288 90 V22 H388 V90"/>
+            <circle cx="288" cy="90" r="3.5" fill="#334155"/>
+            <circle cx="388" cy="90" r="3.5" fill="#334155"/>
+            <rect class="hl" x="322" y="9" width="34" height="24" rx="3"/>
+            <path id="vKzrByp" class="valve-body valve-closed" d="M327 16 L349 28 L349 16 L327 28 Z"/>
+            <text x="356" y="17" class="lbl-s" style="font-size:8.5px;fill:#334155;font-weight:600">байпас</text>
+          </g>
+          <g class="node" data-info="kzrBypass">
+            <rect class="hl" x="298" y="80" width="16" height="20" rx="2"/>
+            <path id="vKzrIso1" class="valve-body valve-open" d="M300 85 L312 95 L312 85 L300 95 Z"/>
+          </g>
+          <g class="node" data-info="kzrBypass">
+            <rect class="hl" x="352" y="80" width="16" height="20" rx="2"/>
+            <path id="vKzrIso2" class="valve-body valve-open" d="M354 85 L366 95 L366 85 L354 95 Z"/>
           </g>
 
           <!-- ========== КЗР ========== -->
@@ -565,6 +585,27 @@
             <path d="M766 46 L772 50 L766 54" fill="none" stroke="#1E293B" stroke-width="1.4"/>
             <text x="776" y="44" class="lbl-s" style="fill:#334155;font-weight:600">ПК</text>
             <text x="776" y="56" class="lbl-s" style="font-family:var(--mono)">6.0</text>
+          </g>
+
+          <!-- ========== Трехходовой кран манометра P21 ========== -->
+          <g class="node" data-info="p21Cock">
+            <rect class="hl" x="704" y="434" width="42" height="18" rx="2"/>
+            <path d="M712 435 V452" stroke="#1E293B" stroke-width="1.3"/>
+            <circle id="p21CockBody" cx="712" cy="443" r="4.2" fill="#FFFFFF" stroke="#1E293B" stroke-width="1.2"/>
+            <path id="p21CockHandle" d="M712 443 V439.5" stroke="#1E293B" stroke-width="1.4"/>
+            <text id="p21CockTxt" x="719" y="446" class="lbl-s" style="font-size:8px;fill:#334155;font-weight:600;font-family:var(--mono)">РАБ</text>
+          </g>
+
+          <!-- ========== Кран перед ПК и опрессовочный насос ========== -->
+          <g class="node" data-info="hydrotest">
+            <rect class="hl" x="732" y="66" width="16" height="20" rx="2"/>
+            <path id="vRelIso" class="valve-body valve-open" d="M735 70 L745 70 L735 82 L745 82 Z"/>
+          </g>
+          <g class="node" data-info="hydrotest">
+            <rect class="hl" x="676" y="54" width="28" height="36" rx="3"/>
+            <path d="M690 85.5 V76" stroke="#1E293B" stroke-width="1.6"/>
+            <circle id="pressPumpBody" cx="690" cy="68" r="8" fill="#F1F5F9" stroke="#64748B" stroke-width="1.4"/>
+            <text x="690" y="70.5" text-anchor="middle" style="fill:#0F172A;font-size:6.5px;font-weight:700;font-family:var(--mono)">ОН</text>
           </g>
 
           <!-- ========== Дренаж ========== -->
@@ -981,6 +1022,49 @@
             </div>
           </section>
 
+          <!-- 5. Регламентные и ремонтные работы -->
+          <section id="svcControls">
+            <div class="sec-h"><span class="num">05</span>Регламентные и ремонтные работы<button class="qbtn ml-auto" data-info="service">?</button></div>
+            <div class="flex flex-col gap-2.5">
+              <div>
+                <div class="arm-h" style="margin-top:0">Узел КЗР</div>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <button id="kzrIsoBtn" data-toggle="KZR_ISO" data-on="Краны КЗР: ОТКР" data-off="Краны КЗР: ЗАКР" data-tone="slate" data-inverse="1" data-label="Отсечные краны КЗР" class="tbtn tbtn-sm"></button>
+                  <button id="repairKzrBtn" class="btn btn-sm">Ремонт привода КЗР</button>
+                </div>
+                <div class="ctl mt-2" data-ctl="KZR_BYPASS">
+                  <div class="flex items-center gap-2 mb-1">
+                    <span class="text-[12px] font-semibold">Байпас КЗР</span>
+                    <span class="text-[11px] faint">ручной вентиль, Kvs 16</span>
+                    <span class="mono text-sm w-12 text-right ml-auto" data-val>0%</span>
+                  </div>
+                  <input type="range" min="0" max="100" step="1" value="0" aria-label="Байпас КЗР, %">
+                </div>
+              </div>
+              <div>
+                <div class="arm-h" style="margin-top:0">ПТО отопления</div>
+                <div class="flex items-center gap-2 text-[11px]"><span class="mono w-20">Накипь</span><div class="meter flex-1"><div id="hexScaleBar" style="width:0%;background:#92400E"></div></div><span id="hexScaleVal" class="mono w-9 text-right">0%</span></div>
+                <button id="hexWashBtn" class="btn btn-sm w-full mt-1.5">Хим. промывка ПТО (CIP)</button>
+              </div>
+              <div>
+                <div class="arm-h" style="margin-top:0">Насосы и КИП</div>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <button id="replacePump1Btn" class="btn btn-sm">Заменить насос Н1</button>
+                  <button id="replaceGaugeBtn" class="btn btn-sm">Заменить манометр P21</button>
+                  <button id="p21CockBtn" class="tbtn tbtn-sm col-span-2"></button>
+                </div>
+              </div>
+              <div>
+                <div class="arm-h" style="margin-top:0">Опрессовка</div>
+                <div class="grid grid-cols-2 gap-1.5">
+                  <button id="reliefIsoBtn" data-toggle="RELIEF_ISO" data-on="Кран перед ПК: ОТКР" data-off="Кран перед ПК: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран перед ПК" class="tbtn tbtn-sm"></button>
+                  <button id="pressPumpBtn" data-toggle="PRESS_PUMP" data-on="Опрессовочный насос: ВКЛ" data-off="Опрессовочный насос (6.25 бар)" data-tone="amber" data-label="Опрессовочный насос" class="tbtn tbtn-sm"></button>
+                </div>
+              </div>
+              <div id="svcStatus" class="mono text-[10.5px] faint"></div>
+            </div>
+          </section>
+
           <!-- 3. Контур здания -->
           <section>
             <div class="sec-h"><span class="num">03</span>Контур здания (Отопление)<button class="qbtn ml-auto" data-info="house">?</button></div>
@@ -1046,7 +1130,7 @@
       </div>
       <div id="lessonDoneCount" class="text-xs mono t-ok mt-3"></div>
       <div id="lessonList" class="grid gap-2 mt-2 sm:grid-cols-2"></div>
-      <div class="panel-title mt-5 mb-2">Скоро</div>
+      <div id="lessonSoonTitle" class="panel-title mt-5 mb-2">Скоро</div>
       <div id="lessonSoon" class="grid gap-2 sm:grid-cols-2"></div>
     </div>
   </div>
