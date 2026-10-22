@@ -362,8 +362,89 @@
     m.classList.add('hidden');
     m.classList.remove('flex');
   }
-  document.querySelectorAll('[data-info]').forEach(el =>
-    el.addEventListener('click', () => openInfo(el.dataset.info)));
+  document.querySelectorAll('[data-info]').forEach(el => el.addEventListener('click', e => {
+    if (el.closest('#scheme')) { e.stopPropagation(); openInspector(el.dataset.info, el); }
+    else openInfo(el.dataset.info);
+  }));
+
+  // ---------------------------------------------------------------------------
+  // Контекстный пульт узла (инспектор): параметры, органы управления, справка
+  // ---------------------------------------------------------------------------
+  const INSP_PANEL = {
+    valves: 'valves', strainer: 'strainer', netdrain: 'netdrain', kzr: 'kzr', kzrBypass: 'kzrBypass', hex: 'hex',
+    pump: 'pump', makeup: 'makeup', makeupPump: 'makeup', drain: 'makeup', relief: 'protect', hydrotest: 'protect',
+    p21Cock: 'protect', house: 'house', building: 'house', dhwKzr: 'dhwKzr', dhwHex: 'dhw', dhw2stage: 'dhw',
+    dhwValves: 'dhw', dhwFilters: 'dhw', dhwRelief: 'dhw', dhwPump: 'dhw', service: 'kzrBypass',
+    // панели, которые открываются кнопками пульта
+    protect: 'protect', dhw: 'dhw'
+  };
+  const PANEL_INFO = { protect: 'hydrotest', dhw: 'dhwHex', makeup: 'makeup' };
+  const PANEL_DOCK = { valves: 'inlet', strainer: 'inlet', kzr: 'kzr', kzrBypass: 'kzr', pump: 'pumps', makeup: 'makeup', protect: 'makeup',
+    netdrain: 'house', house: 'house', hex: 'house', dhwKzr: 'dhw', dhw: 'dhw' };
+  let inspPanel = null;
+  let inspAuto = false;     // открыт уроком, а не оператором
+
+  function openInspector(key, nodeEl, auto) {
+    const panel = INSP_PANEL[key] || key;
+    const box = $('inspector');
+    if (!document.querySelector(`[data-insp="${panel}"]`)) return;
+    const infoKey = INFO[key] ? key : (PANEL_INFO[panel] || panel);
+    if (!auto && window.ITPLessons && INFO[infoKey]) window.ITPLessons.onInfo(key);
+    inspPanel = panel;
+    inspAuto = !!auto;
+    document.querySelectorAll('[data-insp]').forEach(d => d.toggleAttribute('hidden', d.dataset.insp !== panel));
+    const it = INFO[infoKey];
+    $('inspTitle').textContent = it ? it.title : key;
+    $('inspInfoBody').innerHTML = it ? it.body : '';
+    $('inspInfo').hidden = !it;
+    // карточка ставится в угол, противоположный узлу, чтобы не закрывать его
+    let left = false;
+    if (nodeEl && nodeEl.getBoundingClientRect) {
+      const r = nodeEl.getBoundingClientRect(), sc = $('scene').getBoundingClientRect();
+      left = (r.left + r.width / 2) > (sc.left + sc.width / 2);
+    }
+    box.classList.toggle('at-left', left);
+    box.classList.toggle('at-right', !left);
+    box.hidden = false;
+    flashDock(PANEL_DOCK[panel]);
+    renderInspector();
+  }
+  function closeInspector() { $('inspector').hidden = true; inspPanel = null; inspAuto = false; }
+  function flashDock(id) {
+    document.querySelectorAll('.dmod.dock-flash').forEach(m => m.classList.remove('dock-flash'));
+    const m = id && document.querySelector(`[data-dock="${id}"]`);
+    if (m) { m.classList.add('dock-flash'); setTimeout(() => m.classList.remove('dock-flash'), 1600); }
+  }
+  $('inspClose').addEventListener('click', closeInspector);
+  $('scene').addEventListener('click', e => {
+    if (e.target.closest('#inspector') || e.target.closest('.node') || e.target.closest('#viewFocus')) return;
+    closeInspector();
+  });
+  document.querySelectorAll('[data-open-insp]').forEach(b => b.addEventListener('click', () => openInspector(b.dataset.openInsp)));
+
+  /** Параметры узла для инспектора: [название, значение]. */
+  function inspectorRows(panel) {
+    const o = sim.out, c = sim.controls, f = (v, d) => fmt(v, d);
+    switch (panel) {
+      case 'valves': return [['V1 / V2', `${Math.round(c.V1)} / ${Math.round(c.V2)} %`], ['P1 / P2', `${f(o.P1, 2)} / ${f(o.P2, 2)} бар`], ['G1 сети', `${f(o.G1_total || o.G1, 2)} т/ч`], ['Плакаты V1 / V2', `${c.V1tag ? 'да' : 'нет'} / ${c.V2tag ? 'да' : 'нет'}`]];
+      case 'strainer': return [['P до / после', `${f(o.P_before_strainer, 2)} / ${f(o.P_after_strainer, 2)} бар`], ['ΔP грязевика', `${f(o.dP_strainer, 2)} бар`], ['Засор сетки', `${Math.round(c.strainerFouling)} %`]];
+      case 'netdrain': return [['P участка', `${f(o.nodes[2], 2)} бар`], ['Заполнение', `${Math.round(100 * Math.min(o.fill[1], o.fill[2], o.fill[3], o.fill[4]))} %`], ['Дренаж / воздушник', `${c.NET_DRAIN ? 'откр' : 'закр'} / ${c.NET_VENT ? 'откр' : 'закр'}`]];
+      case 'kzr': return [['Задание / положение', `${Math.round(c.KZRcmd)} / ${Math.round(c.KZR)} %`], ['Режим', c.KZR_MANUAL ? 'штурвал' : (o.kzrFail ? 'привод не отвечает' : 'привод')], ['G1', `${f(o.G1, 2)} т/ч`], ['T11 / график', `${f(o.T11, 1)} / ${f(o.T11_target, 1)} °C`]];
+      case 'kzrBypass': return [['КЗР положение', `${Math.round(c.KZR)} %`], ['Краны КЗР', c.KZR_ISO !== false ? 'открыты' : 'ЗАКРЫТЫ'], ['Байпас', `${Math.round(c.KZR_BYPASS)} %`], ['T11 / G1', `${f(o.T11, 1)} °C / ${f(o.G1, 2)} т/ч`]];
+      case 'hex': return [['Q ПТО', `${Math.round(o.Q)} кВт`], ['T1 → T2', `${f(o.T1, 1)} → ${f(o.T2_co !== undefined ? o.T2_co : o.T2, 1)} °C`], ['T21 → T11', `${f(o.T21, 1)} → ${f(o.T11, 1)} °C`], ['Накипь', `${Math.round(100 * (o.hexScaling || 0))} %`]];
+      case 'pump': return [['Н1 / Н2', `${o.p1Running ? 'работа' : (c.PUMP ? 'вкл, нет перепада' : 'стоп')} / ${o.p2Running ? 'работа' : 'стоп'}`], ['P11 − P21', `${f(o.P11 - o.P21_disp, 2)} бар`], ['G2 дома', `${f(o.G2, 1)} т/ч`]];
+      case 'makeup': return [['P21 всас', `${f(o.P21_disp, 2)} бар`], ['Подпитка', `${Math.round(c.MAKEUP)} %`], ['Располагаемое давление', `${f(o.P_makeup_avail, 2)} бар`], ['Схема', o.makeupType === 'pumped' ? 'насосная (Нп + РД)' : 'безнасосная']];
+      case 'protect': return [['Манометр P21', `${f(o.P21_disp, 2)} бар`], ['Кран манометра', c.P21_COCK === 'zero' ? '0 (атмосфера)' : 'РАБ'], ['P11 нагнетание', `${f(o.P11, 2)} бар`], ['ПК 6.0 бар', c.RELIEF_ISO === false ? 'ОТСЕЧЕН' : (o.reliefOpen ? 'СБРАСЫВАЕТ' : 'в работе')]];
+      case 'house': return [['P внизу / 9 эт.', `${f(o.P_house, 2)} / ${f(o.P_top, 2)} бар`], ['Заполнение', `${Math.round(o.houseFill * 100)} %`], ['T11 / T21', `${f(o.T11, 1)} / ${f(o.T21, 1)} °C`], ['T в квартирах', `${f(o.T_room, 1)} °C`]];
+      case 'dhwKzr': return o.dhwOn ? [['T3 / уставка', `${f(o.T3, 1)} / 62 °C`], ['КЗР ГВС', `${Math.round(o.DHW_KZR)} % · ${c.DHW_KZR_AUTO ? 'АВТО' : 'ручной'}`], ['G1 ГВС', `${f(o.G1_dhw, 2)} т/ч`]] : [['Контур ГВС', 'не подключен']];
+      case 'dhw': return o.dhwOn ? [['T3 / T4', `${f(o.T3, 1)} / ${f(o.T4, 1)} °C`], ['Водоразбор', `${f(o.G_draw, 2)} т/ч`], ['Q ГВС', `${Math.round(o.Q_dhw)} кВт`]] : [['Контур ГВС', 'не подключен']];
+      default: return [];
+    }
+  }
+  function renderInspector() {
+    if (!inspPanel || $('inspector').hidden) return;
+    $('inspParams').innerHTML = inspectorRows(inspPanel).map(([k, v]) => `<span class="k">${k}</span><span class="v">${v}</span>`).join('');
+  }
   $('infoClose').addEventListener('click', closeInfo);
   $('infoModal').addEventListener('click', e => { if (e.target.id === 'infoModal') closeInfo(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeInfo(); });
@@ -668,6 +749,21 @@
   }
   // Высота листа: 520 (только отопление) или 760 (с контуром ГВС), плавно
   let sheetH = 520, sheetAnim = null;
+  // Фокус просмотра листа с контуром ГВС: весь лист, только отопление или только ГВС
+  let viewFocus = 'all';
+  function viewBoxFor(h) {
+    if (h > 520 && !sheetAnim) {
+      if (viewFocus === 'heat') return '0 0 1000 520';
+      if (viewFocus === 'dhw') return `0 ${h - 520} 1000 520`;
+    }
+    return `0 0 1000 ${h}`;
+  }
+  function setViewFocus(f) {
+    viewFocus = f;
+    document.querySelectorAll('[data-focus]').forEach(b => b.classList.toggle('is-active', b.dataset.focus === f));
+    if (!sheetAnim) $('scheme').setAttribute('viewBox', viewBoxFor(sheetH));
+  }
+  document.querySelectorAll('[data-focus]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); setViewFocus(b.dataset.focus); }));
   function setSheetHeight(target) {
     if (sheetAnim && sheetAnim.target === target) return;
     if (!sheetAnim && sheetH === target) return;
@@ -683,7 +779,7 @@
       if (k < 1 && sheetAnim && sheetAnim.target === target) requestAnimationFrame(stepH);
       else {
         sheetH = target; sheetAnim = null;
-        $('scheme').setAttribute('viewBox', `0 0 1000 ${target}`);
+        $('scheme').setAttribute('viewBox', viewBoxFor(target));
         $('sheetFrameA').setAttribute('height', String(target - 6));
         $('sheetFrameB').setAttribute('height', String(target - 12));
       }
@@ -707,6 +803,9 @@
     $('svgDhw2StageGroup').toggleAttribute('hidden', !two);
     $('svgDhw2StageNet').toggleAttribute('hidden', !two);
     $('dhwControls').toggleAttribute('hidden', !dhw);
+    $('dockNoDhw').toggleAttribute('hidden', dhw);
+    $('viewFocus').toggleAttribute('hidden', !dhw);
+    if (!dhw && viewFocus !== 'all') setViewFocus('all');
     document.querySelectorAll('.dhw2-only').forEach(el => el.toggleAttribute('hidden', !two));
     const layout = cfg.dhwScheme;
     if (dhwLayout !== layout) {
@@ -720,7 +819,10 @@
       $('dhwSecInfo').dataset.info = two ? 'dhw2stage' : 'dhwHex';
     }
     const locked = cfgLocked();
-    $('configPanel').hidden = !!locked;
+    $('cfgToggle').hidden = !!locked;
+    $('envToggle').hidden = !!locked;
+    $('dockNoDhw').querySelectorAll('[data-cfg]').forEach(b => { b.disabled = !!locked; });
+    if (locked) { $('configPanel').hidden = true; $('envPanel').hidden = true; }
     cfgBtns.forEach(b => b.classList.toggle('is-active', cfg[b.dataset.cfg] === b.dataset.val));
     $('configNote').textContent = CFG_NOTE[cfg.makeupType] + (cfg.network === 'low' ? ' Сейчас напор сети понижен: P2 = 2.5 бар — ниже статики дома.' : '') +
       (two ? ' ГВС: I ступень греет холодную воду обраткой (после системы отопления и II ступени), II ступень догревает от подачи T1 до 62 °C.'
@@ -737,6 +839,58 @@
     renderConfig();
     render();
   }));
+
+  // Выпадающие панели шапки (конфигуратор, внешние условия, тренд) и всплывающие окна полосы урока/смены
+  const DROPS = ['configPanel', 'envPanel', 'trendPanel'];
+  function toggleDrop(id) {
+    const el = $(id), open = el.hidden;
+    DROPS.forEach(d => { $(d).hidden = true; });
+    el.hidden = !open;
+    if (!el.hidden && id === 'trendPanel') drawTrend();
+  }
+  document.querySelectorAll('[data-drop]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); toggleDrop(b.dataset.drop); }));
+  $('trendToggle').addEventListener('click', e => { e.stopPropagation(); toggleDrop('trendPanel'); });
+  document.querySelectorAll('[data-pop]').forEach(b => b.addEventListener('click', e => {
+    e.stopPropagation();
+    const pop = $(b.dataset.pop), open = pop.hidden;
+    document.querySelectorAll('.strip-pop').forEach(x => { x.hidden = true; });
+    pop.hidden = !open;
+  }));
+  document.addEventListener('click', e => {
+    if (!e.target.closest('.drop-panel') && !e.target.closest('[data-drop]') && !e.target.closest('#trendToggle')) DROPS.forEach(d => { $(d).hidden = true; });
+    if (!e.target.closest('.strip-pop') && !e.target.closest('[data-pop]')) document.querySelectorAll('.strip-pop').forEach(x => { x.hidden = true; });
+  });
+  document.addEventListener('keydown', e => {
+    if (e.key !== 'Escape') return;
+    DROPS.forEach(d => { $(d).hidden = true; });
+    document.querySelectorAll('.strip-pop').forEach(x => { x.hidden = true; });
+    closeInspector();
+  });
+
+  // Внешние условия: погода и возмущения (свободный режим)
+  $('envTout').addEventListener('input', e => { sim.env.T_out = Number(e.target.value); renderEnv(); });
+  $('envTout').addEventListener('change', () => log(`Инструктор: температура наружного воздуха ${fmt(sim.env.T_out, 0)} °C`, 'op'));
+  $('envFoulBtn').addEventListener('click', () => { sim.controls.strainerFouling = Math.min(90, sim.controls.strainerFouling + 10); log(`Инструктор: грязевик засорен до ${Math.round(sim.controls.strainerFouling)} %`, 'op'); });
+  $('envScaleBtn').addEventListener('click', () => { sim.env.hexScaling = Math.min(1, (sim.env.hexScaling || 0) + 0.25); log(`Инструктор: накипь в ПТО ${Math.round(sim.env.hexScaling * 100)} %`, 'op'); });
+  const ENV_TOGGLES = {
+    pump1Fail: { get: () => sim.env.pump1Fail, set: v => { sim.env.pump1Fail = v; }, name: 'отказ насоса Н1' },
+    kzrFail: { get: () => sim.env.kzrFail, set: v => { sim.env.kzrFail = v; }, name: 'отказ привода КЗР' },
+    houseLeak: { get: () => sim.env.houseLeak > 0, set: v => { sim.env.houseLeak = v ? 0.006 : 0; }, name: 'утечка в системе отопления дома' },
+    T1: { get: () => sim.env.T1 !== null, set: v => { sim.env.T1 = v ? P.graphT1(sim.env.T_out) - 15 : null; }, name: 'недодача температуры сети' }
+  };
+  document.querySelectorAll('[data-env]').forEach(b => b.addEventListener('click', () => {
+    const t = ENV_TOGGLES[b.dataset.env];
+    const v = !t.get();
+    t.set(v);
+    log(`Инструктор: ${t.name} — ${v ? 'включено' : 'снято'}`, 'op');
+    renderEnv();
+  }));
+  function renderEnv() {
+    const tv = (sim.env.T_out > 0 ? '+' : sim.env.T_out < 0 ? '−' : '') + Math.abs(sim.env.T_out).toFixed(0) + ' °C';
+    $('envToutVal').textContent = tv;
+    if (document.activeElement !== $('envTout')) $('envTout').value = sim.env.T_out;
+    document.querySelectorAll('[data-env]').forEach(b => b.classList.toggle('btn-close', !!ENV_TOGGLES[b.dataset.env].get()));
+  }
 
   function setSpeed(s) {
     speed = s;
@@ -779,17 +933,35 @@
   let lastSignature = '';
   let activeIds = new Map(); // id -> заголовок
 
+  let lastAlarmList = [];
+  let alarmPopFor = null, alarmPopPinned = false;
+  function showAlarmPop(btn) {
+    const a = lastAlarmList[Number(btn.dataset.ai)];
+    if (!a) return;
+    alarmPopFor = btn.dataset.ai;
+    const pop = $('alarmPop');
+    pop.className = 'alarm-pop ' + a.level;
+    pop.innerHTML = `<div class="font-semibold text-[13px]" style="color:var(--ink)">${a.title}</div>
+      <div class="alarm-text text-[12px] muted mt-1 leading-5">${a.text}</div><div class="a-detail mono text-[11px] faint mt-1">${a.detail || ''}</div>`;
+    const r = btn.getBoundingClientRect();
+    pop.style.top = (r.bottom + 6) + 'px';
+    pop.style.left = Math.max(8, Math.min(window.innerWidth - 428, r.left)) + 'px';
+    pop.hidden = false;
+  }
+  document.addEventListener('click', e => { if (!e.target.closest('.abadge') && !e.target.closest('#alarmPop')) { alarmPopPinned = false; $('alarmPop').hidden = true; } });
+
   function renderAlarms() {
     const list = P.diagnose(sim);
     const signature = list.map(a => a.id + '|' + a.title).join(';');
     if (signature !== lastSignature) {
       lastSignature = signature;
-      $('alarms').innerHTML = list.map(a => `
-        <div class="alarm-card ${a.level}">
-          <div class="a-title"><span class="${a.level === 'alarm' ? 'blink' : ''}" style="margin-top:1px">${ICONS.svg(ICON[a.level], 16)}</span><span>${a.title}</span></div>
-          <div class="alarm-text">${a.text}</div>
-          <div class="a-detail" data-detail="${a.id}"></div>
-        </div>`).join('');
+      $('alarms').innerHTML = list.map((a, i) => `
+        <button class="abadge ${a.level}" data-ai="${i}"><span class="${a.level === 'alarm' ? 'blink' : ''}">${ICONS.svg(ICON[a.level], 13)}</span><span>${a.title}</span></button>`).join('');
+      $('alarms').querySelectorAll('.abadge').forEach(b => {
+        b.addEventListener('mouseenter', () => showAlarmPop(b));
+        b.addEventListener('mouseleave', () => { if (!alarmPopPinned) $('alarmPop').hidden = true; });
+        b.addEventListener('click', e => { e.stopPropagation(); alarmPopPinned = !alarmPopPinned || alarmPopFor !== b.dataset.ai; showAlarmPop(b); if (!alarmPopPinned) $('alarmPop').hidden = true; });
+      });
 
       // Журнал: появление и снятие событий
       const now = new Map(list.map(a => [a.id, a.title]));
@@ -798,10 +970,12 @@
       if (now.has('ok') && !activeIds.has('ok') && activeIds.size) log('НОРМА: режим восстановлен', 'ok');
       activeIds = now;
     }
-    list.forEach(a => {
-      const d = document.querySelector(`[data-detail="${a.id}"]`);
-      if (d) d.textContent = a.detail || '';
-    });
+    lastAlarmList = list;
+    if (!$('alarmPop').hidden && alarmPopFor !== null) {
+      const a = list[Number(alarmPopFor)];
+      const d = $('alarmPop').querySelector('.a-detail');
+      if (a && d) d.textContent = a.detail || '';
+    }
 
     const alarms = list.filter(a => a.level === 'alarm').length;
     const warns = list.filter(a => a.level === 'warn').length;
@@ -947,6 +1121,10 @@
 
     // Грязевик и заполнение сетевого участка на пульте
     $('foulVal').textContent = Math.round(c.strainerFouling) + '%';
+    $('dockStrDp').textContent = fmt(o.dP_strainer, 2);
+    $('dockStrDp').style.color = o.dP_strainer > C.STRAINER_DP_WARN ? '#B45309' : 'var(--ink)';
+    renderInspector();
+    if (!$('envPanel').hidden) renderEnv();
     $('foulBar').style.width = (c.strainerFouling / 90 * 100).toFixed(0) + '%';
     const minFill = Math.min(o.fill[1], o.fill[2], o.fill[3], o.fill[4]);
     $('netFillBar').style.width = (minFill * 100).toFixed(0) + '%';
@@ -1198,6 +1376,9 @@
     render,
     syncControlsUI,
     clearTrend() { trend.length = 0; },
+    openInspector, closeInspector, setViewFocus, flashDock,
+    inspectorAuto: () => inspAuto && !$('inspector').hidden,
+    viewFocus: () => viewFocus,
     setPaused(v) { paused = v; setSpeed(speed); },
     isPaused() { return paused; }
   };

@@ -742,6 +742,7 @@
   function exit() {
     lesson = null;
     clearHighlight();
+    if (app.inspectorAuto()) app.closeInspector();
     $('lessonPanel').hidden = true;
     setMode('free');
     app.setPaused(false);
@@ -838,7 +839,17 @@
       ring.setAttribute('class', 'lesson-ring');
       $('lessonMarks').appendChild(ring);
     });
-    if (t.el) document.querySelectorAll(t.el).forEach(e => e.classList.add('lesson-hl'));
+    // Цель на пульте: если она в контекстном пульте узла — открыть его, чтобы кнопка была перед глазами
+    let opened = false;
+    if (t.el) document.querySelectorAll(t.el).forEach(e => {
+      e.classList.add('lesson-hl');
+      const pnl = e.closest('[data-insp]');
+      if (pnl && !opened) { app.openInspector(pnl.dataset.insp, null, true); opened = true; }
+    });
+    if (!opened && app.inspectorAuto()) app.closeInspector();
+    // Кольцо вне текущего масштаба листа — показать весь лист
+    const f = app.viewFocus();
+    if ((f === 'heat' && rings.some(r => r[1] > 515)) || (f === 'dhw' && rings.some(r => r[1] < 400))) app.setViewFocus('all');
   }
 
   function renderHold() {
@@ -864,6 +875,8 @@
     $('lessonStep').textContent = finished ? 'Урок пройден' : st.text;
     $('lessonWhy').textContent = finished ? '' : (st.why || '');
     $('lessonWhyBox').hidden = finished || !st.why;
+    $('lessonWhyToggle').disabled = finished || !st.why;
+    $('lessonWhyPop').hidden = true;
     $('lessonAck').hidden = finished || !st.ack;
     $('lessonHold').hidden = finished || !st.hold;
     renderHold();
@@ -939,6 +952,15 @@
   // Кнопки
   $('lessonAck').addEventListener('click', () => { if (lesson && lesson.steps[stepIdx] && lesson.steps[stepIdx].ack) advance(); });
   $('lessonRestart').addEventListener('click', restart);
+  $('lessonStepReset').addEventListener('click', () => {
+    if (!lesson || blocked || stepIdx >= lesson.steps.length) return;
+    restoreSnapshot();
+    app.syncControlsUI();
+    allowed = new Set(alarmIds());
+    holdSince = null;
+    app.log('Урок: шаг сброшен к началу', 'op');
+    app.render();
+  });
   $('lessonExit').addEventListener('click', exit);
   $('lessonAll').addEventListener('click', openMenu);
   $('lessonMenuClose').addEventListener('click', closeMenu);

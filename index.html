@@ -153,7 +153,7 @@
     .sr-bar { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); }
 
     /* --- Мнемосхема: лист чертежа P&ID --- */
-    #scheme { width: 100%; height: auto; display: block; user-select: none; }
+    #scheme { user-select: none; }
     #scheme text { font-family: var(--font); }
     .pipe { fill: none; stroke-width: 9; stroke-linecap: butt; stroke-linejoin: miter; transition: stroke .6s, opacity .6s; }
     .pipe-thin { fill: none; stroke-width: 5; stroke: var(--metal-2); }
@@ -225,128 +225,236 @@
     .scroll-box { background: #F8FAFC; border: 1px solid var(--line-soft); border-radius: 4px; }
     .k-table tr { border-bottom: 1px solid var(--line-soft); }
     .k-table td { padding: 4px 0; }
+
+    /* ===== Гибридный кокпит: один экран без прокрутки ===== */
+    html, body { height: 100%; overflow: hidden; }
+    .mode-sm { padding: 4px 10px; font-size: 12.5px; gap: 6px; border-radius: 5px; }
+    .drop-panel { position: fixed; top: 48px; left: 50%; transform: translateX(-50%); z-index: 45; box-shadow: 0 16px 32px rgba(15,23,42,.18); }
+    .drop-right { left: auto; right: 12px; transform: none; width: min(640px, calc(100vw - 24px)); }
+    #envPanel { width: 420px; }
+    .strip { position: relative; display: flex; align-items: center; gap: 8px; background: #FFFFFF; border: 1px solid #7DD3FC; border-radius: 6px; padding: 5px 10px; box-shadow: 0 1px 2px rgba(15,23,42,.05); }
+    .strip-level { border-color: #FCD34D; }
+    .lesson-step { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+    .strip-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 40; width: 440px; background: #FFFFFF; border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 14px 28px rgba(15,23,42,.18); padding: 10px 12px; }
+    .strip-pop-right, .strip-level .strip-pop { left: auto; right: 0; }
+    .alarm-strip { display: flex; align-items: center; gap: 8px; min-height: 28px; }
+    .abadges { display: flex; gap: 6px; overflow-x: auto; flex: 1; min-width: 0; scrollbar-width: thin; }
+    .abadge { display: inline-flex; align-items: center; gap: 5px; white-space: nowrap; font-size: 11.5px; font-weight: 600; padding: 3px 9px; border-radius: 4px; border: 1px solid; flex: none; }
+    .abadge.alarm { background: #FEF2F2; border-color: #FCA5A5; color: #991B1B; }
+    .abadge.warn { background: #FFFBEB; border-color: #FCD34D; color: #92400E; }
+    .abadge.ok { background: #F0FDF4; border-color: #86EFAC; color: #166534; }
+    .abadge.info { background: #F0F9FF; border-color: #BAE6FD; color: #075985; }
+    .alarm-pop { position: fixed; z-index: 46; width: 420px; background: #FFFFFF; border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; box-shadow: 0 14px 28px rgba(15,23,42,.18); padding: 8px 12px; }
+    .alarm-pop.alarm { border-left-color: var(--bad); } .alarm-pop.warn { border-left-color: var(--warn); } .alarm-pop.ok { border-left-color: var(--ok); } .alarm-pop.info { border-left-color: var(--accent); }
+    .scene { width: 100%; height: 100%; background: #FAFBFD; border: 1px solid #CBD5E1; border-radius: 6px; position: relative; overflow: hidden; box-shadow: inset 0 1px 3px rgba(15,23,42,.06); }
+    #scheme { width: 100%; height: 100%; display: block; }
+    #scheme .node:hover { opacity: .85; }
+    .scheme-hint { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: var(--ink-3); pointer-events: none; }
+    .view-focus { position: absolute; left: 10px; bottom: 8px; display: inline-flex; border: 1px solid var(--line); border-radius: 6px; overflow: hidden; background: #FFFFFF; z-index: 20; }
+    .view-focus .seg-btn { padding: 3px 9px; font-size: 11.5px; }
+    .inspector { position: absolute; top: 8px; width: 20rem; max-height: calc(100% - 16px); overflow-y: auto; z-index: 30; background: rgba(255,255,255,.96);
+                 backdrop-filter: blur(4px); border: 1px solid #94A3B8; border-radius: 6px; box-shadow: 0 12px 26px rgba(15,23,42,.18); padding: 10px 12px; }
+    .inspector.at-right { right: 8px; } .inspector.at-left { left: 8px; }
+    .insp-params { font-family: var(--mono); font-size: 11.5px; margin: 6px 0 8px; display: grid; grid-template-columns: 1fr auto; gap: 1px 10px; border-top: 1px solid var(--line-soft); padding-top: 6px; }
+    .insp-params .v { color: var(--ink); font-weight: 600; text-align: right; }
+    .insp-params .k { color: var(--ink-3); }
+    .insp-note { font-size: 11.5px; color: var(--ink-3); line-height: 1.45; margin-top: 6px; }
+    .insp-info { margin-top: 8px; border-top: 1px solid var(--line-soft); padding-top: 6px; }
+    .insp-info summary { font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; }
+    body.level-mode .insp-info { display: none; }
+    .dock { height: 10rem; }
+    #topbar .btn, #topbar .mode-btn { white-space: nowrap; }
+    .narrow { display: none; }
+    @media (max-width: 1400px) { .wide { display: none; } .narrow { display: inline; } #topbar { gap: 8px; } #topbar .mode-sm { padding: 4px 8px; } }
+    .dmod .grid { row-gap: 4px; }
+    .dmod { border: 1px solid var(--line); border-radius: 6px; padding: 5px 7px; display: flex; flex-direction: column; gap: 4px; min-width: 0; background: #FBFCFD; overflow: hidden; }
+    .dmod.dock-flash { outline: 2px solid var(--accent); outline-offset: 1px; }
+    .dmod-h { font-size: 10px; font-weight: 600; letter-spacing: .06em; text-transform: uppercase; color: var(--ink-3); display: flex; align-items: center; gap: 6px; min-height: 18px; }
+    .dmod-h .qbtn { width: 17px; height: 17px; line-height: 15px; font-size: 10px; }
+    .dock .tbtn, .inspector .tbtn { padding: 3px 6px; font-size: 11px; gap: 5px; min-width: 0; white-space: nowrap; overflow: hidden; }
+    .dock .tbtn::before, .inspector .tbtn::before { width: 7px; height: 7px; }
+    .dock .btn-sm { padding: 3px 6px; font-size: 11px; }
+    .dock .gate-btn { width: 5rem !important; flex: none; }
+    .dock .tag-btn { min-width: 0; flex: 1; font-size: 9.5px; padding: 3px 4px; line-height: 1.1; }
+    .dock .tag-btn.tag-on { border-width: 2px; border-style: solid; }
+    .dock .tag-btn.tag-on span + span { display: none; }
+    .dock .gate-state { display: none; }
+    .dock .meter { height: 4px; }
+    .seg-sm .seg-btn { padding: 3px 8px; font-size: 11px; }
+    #levelToasts { bottom: auto; top: 128px; }
   </style>
 </head>
-<body class="min-h-screen">
+<body class="h-screen w-screen overflow-hidden flex flex-col select-none">
 
-  <!-- Шапка -->
-  <header class="flex flex-wrap items-center gap-x-4 gap-y-2 px-4 py-2.5 bg-white border-b" style="border-color:var(--line)">
-    <div class="flex items-center gap-2.5 min-w-0">
+  <!-- ===== Уровень 1: шапка ===== -->
+  <header id="topbar" class="h-11 shrink-0 bg-white border-b px-3 flex items-center gap-3" style="border-color:#CBD5E1">
+    <div class="flex items-center gap-2 shrink-0">
       <span id="statusLamp" class="inline-block w-3 h-3 rounded-full bg-green-500"></span>
-      <h1 class="text-[15px] font-semibold tracking-tight">ИТП · Жилой дом 9 эт. · Независимая схема отопления</h1>
+      <h1 class="text-[14px] font-semibold tracking-tight whitespace-nowrap">ИТП-01<span class="wide"> Тренажер</span></h1>
     </div>
-    <div class="text-xs muted">T<sub>нар</sub> = <span id="tOut" class="mono font-semibold" style="color:var(--ink)">−10 °C</span></div>
-    <div class="ml-auto flex flex-wrap items-center gap-3">
-      <div class="text-xs muted flex items-center gap-1.5"><span data-icon="clock"></span>Время <span id="simTime" class="mono font-semibold" style="color:var(--ink)">00:00</span></div>
-      <div class="flex items-center gap-1 text-xs" id="speedGroup">
-        <span class="faint mr-1">Скорость</span>
+    <nav class="flex items-center gap-1 shrink-0" aria-label="Режим тренажера">
+      <button data-mode="free" class="mode-btn mode-sm"><span data-icon="gauge"></span>Свободный</button>
+      <button data-mode="lesson" class="mode-btn mode-sm"><span data-icon="book"></span>Обучение <span class="mono opacity-70">(20)</span></button>
+      <button data-mode="levels" class="mode-btn mode-sm"><span data-icon="flag"></span>Смены <span class="mono opacity-70">(6)</span></button>
+    </nav>
+    <div class="flex items-center gap-1.5 mx-auto">
+      <button id="cfgToggle" class="btn btn-sm" data-drop="configPanel"><span data-icon="gear"></span>Конфигуратор<span class="wide"> схемы</span><span data-icon="chevDown"></span></button>
+      <button id="envToggle" class="btn btn-sm" data-drop="envPanel"><span data-icon="sliders"></span><span class="wide">Внешние условия</span><span class="narrow">Условия</span><span data-icon="chevDown"></span></button>
+    </div>
+    <div class="flex items-center gap-2.5 shrink-0">
+      <div class="text-[11px] muted whitespace-nowrap">T<sub>нар</sub> <span id="tOut" class="mono font-semibold" style="color:var(--ink)">−10 °C</span></div>
+      <div class="text-[11px] muted flex items-center gap-1 whitespace-nowrap"><span data-icon="clock"></span><span id="simTime" class="mono font-semibold" style="color:var(--ink)">00:00</span></div>
+      <div class="flex items-center gap-1" id="speedGroup">
+        <button id="pauseBtn" aria-label="Пауза"></button>
         <button data-speed="1" class="speed-btn">×1</button>
         <button data-speed="2" class="speed-btn">×2</button>
         <button data-speed="5" class="speed-btn">×5</button>
-        <button id="pauseBtn" aria-label="Пауза"></button>
       </div>
-      <button id="resetBtn" class="btn btn-primary btn-sm"><span data-icon="reset"></span>Сбросить в штатный режим</button>
+      <button id="trendToggle" class="btn btn-sm"><span data-icon="list"></span>График<span class="wide"> и журнал</span></button>
+      <button id="resetBtn" class="btn btn-primary btn-sm"><span data-icon="reset"></span>Сброс</button>
     </div>
   </header>
 
-  <!-- Режимы -->
-  <nav class="flex flex-wrap items-center gap-2 px-3 pt-3" aria-label="Режим тренажера">
-    <button data-mode="free" class="mode-btn"><span data-icon="gauge"></span>Свободный режим</button>
-    <button data-mode="lesson" class="mode-btn"><span data-icon="book"></span>Обучение</button>
-    <button data-mode="levels" class="mode-btn"><span data-icon="flag"></span>Уровни</button>
-  </nav>
-
-  <!-- Конфигуратор схемы (только свободный режим) -->
-  <div id="configPanel" class="mx-3 mt-3 panel px-4 py-3 flex flex-wrap items-center gap-x-6 gap-y-3">
-    <div class="flex items-center gap-2 text-[13px] font-semibold"><span data-icon="gear"></span>Конфигуратор схемы</div>
-    <div class="flex items-center gap-2 flex-wrap">
-      <span class="cfg-label">Подпитка системы отопления</span>
-      <div class="seg-group" role="group" aria-label="Узел подпитки">
-        <button class="seg-btn" data-cfg="makeupType" data-val="direct">Безнасосная (от P2)</button>
-        <button class="seg-btn" data-cfg="makeupType" data-val="pumped">Насосная станция (Нп + РД)</button>
+  <!-- Выпадающая панель: конфигуратор схемы (только свободный режим) -->
+  <div id="configPanel" class="drop-panel panel px-4 py-3" hidden>
+    <div class="flex flex-col gap-3">
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="cfg-label w-44">Подпитка системы отопления</span>
+        <div class="seg-group" role="group" aria-label="Узел подпитки">
+          <button class="seg-btn" data-cfg="makeupType" data-val="direct">Безнасосная (от P2)</button>
+          <button class="seg-btn" data-cfg="makeupType" data-val="pumped">Насосная станция (Нп + РД)</button>
+        </div>
+        <button class="qbtn" data-info="makeupPump">?</button>
       </div>
-      <button class="qbtn" data-info="makeupPump">?</button>
-    </div>
-    <div class="flex items-center gap-2 flex-wrap">
-      <span class="cfg-label">Контур ГВС</span>
-      <div class="seg-group" role="group" aria-label="Схема ГВС">
-        <button class="seg-btn" data-cfg="dhwScheme" data-val="none">Без ГВС</button>
-        <button class="seg-btn" data-cfg="dhwScheme" data-val="1stage" title="Одноступенчатая параллельная схема">1-ступ.</button>
-        <button class="seg-btn" data-cfg="dhwScheme" data-val="2stage" title="Двухступенчатая смешанная схема">2-ступ.</button>
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="cfg-label w-44">Контур ГВС</span>
+        <div class="seg-group" role="group" aria-label="Схема ГВС">
+          <button class="seg-btn" data-cfg="dhwScheme" data-val="none">Без ГВС</button>
+          <button class="seg-btn" data-cfg="dhwScheme" data-val="1stage" title="Одноступенчатая параллельная схема">1-ступ.</button>
+          <button class="seg-btn" data-cfg="dhwScheme" data-val="2stage" title="Двухступенчатая смешанная схема">2-ступ.</button>
+        </div>
+        <button class="qbtn" data-info="dhwHex">?</button>
       </div>
-      <button class="qbtn" data-info="dhwHex">?</button>
-    </div>
-    <div class="flex items-center gap-2 flex-wrap">
-      <span class="cfg-label">Напор сети</span>
-      <div class="seg-group" role="group" aria-label="Режим давления сети">
-        <button class="seg-btn mono" data-cfg="network" data-val="normal" title="P1 = 6.5 бар, P2 = 4.5 бар">Штатный 6.5 / 4.5</button>
-        <button class="seg-btn mono" data-cfg="network" data-val="low" title="P1 = 4.5 бар, P2 = 2.5 бар — ниже статики дома">Пониженный 4.5 / 2.5</button>
+      <div class="flex items-center gap-2 flex-wrap">
+        <span class="cfg-label w-44">Напор сети</span>
+        <div class="seg-group" role="group" aria-label="Режим давления сети">
+          <button class="seg-btn mono" data-cfg="network" data-val="normal" title="P1 = 6.5 бар, P2 = 4.5 бар">Штатный 6.5 / 4.5</button>
+          <button class="seg-btn mono" data-cfg="network" data-val="low" title="P1 = 4.5 бар, P2 = 2.5 бар — ниже статики дома">Пониженный 4.5 / 2.5</button>
+        </div>
       </div>
+      <div id="configNote" class="text-[11px] faint leading-4" style="max-width:62ch"></div>
     </div>
-    <div id="configNote" class="text-[11px] faint basis-full -mt-1"></div>
   </div>
 
-  <main class="grid gap-3 p-3 xl:grid-cols-[minmax(0,1fr)_356px]">
+  <!-- Выпадающая панель: внешние условия и возмущения (только свободный режим) -->
+  <div id="envPanel" class="drop-panel panel px-4 py-3" hidden>
+    <div class="ctl-env">
+      <div class="flex items-center gap-2 mb-1"><span class="text-[12px] font-semibold">Погода</span><span class="text-[11px] faint">температура наружного воздуха</span><span id="envToutVal" class="mono text-sm ml-auto">−10 °C</span></div>
+      <input id="envTout" type="range" min="-30" max="10" step="1" value="-10" aria-label="Температура наружного воздуха">
+    </div>
+    <div class="arm-h">Возмущения</div>
+    <div class="grid grid-cols-2 gap-1.5">
+      <button id="envFoulBtn" class="btn btn-sm btn-warn">Засорить грязевик +10 %</button>
+      <button id="envScaleBtn" class="btn btn-sm btn-warn">Накипь в ПТО +25 %</button>
+      <button id="envPump1Btn" class="btn btn-sm" data-env="pump1Fail">Отказ насоса Н1</button>
+      <button id="envKzrBtn" class="btn btn-sm" data-env="kzrFail">Отказ привода КЗР</button>
+      <button id="envLeakBtn" class="btn btn-sm" data-env="houseLeak">Утечка в доме</button>
+      <button id="envT1Btn" class="btn btn-sm" data-env="T1">Недодача сети −15 °C</button>
+    </div>
+    <div class="text-[11px] faint mt-2 leading-4">Возмущения включаются и снимаются повторным нажатием. «Сброс» в шапке возвращает штатный режим.</div>
+  </div>
 
-    <!-- Левая колонка: схема + диагностика -->
-    <section class="flex flex-col gap-3 min-w-0">
-      <!-- Панель уровня (смены) -->
-      <div id="levelPanel" class="panel p-4" style="border-top:3px solid var(--warn)" hidden>
-        <div class="flex flex-wrap items-center gap-2">
-          <span class="badge badge-amber">СМЕНА</span>
-          <h2 id="levelTitle" class="text-base font-semibold"></h2>
-          <span class="mono text-sm font-semibold ml-1 flex items-center gap-1.5" style="color:#92400E"><span data-icon="clock"></span><span id="levelClock">00:00</span></span>
-          <div class="ml-auto flex flex-wrap gap-2">
-            <button id="levelReport" class="btn btn-sm btn-warn"><span data-icon="phone"></span>Сообщить диспетчеру теплосети</button>
-            <button id="levelRestart" class="btn btn-sm"><span data-icon="reset"></span>Заново</button>
-            <button id="levelExit" class="btn btn-sm"><span data-icon="close"></span>Выйти</button>
-          </div>
-        </div>
-        <p id="levelIntro" class="text-[13px] muted mt-2 leading-5"></p>
-        <div id="levelStatus" class="text-[11px] mono faint mt-2"></div>
-        <details class="mt-2">
-          <summary class="text-xs muted cursor-pointer">Принятые сообщения</summary>
-          <ul id="levelMessages" class="text-xs leading-5 mt-1 flex flex-col gap-1 max-h-32 overflow-y-auto"></ul>
-        </details>
+  <!-- Оверлей: тренд, журнал, ключевые параметры -->
+  <div id="trendPanel" class="drop-panel drop-right panel p-3" hidden>
+    <div class="flex items-center justify-between mb-1.5">
+      <div class="panel-title">Тренд температур · 2 мин</div>
+      <div class="flex gap-3 text-[11px] mono">
+        <span class="flex items-center gap-1.5" style="color:#C2410C"><i style="display:inline-block;width:14px;height:2.5px;background:#C2410C"></i>T11</span>
+        <span class="flex items-center gap-1.5" style="color:#B45309"><i style="display:inline-block;width:14px;height:2.5px;background:#D97706"></i>T2</span>
+        <span class="flex items-center gap-1.5" style="color:#0369A1"><i style="display:inline-block;width:14px;height:2.5px;background:#0369A1"></i>T21</span>
       </div>
+    </div>
+    <canvas id="trend" class="w-full h-[140px] block rounded" style="background:#FFFFFF;border:1px solid var(--line-soft)"></canvas>
+    <div class="grid grid-cols-2 gap-3 mt-2.5">
+      <div class="min-w-0">
+        <div class="panel-title mb-1">Журнал событий</div>
+        <div id="log" class="mono text-[11px] leading-5 h-[220px] overflow-y-auto scroll-box px-2 py-1"></div>
+      </div>
+      <div class="min-w-0">
+        <div class="panel-title mb-1">Ключевые параметры</div>
+        <div class="h-[220px] overflow-y-auto"><table class="w-full text-[12px] k-table"><tbody id="summary"></tbody></table></div>
+      </div>
+    </div>
+  </div>
 
-      <!-- Панель текущего урока -->
-      <div id="lessonPanel" class="panel p-4" style="border-top:3px solid var(--accent)" hidden>
-        <div class="flex flex-wrap items-center gap-2">
-          <span id="lessonBadge" class="badge"></span>
-          <h2 id="lessonTitle" class="text-base font-semibold"></h2>
-          <div class="ml-auto flex flex-wrap gap-2">
-            <a id="lessonNotes" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-accent"><span data-icon="doc"></span>Конспект PDF</a>
-            <button id="lessonAll" class="btn btn-sm"><span data-icon="list"></span>Все уроки</button>
-            <button id="lessonRestart" class="btn btn-sm"><span data-icon="reset"></span>Заново</button>
-            <button id="lessonExit" class="btn btn-sm"><span data-icon="close"></span>Выйти</button>
-          </div>
-        </div>
-        <p id="lessonIntro" class="text-[13px] muted mt-2 leading-5" style="max-width:78ch"></p>
-        <div id="lessonSegs" class="segs mt-3" aria-hidden="true"></div>
-        <div class="sr-bar"><div id="lessonProgress" style="width:0%"></div></div>
-        <div class="grid gap-4 mt-3 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
-          <div class="min-w-0">
-            <div id="lessonCounter" class="text-[11px] mono faint"></div>
-            <div id="lessonStep" class="text-[17px] font-semibold mt-1 leading-snug" style="text-wrap:balance"></div>
-            <div id="lessonWhyBox" class="why mt-3">
-              <div class="why-h">Почему это важно · физика процесса</div>
-              <div id="lessonWhy" class="text-[13px] muted leading-5"></div>
-            </div>
-            <div id="lessonHold" class="text-xs mono mt-2" style="color:#92400E" hidden></div>
-            <button id="lessonAck" class="btn btn-primary mt-3" hidden>Далее</button>
-          </div>
-          <ol id="lessonSteps" class="text-xs leading-5 flex flex-col gap-1.5 min-w-0"></ol>
+  <!-- ===== Уровень 2: смена / урок и табло тревог ===== -->
+  <div id="stripRow" class="shrink-0 px-3 pt-1.5 flex flex-col gap-1.5">
+    <div id="levelPanel" class="strip strip-level" hidden>
+      <span class="badge badge-amber">СМЕНА</span>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2 min-w-0"><h2 id="levelTitle" class="text-[13px] font-semibold truncate"></h2>
+          <span class="mono text-[12px] font-semibold flex items-center gap-1" style="color:#92400E"><span data-icon="clock"></span><span id="levelClock">00:00</span></span></div>
+        <div id="levelStatus" class="text-[11px] mono faint truncate"></div>
+      </div>
+      <button id="levelReport" class="btn btn-sm btn-warn"><span data-icon="phone"></span>Сообщить диспетчеру</button>
+      <div class="relative">
+        <button id="levelMore" class="btn btn-sm" data-pop="levelMorePop">Задание и сообщения<span data-icon="chevDown"></span></button>
+        <div id="levelMorePop" class="strip-pop" hidden>
+          <p id="levelIntro" class="text-[13px] muted leading-5"></p>
+          <div class="panel-title mt-3 mb-1">Принятые сообщения</div>
+          <ul id="levelMessages" class="text-xs leading-5 flex flex-col gap-1 max-h-40 overflow-y-auto"></ul>
         </div>
       </div>
+      <button id="levelRestart" class="btn btn-sm" title="Начать смену заново"><span data-icon="reset"></span>Заново</button>
+      <button id="levelExit" class="btn btn-sm" title="Выйти из смены"><span data-icon="close"></span>Выйти</button>
+    </div>
 
-      <div class="panel p-2">
-        <div class="flex items-center justify-between px-1 pb-1.5">
-          <div class="panel-title">Мнемосхема ИТП · технологическая схема</div>
-          <div class="scheme-hint text-[11px] faint">Нажмите на узел схемы, чтобы узнать, зачем он нужен</div>
+    <div id="lessonPanel" class="strip strip-lesson" hidden>
+      <span id="lessonBadge" class="badge"></span>
+      <div class="min-w-0 flex-1">
+        <div class="flex items-center gap-2 min-w-0"><span id="lessonCounter" class="mono text-[11px] faint whitespace-nowrap"></span>
+          <span id="lessonHold" class="mono text-[11px] whitespace-nowrap" style="color:#92400E" hidden></span></div>
+        <div id="lessonStep" class="text-[14px] font-semibold leading-snug lesson-step"></div>
+      </div>
+      <div class="relative">
+        <button id="lessonWhyToggle" class="btn btn-sm btn-accent" data-pop="lessonWhyPop"><span data-icon="info"></span>Физический смысл</button>
+        <div id="lessonWhyPop" class="strip-pop" hidden>
+          <div id="lessonWhyBox" class="why">
+            <div class="why-h">Почему это важно · физика процесса</div>
+            <div id="lessonWhy" class="text-[13px] muted leading-5"></div>
+          </div>
         </div>
+      </div>
+      <button id="lessonAck" class="btn btn-primary btn-sm" hidden>Далее</button>
+      <div class="relative">
+        <button id="lessonMore" class="btn btn-sm" data-pop="lessonMorePop">Ход урока<span data-icon="chevDown"></span></button>
+        <div id="lessonMorePop" class="strip-pop strip-pop-right" hidden>
+          <h2 id="lessonTitle" class="text-[14px] font-semibold"></h2>
+          <p id="lessonIntro" class="text-[12.5px] muted mt-1 leading-5"></p>
+          <div id="lessonSegs" class="segs mt-2" aria-hidden="true"></div>
+          <div class="sr-bar"><div id="lessonProgress" style="width:0%"></div></div>
+          <ol id="lessonSteps" class="text-xs leading-5 flex flex-col gap-1.5 mt-2 max-h-56 overflow-y-auto"></ol>
+        </div>
+      </div>
+      <a id="lessonNotes" href="#" target="_blank" rel="noopener" class="btn btn-sm btn-accent"><span data-icon="doc"></span>Конспект PDF</a>
+      <button id="lessonStepReset" class="btn btn-sm" title="Вернуть состояние на начало текущего шага">Сбросить шаг</button>
+      <button id="lessonRestart" class="btn btn-sm" title="Начать урок заново"><span data-icon="reset"></span></button>
+      <button id="lessonAll" class="btn btn-sm" title="Все уроки"><span data-icon="list"></span></button>
+      <button id="lessonExit" class="btn btn-sm" title="Выйти из урока"><span data-icon="close"></span></button>
+    </div>
 
-        <svg id="scheme" viewBox="0 0 1000 520" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Технологическая схема ИТП">
+    <div class="alarm-strip">
+      <span class="panel-title flex items-center gap-1.5 shrink-0"><span data-icon="alert"></span>Диагностика</span>
+      <span id="alarmCount" class="text-[10.5px] mono faint shrink-0"></span>
+      <div id="alarms" class="abadges"></div>
+    </div>
+  </div>
+  <div id="alarmPop" class="alarm-pop" hidden></div>
+
+  <!-- ===== Уровень 3: мнемосхема ===== -->
+  <main class="flex-1 min-h-0 px-3 py-1.5 relative">
+    <div id="scene" class="scene">
+      <svg id="scheme" viewBox="0 0 1000 520" preserveAspectRatio="xMidYMid meet" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="Технологическая схема ИТП">
           <defs>
             <pattern id="grid" width="20" height="20" patternUnits="userSpaceOnUse">
               <path d="M20 0H0V20" fill="none" stroke="#E2E8F0" stroke-width="0.7"/>
@@ -756,350 +864,290 @@
           <!-- Подсветка шага урока -->
           <g id="lessonMarks"></g>
         </svg>
+
+      <!-- Масштаб листа (с контуром ГВС) -->
+      <div id="viewFocus" class="view-focus" hidden>
+        <button data-focus="all" class="seg-btn is-active">Весь лист</button>
+        <button data-focus="heat" class="seg-btn">Отопление</button>
+        <button data-focus="dhw" class="seg-btn">ГВС</button>
       </div>
+      <div class="scheme-hint">Нажмите на узел схемы — откроется его пульт и справка</div>
 
-      <div class="grid gap-3 lg:grid-cols-2">
-        <!-- Диагностика -->
-        <div class="panel p-4 flex flex-col">
-          <div class="flex items-center justify-between mb-3">
-            <div class="panel-title flex items-center gap-2"><span data-icon="alert"></span>Диагностика · аварии и предупреждения</div>
-            <span id="alarmCount" class="text-[11px] mono faint"></span>
-          </div>
-          <div id="alarms" class="flex flex-col gap-2"></div>
+      <!-- Контекстный пульт узла -->
+      <div id="inspector" class="inspector at-right" hidden>
+        <div class="flex items-center gap-2">
+          <span class="panel-title">Узел</span>
+          <h3 id="inspTitle" class="text-[13px] font-semibold leading-tight min-w-0"></h3>
+          <button id="inspClose" class="btn btn-sm ml-auto" aria-label="Закрыть"><span data-icon="close"></span></button>
         </div>
+        <div id="inspParams" class="insp-params"></div>
+        <div id="inspPanels">
+          <div data-insp="valves" hidden><p class="insp-note">Задвижки V1 и V2, плакаты и перепад на грязевике — модуль «Ввод теплосети» внизу.</p></div>
 
-        <!-- Тренд + журнал -->
-        <div class="panel p-4 flex flex-col gap-4">
-          <div>
-            <div class="flex items-center justify-between mb-2">
-              <div class="panel-title">Тренд температур · 2 мин</div>
-              <div class="flex gap-3 text-[11px] mono">
-                <span class="flex items-center gap-1.5" style="color:#C2410C"><i style="display:inline-block;width:14px;height:2.5px;background:#C2410C"></i>T11</span>
-                <span class="flex items-center gap-1.5" style="color:#B45309"><i style="display:inline-block;width:14px;height:2.5px;background:#D97706"></i>T2</span>
-                <span class="flex items-center gap-1.5" style="color:#0369A1"><i style="display:inline-block;width:14px;height:2.5px;background:#0369A1"></i>T21</span>
-              </div>
+          <div data-insp="strainer" hidden>
+            <div class="flex items-center gap-2 text-[11px]"><span class="mono w-16">Засор</span><div class="meter flex-1"><div id="foulBar" style="width:0%;background:#92400E"></div></div><span id="foulVal" class="mono w-10 text-right">0%</span></div>
+            <div class="grid grid-cols-2 gap-1.5 mt-2">
+              <button id="foulBtn" class="btn btn-sm btn-warn">Засорить +10%</button>
+              <button id="cleanBtn" class="btn btn-sm"><span data-icon="wrench"></span>Вскрыть и промыть</button>
             </div>
-            <canvas id="trend" class="w-full h-[160px] block rounded" style="background:#FFFFFF;border:1px solid var(--line-soft)"></canvas>
+            <p class="insp-note">Вскрывать можно только отключенный (V1, V2 закрыты) и опорожненный участок: дренаж и воздушник сети — модуль «Дом и ПТО».</p>
           </div>
-          <div>
-            <div class="panel-title mb-1.5">Журнал событий</div>
-            <div id="log" class="mono text-[11px] leading-5 h-[124px] overflow-y-auto scroll-box px-2 py-1"></div>
+
+          <div data-insp="netdrain" hidden>
+            <div class="meter"><div id="netFillBar" style="width:100%;background:var(--cold)"></div></div>
+            <div id="netFillTxt" class="mono text-[10.5px] faint mt-1"></div>
+            <p class="insp-note">Слив: закрыть V1, затем V2 → открыть дренаж и воздушник сети → дождаться 0 бар и 0 %.<br>
+              Заполнение: дренаж закрыт, воздушник открыт → открыть V2 → когда участок полон, закрыть воздушник → открыть V1.</p>
           </div>
-        </div>
-      </div>
-    </section>
 
-    <!-- Правая колонка: щит управления ИТП -->
-    <aside class="flex flex-col gap-3">
-      <div class="panel p-4">
-        <div class="flex items-center justify-between mb-3">
-          <div class="text-[13px] font-semibold flex items-center gap-2"><span data-icon="sliders"></span>Щит управления ИТП</div>
-          <span class="mono text-[10px] faint">ШУ-ИТП-01</span>
-        </div>
+          <div data-insp="kzr" hidden><p class="insp-note">Задание КЗР и режим привода — модуль «КЗР · регулирование» внизу. Байпас и ремонт — кнопка «Байпас / ремонт».</p></div>
 
-        <div class="flex flex-col gap-5" id="controls">
-          <!-- 1. Первичный контур -->
-          <section>
-            <div class="sec-h"><span class="num">01</span>Первичный контур (Теплосеть)</div>
-            <div class="flex flex-col gap-4">
-              <div class="gate" data-gate="V1">
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="text-sm font-semibold mono">V1</span>
-                  <span class="text-xs muted">Задвижка подачи теплосети</span>
-                  <button class="qbtn ml-auto" data-info="valves">?</button>
-                </div>
-                <div class="flex items-center gap-2">
-                  <button id="gateBtnV1" class="gate-btn btn btn-sm w-24"></button>
-                  <button id="tagBtnV1" class="tag-btn tag-off" title="Плакат «Не открывать — работают люди»"></button>
-                  <div class="flex-1 min-w-0">
-                    <div class="meter"><div class="gate-bar" style="width:100%"></div></div>
-                    <div class="gate-state mono text-[10.5px] faint mt-1"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div id="strainerRow">
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="text-sm font-semibold mono">Гр</span>
-                  <span class="text-xs muted">Грязевик: засор сетки</span>
-                  <button class="qbtn ml-auto" data-info="strainer">?</button>
-                  <span id="foulVal" class="mono text-sm w-12 text-right">0%</span>
-                </div>
-                <div class="meter mb-2"><div id="foulBar" style="width:0%;background:#92400E"></div></div>
-                <div class="flex gap-2">
-                  <button id="foulBtn" class="btn btn-sm btn-warn flex-1">Засорить +10%</button>
-                  <button id="cleanBtn" class="btn btn-sm flex-1"><span data-icon="wrench"></span>Вскрыть и промыть</button>
-                </div>
-              </div>
-
-              <div class="ctl" data-ctl="KZRcmd">
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="text-sm font-semibold mono">КЗР</span>
-                  <span class="text-xs muted">Регулирующий клапан</span>
-                  <button class="qbtn ml-auto" data-info="kzr">?</button>
-                  <span class="mono text-sm w-12 text-right" data-val>48%</span>
-                </div>
-                <div class="flex items-center gap-2">
-                  <button class="kzr-step btn btn-sm mono" data-step="-1">−1</button>
-                  <input type="range" min="0" max="100" step="1" value="48" aria-label="Задание КЗР">
-                  <button class="kzr-step btn btn-sm mono" data-step="1">+1</button>
-                </div>
-                <div class="flex items-center gap-2 mt-2">
-                  <span id="kzrPos" class="mono text-[10.5px] faint"></span>
-                  <button id="kzrManualBtn" data-toggle="KZR_MANUAL" data-on="Ручной (штурвал)" data-off="Авто (привод)" data-tone="amber" data-label="Режим КЗР" class="tbtn ml-auto"></button>
-                </div>
-              </div>
-
-              <div class="gate" data-gate="V2">
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="text-sm font-semibold mono">V2</span>
-                  <span class="text-xs muted">Задвижка обратки теплосети</span>
-                  <button class="qbtn ml-auto" data-info="valves">?</button>
-                </div>
-                <div class="flex items-center gap-2">
-                  <button id="gateBtnV2" class="gate-btn btn btn-sm w-24"></button>
-                  <button id="tagBtnV2" class="tag-btn tag-off" title="Плакат «Не открывать — работают люди»"></button>
-                  <div class="flex-1 min-w-0">
-                    <div class="meter"><div class="gate-bar" style="width:100%"></div></div>
-                    <div class="gate-state mono text-[10.5px] faint mt-1"></div>
-                  </div>
-                </div>
-              </div>
-
-              <div>
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="text-xs muted">Ремонт участка между V1 и V2</span>
-                  <button class="qbtn ml-auto" data-info="netdrain">?</button>
-                </div>
-                <div class="grid grid-cols-2 gap-2">
-                  <div class="flex flex-col gap-1">
-                    <span class="text-[11px] faint">Дренаж сети</span>
-                    <button id="netDrainBtn" data-toggle="NET_DRAIN" data-on="ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Дренаж сети" class="tbtn"></button>
-                  </div>
-                  <div class="flex flex-col gap-1">
-                    <span class="text-[11px] faint">Воздушник</span>
-                    <button id="netVentBtn" data-toggle="NET_VENT" data-on="ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Воздушник сети" class="tbtn"></button>
-                  </div>
-                </div>
-                <div class="meter mt-2.5"><div id="netFillBar" style="width:100%;background:var(--cold)"></div></div>
-                <div id="netFillTxt" class="mono text-[10.5px] faint mt-1"></div>
-                <div class="text-[11px] faint mt-2 leading-4">
-                  Слив: закрыть V1, затем V2 → открыть дренаж и воздушник → дождаться 0 бар и 0 % → промыть грязевик.<br>
-                  Заполнение: закрыть дренаж, воздушник открыт → открыть V2 → когда участок полон, закрыть воздушник → открыть V1.
-                </div>
-              </div>
+          <div data-insp="kzrBypass" hidden>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button id="kzrIsoBtn" data-toggle="KZR_ISO" data-on="Краны КЗР: ОТКР" data-off="Краны КЗР: ЗАКР" data-tone="slate" data-inverse="1" data-label="Отсечные краны КЗР" class="tbtn tbtn-sm"></button>
+              <button id="repairKzrBtn" class="btn btn-sm">Ремонт привода КЗР</button>
             </div>
-          </section>
-
-          <!-- 2. Вторичный контур и насосная группа -->
-          <section>
-            <div class="sec-h"><span class="num">02</span>Вторичный контур и насосная группа</div>
-            <div class="flex flex-col gap-3">
-              <div class="flex items-center gap-2">
-                <span class="text-xs muted">Циркуляционные насосы</span>
-                <button class="qbtn ml-auto" data-info="pump">?</button>
+            <div class="ctl mt-2" data-ctl="KZR_BYPASS">
+              <div class="flex items-center gap-2 mb-1">
+                <span class="text-[12px] font-semibold">Байпас КЗР</span><span class="text-[11px] faint">ручной вентиль, Kvs 16</span>
+                <span class="mono text-sm w-12 text-right ml-auto" data-val>0%</span>
               </div>
-              <div class="grid grid-cols-[2.2rem_1fr_1fr] gap-2 items-center">
-                <span class="text-sm font-semibold mono">Н1</span>
-                <button id="pumpBtn" data-toggle="PUMP" data-on="В РАБОТЕ" data-off="СТОП" data-tone="green" data-label="Насос Н1" class="tbtn"></button>
-                <button id="iso1Btn" data-toggle="PUMP1_ISO" data-on="Краны открыты" data-off="Краны закрыты" data-tone="slate" data-inverse="1" data-label="Краны Н1" class="tbtn"></button>
-                <span class="text-sm font-semibold mono">Н2</span>
-                <button id="pump2Btn" data-toggle="PUMP2" data-on="В РАБОТЕ" data-off="СТОП" data-tone="green" data-label="Насос Н2" class="tbtn"></button>
-                <button id="iso2Btn" data-toggle="PUMP2_ISO" data-on="Краны открыты" data-off="Краны закрыты" data-tone="slate" data-inverse="1" data-label="Краны Н2" class="tbtn"></button>
-              </div>
-
-              <div class="ctl" data-ctl="MAKEUP">
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="text-sm font-semibold mono">Подп.</span>
-                  <span class="text-xs muted">Кран подпитки контура</span>
-                  <button class="qbtn ml-auto" data-info="makeup">?</button>
-                  <span class="mono text-sm w-12 text-right" data-val>0%</span>
-                </div>
-                <input type="range" min="0" max="100" step="1" value="0" aria-label="Открытие подпитки">
-                <div id="mpControls" class="mt-2.5 p-2.5 rounded-md" style="background:#F8FAFC;border:1px solid var(--line-soft)" hidden>
-                  <div class="flex items-center gap-2 mb-2">
-                    <span class="text-xs font-semibold">Станция подпитки Нп</span>
-                    <button class="qbtn ml-auto" data-info="makeupPump">?</button>
-                  </div>
-                  <div class="grid grid-cols-2 gap-2">
-                    <button id="mpAutoBtn" data-toggle="MAKEUP_AUTO" data-on="РД: АВТО 3.2–3.6" data-off="РД: РУЧНОЙ" data-tone="blue" data-label="Режим РД" class="tbtn"></button>
-                    <button id="mpPumpBtn" data-toggle="MAKEUP_PUMP" data-on="Насос Нп: ВКЛ" data-off="Насос Нп: ВЫКЛ" data-tone="green" data-label="Насос Нп" class="tbtn"></button>
-                  </div>
-                  <div id="mpStatus" class="mono text-[10.5px] faint mt-1.5"></div>
-                </div>
-              </div>
-
-              <div class="flex items-center gap-2">
-                <span class="text-xs muted">Сброс в дренаж (ИТП)</span>
-                <button class="qbtn" data-info="drain">?</button>
-                <button id="drainBtn" data-toggle="DRAIN" data-on="ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Дренаж ИТП" class="tbtn ml-auto w-32"></button>
-              </div>
+              <input type="range" min="0" max="100" step="1" value="0" aria-label="Байпас КЗР, %">
             </div>
-          </section>
+            <div id="svcStatus" class="mono text-[10.5px] faint mt-1.5"></div>
+          </div>
 
-          <!-- 4. Контур ГВС (только при одноступенчатой схеме) -->
-          <section id="dhwControls" hidden>
-            <div class="sec-h"><span class="num">04</span><span id="dhwSecTitle">Контур ГВС (1-ступ.)</span><button id="dhwSecInfo" class="qbtn ml-auto" data-info="dhwHex">?</button></div>
-            <div class="flex flex-col gap-3">
-              <div class="ctl" data-ctl="DHW_DRAW" data-unit="т/ч" data-digits="1">
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="text-sm font-semibold mono">G гвс</span>
-                  <span class="text-xs muted">Водоразбор жильцами</span>
-                  <span class="mono text-sm w-16 text-right ml-auto" data-val>1.5 т/ч</span>
-                </div>
-                <input type="range" min="0" max="6" step="0.1" value="1.5" aria-label="Водоразбор горячей воды, т/ч">
-                <div class="grid grid-cols-3 gap-1.5 mt-2">
-                  <button class="btn btn-sm" data-draw="0">Ночь · 0</button>
-                  <button class="btn btn-sm" data-draw="1.5">День · 1.5</button>
-                  <button class="btn btn-sm" data-draw="5.5">Пик · 5.5</button>
-                </div>
-              </div>
+          <div data-insp="hex" hidden>
+            <div class="flex items-center gap-2 text-[11px]"><span class="mono w-16">Накипь</span><div class="meter flex-1"><div id="hexScaleBar" style="width:0%;background:#92400E"></div></div><span id="hexScaleVal" class="mono w-10 text-right">0%</span></div>
+            <button id="hexWashBtn" class="btn btn-sm w-full mt-2">Хим. промывка ПТО (CIP)</button>
+            <p class="insp-note">Промывка — только при закрытых V1, V2, Кд1, Кд2, остановленных насосах и опорожненном сетевом участке.</p>
+          </div>
 
-              <div class="ctl" data-ctl="DHW_KZRcmd">
-                <div class="flex items-center gap-2 mb-1.5">
-                  <span class="text-sm font-semibold mono">КЗР ГВС</span>
-                  <button class="qbtn" data-info="dhwKzr">?</button>
-                  <span class="mono text-sm w-12 text-right ml-auto" data-val>25%</span>
-                </div>
-                <input type="range" min="0" max="100" step="1" value="25" aria-label="Задание КЗР ГВС">
-                <div class="flex items-center gap-2 mt-2">
-                  <span id="dhwKzrPos" class="mono text-[10.5px] faint"></span>
-                  <button id="dhwAutoBtn" data-toggle="DHW_KZR_AUTO" data-on="АВТО 62 °C" data-off="РУЧНОЙ" data-tone="blue" data-label="Регулятор ГВС" class="tbtn ml-auto"></button>
-                </div>
-              </div>
+          <div data-insp="pump" hidden>
+            <button id="replacePump1Btn" class="btn btn-sm w-full">Заменить насос Н1</button>
+            <p class="insp-note">Пуск, останов и краны насосов — модуль «Насосная группа». Снимать насос можно только выключенным и отсеченным кранами.</p>
+          </div>
 
-              <div class="grid grid-cols-2 gap-2">
-                <div class="flex flex-col gap-1"><span class="text-[11px] faint flex items-center gap-1">Циркуляция Нц (T4) <button class="qbtn" data-info="dhwPump">?</button></span>
-                  <button id="dhwPumpBtn" data-toggle="DHW_PUMP" data-on="Нц: ВКЛ" data-off="Нц: ВЫКЛ" data-tone="green" data-label="Насос циркуляции ГВС Нц" class="tbtn"></button></div>
-                <div class="flex flex-col gap-1"><span class="text-[11px] faint">Ввод ХВС В1</span>
-                  <button id="dhwB1Btn" data-toggle="DHW_B1_VALVE" data-on="В1: ОТКР" data-off="В1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Ввод ХВС В1" class="tbtn"></button></div>
-              </div>
-              <div class="arm-box">
-                <div class="flex items-center gap-2 mb-2"><span class="energy-h" style="margin:0">Арматура узла ГВС</span><button class="qbtn ml-auto" data-info="dhwValves">?</button></div>
-                <div class="arm-h">Сеть</div>
-                <div class="grid grid-cols-2 gap-1.5">
-                  <button data-toggle="DHW_NET_SUP" data-on="Кс1: ОТКР" data-off="Кс1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран врезки ветки ГВС Кс1" class="tbtn tbtn-sm"></button>
-                  <button data-toggle="DHW_NET_RET" data-on="Кс2: ОТКР" data-off="Кс2: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран возврата ветки ГВС Кс2" class="tbtn tbtn-sm"></button>
-                </div>
-                <div class="dhw2-only" hidden>
-                  <div class="arm-h">I ступень по сети</div>
-                  <div class="grid grid-cols-3 gap-1.5">
-                    <button data-toggle="DHW_ST1_IN" data-on="Кс3: ОТКР" data-off="Кс3: ЗАКР" data-tone="slate" data-inverse="1" data-label="Вход сети в I ступень Кс3" class="tbtn tbtn-sm"></button>
-                    <button data-toggle="DHW_ST1_OUT" data-on="Кс4: ОТКР" data-off="Кс4: ЗАКР" data-tone="slate" data-inverse="1" data-label="Выход сети из I ступени Кс4" class="tbtn tbtn-sm"></button>
-                    <button data-toggle="DHW_ST1_BYP" data-on="Обвод Кс5: ОТКР" data-off="Обвод Кс5: ЗАКР" data-tone="amber" data-label="Обвод I ступени по сети Кс5" class="tbtn tbtn-sm"></button>
-                  </div>
-                  <div class="arm-h">I ступень по воде</div>
-                  <div class="grid grid-cols-3 gap-1.5">
-                    <button data-toggle="DHW_ST1_WIN" data-on="Кв1: ОТКР" data-off="Кв1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Вход воды в I ступень Кв1" class="tbtn tbtn-sm"></button>
-                    <button data-toggle="DHW_ST1_WOUT" data-on="Кв2: ОТКР" data-off="Кв2: ЗАКР" data-tone="slate" data-inverse="1" data-label="Выход воды из I ступени Кв2" class="tbtn tbtn-sm"></button>
-                    <button data-toggle="DHW_ST1_WBYP" data-on="Обвод Кв5: ОТКР" data-off="Обвод Кв5: ЗАКР" data-tone="amber" data-label="Обвод I ступени по воде Кв5" class="tbtn tbtn-sm"></button>
-                  </div>
-                </div>
-                <div class="arm-h">II ступень по воде · циркуляция</div>
-                <div class="grid grid-cols-2 gap-1.5">
-                  <button data-toggle="DHW_HEX2_WIN" data-on="Кв3: ОТКР" data-off="Кв3: ЗАКР" data-tone="slate" data-inverse="1" data-label="Вход воды во II ступень Кв3" class="tbtn tbtn-sm"></button>
-                  <button data-toggle="DHW_HEX2_WOUT" data-on="Кв4: ОТКР" data-off="Кв4: ЗАКР" data-tone="slate" data-inverse="1" data-label="Выход T3 в дом Кв4" class="tbtn tbtn-sm"></button>
-                  <button data-toggle="DHW_CIRC_IN" data-on="Кн1: ОТКР" data-off="Кн1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран до насоса Нц Кн1" class="tbtn tbtn-sm"></button>
-                  <button data-toggle="DHW_CIRC_OUT" data-on="Кн2: ОТКР" data-off="Кн2: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран после насоса Нц Кн2" class="tbtn tbtn-sm"></button>
-                </div>
-                <div class="arm-h flex items-center gap-1">Фильтры <button class="qbtn" data-info="dhwFilters">?</button></div>
-                <div class="flex items-center gap-2 text-[11px]"><span class="mono w-20">Фх (ХВС)</span><div class="meter flex-1"><div id="cwFoulBar" style="width:0%;background:#92400E"></div></div><span id="cwFoulVal" class="mono w-9 text-right">0%</span></div>
-                <div class="grid grid-cols-2 gap-1.5 mt-1 mb-2">
-                  <button id="cwFoulBtn" class="btn btn-sm btn-warn">Засорить +10%</button>
-                  <button id="cwCleanBtn" class="btn btn-sm">Промыть Фх</button>
-                </div>
-                <div class="flex items-center gap-2 text-[11px]"><span class="mono w-20">Фн (Нц)</span><div class="meter flex-1"><div id="circFoulBar" style="width:0%;background:#92400E"></div></div><span id="circFoulVal" class="mono w-9 text-right">0%</span></div>
-                <div class="grid grid-cols-2 gap-1.5 mt-1">
-                  <button id="circFoulBtn" class="btn btn-sm btn-warn">Засорить +10%</button>
-                  <button id="circCleanBtn" class="btn btn-sm">Промыть Фн</button>
-                </div>
-              </div>
-              <div id="dhwStatus" class="mono text-[10.5px] faint"></div>
-              <div class="energy-box">
-                <div class="energy-h">Энергобаланс узла ГВС</div>
-                <div id="dhwEnergy" class="mono"></div>
-              </div>
+          <div data-insp="makeup" hidden>
+            <div id="mpStatus" class="mono text-[10.5px] faint"></div>
+            <p class="insp-note">Кран подпитки, РД и насос Нп, дренаж ИТП — модуль «Подпитка и защита».</p>
+          </div>
+
+          <div data-insp="protect" hidden>
+            <div class="arm-h" style="margin-top:0">Манометр P21</div>
+            <div class="grid grid-cols-2 gap-1.5">
+              <button id="p21CockBtn" class="tbtn tbtn-sm col-span-2"></button>
+              <button id="replaceGaugeBtn" class="btn btn-sm col-span-2">Заменить манометр P21</button>
             </div>
-          </section>
-
-          <!-- 5. Регламентные и ремонтные работы -->
-          <section id="svcControls">
-            <div class="sec-h"><span class="num">05</span>Регламентные и ремонтные работы<button class="qbtn ml-auto" data-info="service">?</button></div>
-            <div class="flex flex-col gap-2.5">
-              <div>
-                <div class="arm-h" style="margin-top:0">Узел КЗР</div>
-                <div class="grid grid-cols-2 gap-1.5">
-                  <button id="kzrIsoBtn" data-toggle="KZR_ISO" data-on="Краны КЗР: ОТКР" data-off="Краны КЗР: ЗАКР" data-tone="slate" data-inverse="1" data-label="Отсечные краны КЗР" class="tbtn tbtn-sm"></button>
-                  <button id="repairKzrBtn" class="btn btn-sm">Ремонт привода КЗР</button>
-                </div>
-                <div class="ctl mt-2" data-ctl="KZR_BYPASS">
-                  <div class="flex items-center gap-2 mb-1">
-                    <span class="text-[12px] font-semibold">Байпас КЗР</span>
-                    <span class="text-[11px] faint">ручной вентиль, Kvs 16</span>
-                    <span class="mono text-sm w-12 text-right ml-auto" data-val>0%</span>
-                  </div>
-                  <input type="range" min="0" max="100" step="1" value="0" aria-label="Байпас КЗР, %">
-                </div>
-              </div>
-              <div>
-                <div class="arm-h" style="margin-top:0">ПТО отопления</div>
-                <div class="flex items-center gap-2 text-[11px]"><span class="mono w-20">Накипь</span><div class="meter flex-1"><div id="hexScaleBar" style="width:0%;background:#92400E"></div></div><span id="hexScaleVal" class="mono w-9 text-right">0%</span></div>
-                <button id="hexWashBtn" class="btn btn-sm w-full mt-1.5">Хим. промывка ПТО (CIP)</button>
-              </div>
-              <div>
-                <div class="arm-h" style="margin-top:0">Насосы и КИП</div>
-                <div class="grid grid-cols-2 gap-1.5">
-                  <button id="replacePump1Btn" class="btn btn-sm">Заменить насос Н1</button>
-                  <button id="replaceGaugeBtn" class="btn btn-sm">Заменить манометр P21</button>
-                  <button id="p21CockBtn" class="tbtn tbtn-sm col-span-2"></button>
-                </div>
-              </div>
-              <div>
-                <div class="arm-h" style="margin-top:0">Опрессовка</div>
-                <div class="grid grid-cols-2 gap-1.5">
-                  <button id="reliefIsoBtn" data-toggle="RELIEF_ISO" data-on="Кран перед ПК: ОТКР" data-off="Кран перед ПК: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран перед ПК" class="tbtn tbtn-sm"></button>
-                  <button id="pressPumpBtn" data-toggle="PRESS_PUMP" data-on="Опрессовочный насос: ВКЛ" data-off="Опрессовочный насос (6.25 бар)" data-tone="amber" data-label="Опрессовочный насос" class="tbtn tbtn-sm"></button>
-                </div>
-              </div>
-              <div id="svcStatus" class="mono text-[10.5px] faint"></div>
+            <div class="arm-h">Предохранительный клапан и опрессовка</div>
+            <div class="grid grid-cols-1 gap-1.5">
+              <button id="reliefIsoBtn" data-toggle="RELIEF_ISO" data-on="Кран перед ПК: ОТКР" data-off="Кран перед ПК: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран перед ПК" class="tbtn tbtn-sm"></button>
+              <button id="pressPumpBtn" data-toggle="PRESS_PUMP" data-on="Опрессовочный насос: ВКЛ" data-off="Опрессовочный насос (6.25 бар)" data-tone="amber" data-label="Опрессовочный насос" class="tbtn tbtn-sm"></button>
             </div>
-          </section>
+          </div>
 
-          <!-- 3. Контур здания -->
-          <section>
-            <div class="sec-h"><span class="num">03</span>Контур здания (Отопление)<button class="qbtn ml-auto" data-info="house">?</button></div>
-            <div class="grid grid-cols-2 gap-2">
-              <div class="flex flex-col gap-1"><span class="text-[11px] faint">Кран подачи Кд1</span>
-                <button id="houseSupBtn" data-toggle="HOUSE_SUP" data-on="Открыт" data-off="ЗАКРЫТ" data-tone="slate" data-inverse="1" data-label="Кран подачи дома Кд1" class="tbtn"></button></div>
-              <div class="flex flex-col gap-1"><span class="text-[11px] faint">Кран обратки Кд2</span>
-                <button id="houseRetBtn" data-toggle="HOUSE_RET" data-on="Открыт" data-off="ЗАКРЫТ" data-tone="slate" data-inverse="1" data-label="Кран обратки дома Кд2" class="tbtn"></button></div>
-              <div class="flex flex-col gap-1"><span class="text-[11px] faint">Спуск стояков</span>
-                <button id="houseDrainBtn" data-toggle="HOUSE_DRAIN" data-on="ОТКРЫТ" data-off="ЗАКРЫТ" data-tone="amber" data-label="Спуск стояков" class="tbtn"></button></div>
-              <div class="flex flex-col gap-1"><span class="text-[11px] faint">Воздушники 9 эт.</span>
-                <button id="houseVentBtn" data-toggle="HOUSE_VENT" data-on="ОТКРЫТЫ" data-off="ЗАКРЫТЫ" data-tone="amber" data-label="Воздушники 9 этажа" class="tbtn"></button></div>
-            </div>
-            <div class="meter mt-2.5"><div id="houseFillBar" style="width:100%;background:var(--cold)"></div></div>
+          <div data-insp="house" hidden>
+            <div class="meter"><div id="houseFillBar" style="width:100%;background:var(--cold)"></div></div>
             <div id="houseFillTxt" class="mono text-[10.5px] faint mt-1"></div>
-          </section>
+            <p class="insp-note">Краны дома Кд1/Кд2, спуск стояков и воздушники 9 этажа — модуль «Дом и ПТО».</p>
+          </div>
+
+          <div data-insp="dhwKzr" hidden>
+            <div class="ctl" data-ctl="DHW_KZRcmd">
+              <div class="flex items-center gap-2 mb-1"><span class="text-[12px] font-semibold mono">КЗР ГВС</span><span class="text-[11px] faint">задание (в АВТО — от регулятора)</span>
+                <span class="mono text-sm w-12 text-right ml-auto" data-val>25%</span></div>
+              <input type="range" min="0" max="100" step="1" value="25" aria-label="Задание КЗР ГВС">
+              <div id="dhwKzrPos" class="mono text-[10.5px] faint mt-1"></div>
+            </div>
+          </div>
+
+          <div data-insp="dhw" hidden>
+            <div class="arm-box">
+              <div class="flex items-center gap-2 mb-1"><span class="energy-h" style="margin:0">Арматура узла ГВС</span></div>
+              <div class="arm-h" style="margin-top:2px">Сеть</div>
+              <div class="grid grid-cols-2 gap-1.5">
+                <button data-toggle="DHW_NET_SUP" data-on="Кс1: ОТКР" data-off="Кс1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран врезки ветки ГВС Кс1" class="tbtn tbtn-sm"></button>
+                <button data-toggle="DHW_NET_RET" data-on="Кс2: ОТКР" data-off="Кс2: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран возврата ветки ГВС Кс2" class="tbtn tbtn-sm"></button>
+              </div>
+              <div class="dhw2-only" hidden>
+                <div class="arm-h">I ступень по сети</div>
+                <div class="grid grid-cols-3 gap-1.5">
+                  <button data-toggle="DHW_ST1_IN" data-on="Кс3: ОТКР" data-off="Кс3: ЗАКР" data-tone="slate" data-inverse="1" data-label="Вход сети в I ступень Кс3" class="tbtn tbtn-sm"></button>
+                  <button data-toggle="DHW_ST1_OUT" data-on="Кс4: ОТКР" data-off="Кс4: ЗАКР" data-tone="slate" data-inverse="1" data-label="Выход сети из I ступени Кс4" class="tbtn tbtn-sm"></button>
+                  <button data-toggle="DHW_ST1_BYP" data-on="Кс5: ОТКР" data-off="Кс5: ЗАКР" data-tone="amber" data-label="Обвод I ступени по сети Кс5" class="tbtn tbtn-sm"></button>
+                </div>
+                <div class="arm-h">I ступень по воде</div>
+                <div class="grid grid-cols-3 gap-1.5">
+                  <button data-toggle="DHW_ST1_WIN" data-on="Кв1: ОТКР" data-off="Кв1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Вход воды в I ступень Кв1" class="tbtn tbtn-sm"></button>
+                  <button data-toggle="DHW_ST1_WOUT" data-on="Кв2: ОТКР" data-off="Кв2: ЗАКР" data-tone="slate" data-inverse="1" data-label="Выход воды из I ступени Кв2" class="tbtn tbtn-sm"></button>
+                  <button data-toggle="DHW_ST1_WBYP" data-on="Кв5: ОТКР" data-off="Кв5: ЗАКР" data-tone="amber" data-label="Обвод I ступени по воде Кв5" class="tbtn tbtn-sm"></button>
+                </div>
+              </div>
+              <div class="arm-h">II ступень по воде · циркуляция</div>
+              <div class="grid grid-cols-2 gap-1.5">
+                <button data-toggle="DHW_HEX2_WIN" data-on="Кв3: ОТКР" data-off="Кв3: ЗАКР" data-tone="slate" data-inverse="1" data-label="Вход воды во II ступень Кв3" class="tbtn tbtn-sm"></button>
+                <button data-toggle="DHW_HEX2_WOUT" data-on="Кв4: ОТКР" data-off="Кв4: ЗАКР" data-tone="slate" data-inverse="1" data-label="Выход T3 в дом Кв4" class="tbtn tbtn-sm"></button>
+                <button data-toggle="DHW_CIRC_IN" data-on="Кн1: ОТКР" data-off="Кн1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран до насоса Нц Кн1" class="tbtn tbtn-sm"></button>
+                <button data-toggle="DHW_CIRC_OUT" data-on="Кн2: ОТКР" data-off="Кн2: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран после насоса Нц Кн2" class="tbtn tbtn-sm"></button>
+              </div>
+              <div class="arm-h">Фильтры</div>
+              <div class="flex items-center gap-2 text-[11px]"><span class="mono w-16">Фх (ХВС)</span><div class="meter flex-1"><div id="cwFoulBar" style="width:0%;background:#92400E"></div></div><span id="cwFoulVal" class="mono w-9 text-right">0%</span></div>
+              <div class="grid grid-cols-2 gap-1.5 mt-1 mb-2">
+                <button id="cwFoulBtn" class="btn btn-sm btn-warn">Засорить +10%</button>
+                <button id="cwCleanBtn" class="btn btn-sm">Промыть Фх</button>
+              </div>
+              <div class="flex items-center gap-2 text-[11px]"><span class="mono w-16">Фн (Нц)</span><div class="meter flex-1"><div id="circFoulBar" style="width:0%;background:#92400E"></div></div><span id="circFoulVal" class="mono w-9 text-right">0%</span></div>
+              <div class="grid grid-cols-2 gap-1.5 mt-1">
+                <button id="circFoulBtn" class="btn btn-sm btn-warn">Засорить +10%</button>
+                <button id="circCleanBtn" class="btn btn-sm">Промыть Фн</button>
+              </div>
+            </div>
+            <div id="dhwStatus" class="mono text-[10.5px] faint mt-1.5"></div>
+            <div class="energy-box mt-1.5">
+              <div class="energy-h">Энергобаланс узла ГВС</div>
+              <div id="dhwEnergy" class="mono"></div>
+            </div>
+          </div>
         </div>
+        <details id="inspInfo" class="insp-info">
+          <summary>Зачем нужен узел</summary>
+          <div id="inspInfoBody" class="text-[12.5px] muted leading-5 mt-1.5"></div>
+        </details>
       </div>
-
-      <!-- Сводка -->
-      <div class="panel p-4">
-        <div class="panel-title mb-2">Ключевые параметры</div>
-        <table class="w-full text-sm k-table">
-          <tbody id="summary"></tbody>
-        </table>
-      </div>
-
-      <div class="panel p-4 text-xs muted leading-5">
-        <div class="panel-title mb-1.5">Задание на смену</div>
-        Держите <b style="color:var(--ink)">T11 по температурному графику</b> (при −10 °C — 75 °C, коридор ±5 °C) и
-        <b style="color:var(--ink)">T2 не выше графика</b> (при −10 °C — 55 °C). Попробуйте: засорить грязевик и восстановить
-        режим; правильно отключить ИТП (сначала V1, затем V2); спустить контур в дренаж и заново поднять давление подпиткой.
-      </div>
-    </aside>
+    </div>
   </main>
+
+  <!-- ===== Уровень 4: оперативный пульт (Dock) ===== -->
+  <footer id="dock" class="dock shrink-0 bg-white border-t px-3 py-2" style="border-color:#CBD5E1">
+    <div class="grid grid-cols-6 gap-2 h-full items-stretch" id="controls">
+
+      <!-- 1. Ввод теплосети -->
+      <section class="dmod" data-dock="inlet">
+        <div class="dmod-h">Ввод теплосети<button class="qbtn ml-auto" data-info="valves">?</button></div>
+        <div class="gate" data-gate="V1">
+          <div class="flex items-center gap-1">
+            <span class="mono text-[11px] font-semibold w-5">V1</span>
+            <button id="gateBtnV1" class="gate-btn btn btn-sm"></button>
+            <button id="tagBtnV1" class="tag-btn tag-off" title="Плакат «Не открывать — работают люди»"></button>
+          </div>
+          <div class="meter mt-1"><div class="gate-bar" style="width:100%"></div></div>
+          <div class="gate-state"></div>
+        </div>
+        <div class="gate" data-gate="V2">
+          <div class="flex items-center gap-1">
+            <span class="mono text-[11px] font-semibold w-5">V2</span>
+            <button id="gateBtnV2" class="gate-btn btn btn-sm"></button>
+            <button id="tagBtnV2" class="tag-btn tag-off" title="Плакат «Не открывать — работают люди»"></button>
+          </div>
+          <div class="meter mt-1"><div class="gate-bar" style="width:100%"></div></div>
+          <div class="gate-state"></div>
+        </div>
+        <div class="flex items-center gap-1 mt-auto">
+          <span class="mono text-[10.5px] faint">ΔP гр <span id="dockStrDp" class="font-semibold" style="color:var(--ink)">0.04</span></span>
+          <button class="btn btn-sm ml-auto" data-open-insp="strainer">Грязевик</button>
+        </div>
+      </section>
+
+      <!-- 2. Регулирование системы отопления (КЗР) -->
+      <section class="dmod" data-dock="kzr">
+        <div class="dmod-h">КЗР · регулирование СО<button class="qbtn ml-auto" data-info="kzr">?</button></div>
+        <div class="ctl" data-ctl="KZRcmd">
+          <div class="flex items-center gap-1">
+            <button class="kzr-step btn btn-sm mono" data-step="-1">−1</button>
+            <input type="range" min="0" max="100" step="1" value="48" aria-label="Задание КЗР">
+            <button class="kzr-step btn btn-sm mono" data-step="1">+1</button>
+            <span class="mono text-[12px] font-semibold w-9 text-right" data-val>48%</span>
+          </div>
+          <div id="kzrPos" class="mono text-[10px] faint mt-0.5 truncate"></div>
+        </div>
+        <div class="grid grid-cols-2 gap-1 mt-auto">
+          <button id="kzrManualBtn" data-toggle="KZR_MANUAL" data-on="ШТУРВАЛ" data-off="ПРИВОД" data-tone="amber" data-label="Режим КЗР" class="tbtn tbtn-sm"></button>
+          <button class="btn btn-sm" data-open-insp="kzrBypass">Байпас / ремонт</button>
+        </div>
+      </section>
+
+      <!-- 3. Насосная группа -->
+      <section class="dmod" data-dock="pumps">
+        <div class="dmod-h">Насосная группа<button class="qbtn ml-auto" data-info="pump">?</button></div>
+        <div class="grid grid-cols-[1.5rem_1fr_1fr] gap-1 items-center">
+          <span class="text-[11px] font-semibold mono">Н1</span>
+          <button id="pumpBtn" data-toggle="PUMP" data-on="РАБОТА" data-off="СТОП" data-tone="green" data-label="Насос Н1" class="tbtn tbtn-sm"></button>
+          <button id="iso1Btn" data-toggle="PUMP1_ISO" data-on="Краны ОТКР" data-off="Краны ЗАКР" data-tone="slate" data-inverse="1" data-label="Краны Н1" class="tbtn tbtn-sm"></button>
+          <span class="text-[11px] font-semibold mono">Н2</span>
+          <button id="pump2Btn" data-toggle="PUMP2" data-on="РАБОТА" data-off="СТОП" data-tone="green" data-label="Насос Н2" class="tbtn tbtn-sm"></button>
+          <button id="iso2Btn" data-toggle="PUMP2_ISO" data-on="Краны ОТКР" data-off="Краны ЗАКР" data-tone="slate" data-inverse="1" data-label="Краны Н2" class="tbtn tbtn-sm"></button>
+        </div>
+        <button class="btn btn-sm mt-auto" data-open-insp="pump">Замена Н1</button>
+      </section>
+
+      <!-- 4. Подпитка и защита -->
+      <section class="dmod" data-dock="makeup">
+        <div class="dmod-h">Подпитка и защита<button class="qbtn ml-auto" data-info="makeup">?</button></div>
+        <div class="ctl" data-ctl="MAKEUP">
+          <div class="flex items-center gap-1.5"><span class="mono text-[11px] font-semibold">Подп.</span>
+            <input type="range" min="0" max="100" step="1" value="0" aria-label="Открытие подпитки">
+            <span class="mono text-[12px] font-semibold w-9 text-right" data-val>0%</span></div>
+        </div>
+        <div id="mpControls" class="grid grid-cols-2 gap-1" hidden>
+          <button id="mpAutoBtn" data-toggle="MAKEUP_AUTO" data-on="РД: АВТО" data-off="РД: РУЧН" data-tone="blue" data-label="Режим РД" class="tbtn tbtn-sm"></button>
+          <button id="mpPumpBtn" data-toggle="MAKEUP_PUMP" data-on="Нп: ВКЛ" data-off="Нп: ВЫКЛ" data-tone="green" data-label="Насос Нп" class="tbtn tbtn-sm"></button>
+        </div>
+        <div class="grid grid-cols-2 gap-1 mt-auto">
+          <button id="drainBtn" data-toggle="DRAIN" data-on="Дренаж: ОТКР" data-off="Дренаж ИТП" data-tone="amber" data-label="Дренаж ИТП" class="tbtn tbtn-sm"></button>
+          <button class="btn btn-sm" data-open-insp="protect">P21 / ПК</button>
+        </div>
+      </section>
+
+      <!-- 5. Дом и ПТО -->
+      <section class="dmod" data-dock="house">
+        <div class="dmod-h">Дом и ПТО<button class="qbtn ml-auto" data-info="house">?</button></div>
+        <div class="grid grid-cols-2 gap-1">
+          <button id="houseSupBtn" data-toggle="HOUSE_SUP" data-on="Кд1: ОТКР" data-off="Кд1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран подачи дома Кд1" class="tbtn tbtn-sm"></button>
+          <button id="houseRetBtn" data-toggle="HOUSE_RET" data-on="Кд2: ОТКР" data-off="Кд2: ЗАКР" data-tone="slate" data-inverse="1" data-label="Кран обратки дома Кд2" class="tbtn tbtn-sm"></button>
+          <button id="houseDrainBtn" data-toggle="HOUSE_DRAIN" data-on="Спуск: ОТКР" data-off="Спуск стояков" data-tone="amber" data-label="Спуск стояков" class="tbtn tbtn-sm"></button>
+          <button id="houseVentBtn" data-toggle="HOUSE_VENT" data-on="Возд. 9 эт.: ОТКР" data-off="Возд. 9 эт." data-tone="amber" data-label="Воздушники 9 этажа" class="tbtn tbtn-sm"></button>
+          <button id="netDrainBtn" data-toggle="NET_DRAIN" data-on="Дренаж сети: ОТКР" data-off="Дренаж сети" data-tone="amber" data-label="Дренаж сети" class="tbtn tbtn-sm"></button>
+          <button id="netVentBtn" data-toggle="NET_VENT" data-on="Возд. сети: ОТКР" data-off="Возд. сети" data-tone="amber" data-label="Воздушник сети" class="tbtn tbtn-sm"></button>
+        </div>
+        <button class="btn btn-sm mt-auto" data-open-insp="hex">Промывка ПТО</button>
+      </section>
+
+      <!-- 6. Контур ГВС -->
+      <section class="dmod" data-dock="dhw">
+        <div id="dhwControls" class="flex flex-col gap-1 h-full" hidden>
+          <div class="dmod-h"><span id="dhwSecTitle">Контур ГВС (1-ступ.)</span><button id="dhwSecInfo" class="qbtn ml-auto" data-info="dhwHex">?</button></div>
+          <div class="ctl" data-ctl="DHW_DRAW" data-unit="т/ч" data-digits="1">
+            <div class="flex items-center gap-1.5"><span class="mono text-[11px] font-semibold">Разбор</span>
+              <input type="range" min="0" max="6" step="0.1" value="1.5" aria-label="Водоразбор горячей воды, т/ч">
+              <span class="mono text-[11.5px] font-semibold w-14 text-right" data-val>1.5 т/ч</span></div>
+            <div class="grid grid-cols-3 gap-1 mt-1">
+              <button class="btn btn-sm" data-draw="0">Ночь</button>
+              <button class="btn btn-sm" data-draw="1.5">День</button>
+              <button class="btn btn-sm" data-draw="5.5">Пик</button>
+            </div>
+          </div>
+          <div class="grid grid-cols-3 gap-1">
+            <button id="dhwAutoBtn" data-toggle="DHW_KZR_AUTO" data-on="АВТО 62°" data-off="РУЧН" data-tone="blue" data-label="Регулятор ГВС" class="tbtn tbtn-sm"></button>
+            <button id="dhwB1Btn" data-toggle="DHW_B1_VALVE" data-on="В1" data-off="В1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Ввод ХВС В1" class="tbtn tbtn-sm"></button>
+            <button id="dhwPumpBtn" data-toggle="DHW_PUMP" data-on="Нц" data-off="Нц: СТОП" data-tone="green" data-label="Насос циркуляции ГВС Нц" class="tbtn tbtn-sm"></button>
+          </div>
+          <div class="grid grid-cols-2 gap-1 mt-auto">
+            <button class="btn btn-sm" data-open-insp="dhwKzr">КЗР ГВС</button>
+            <button class="btn btn-sm" data-open-insp="dhw">Узел ГВС</button>
+          </div>
+        </div>
+        <div id="dockNoDhw" class="flex flex-col gap-1.5 h-full">
+          <div class="dmod-h">Контур ГВС</div>
+          <div class="text-[11px] faint leading-4">ГВС не подключен. Схему можно выбрать здесь или в конфигураторе.</div>
+          <div class="seg-group seg-sm mt-auto" role="group" aria-label="Схема ГВС">
+            <button class="seg-btn" data-cfg="dhwScheme" data-val="none">Нет</button>
+            <button class="seg-btn" data-cfg="dhwScheme" data-val="1stage">1-ступ.</button>
+            <button class="seg-btn" data-cfg="dhwScheme" data-val="2stage">2-ступ.</button>
+          </div>
+        </div>
+      </section>
+    </div>
+  </footer>
 
   <!-- Карточка «Зачем нужен этот элемент?» -->
   <div id="infoModal" class="fixed inset-0 z-50 hidden items-center justify-center overlay p-4">
