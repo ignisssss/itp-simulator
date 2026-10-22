@@ -379,13 +379,54 @@
     protect: 'protect', dhw: 'dhw'
   };
   const PANEL_INFO = { protect: 'hydrotest', dhw: 'dhwHex', makeup: 'makeup' };
+  // Краны на схеме: id символа → орган управления (gate — задвижка с приводом хода)
+  const VALVES = {
+    vV1: { gate: 'V1', name: 'Задвижка подачи теплосети V1', dock: 'inlet', where: 'модуль «Ввод теплосети»' },
+    vV2: { gate: 'V2', name: 'Задвижка обратки теплосети V2', dock: 'inlet', where: 'модуль «Ввод теплосети»' },
+    vKzrIso1: { key: 'KZR_ISO', name: 'Отсечные краны КЗР', dock: 'kzr', where: 'пульт «Байпас / ремонт»' },
+    vKzrIso2: { key: 'KZR_ISO', name: 'Отсечные краны КЗР', dock: 'kzr', where: 'пульт «Байпас / ремонт»' },
+    vRelIso: { key: 'RELIEF_ISO', name: 'Кран перед предохранительным клапаном ПК', dock: 'makeup', where: 'пульт «P21 / ПК»' },
+    vHS: { key: 'HOUSE_SUP', name: 'Кран подачи дома Кд1', dock: 'house', where: 'модуль «Дом и ПТО»' },
+    vHR: { key: 'HOUSE_RET', name: 'Кран обратки дома Кд2', dock: 'house', where: 'модуль «Дом и ПТО»' },
+    vHD: { key: 'HOUSE_DRAIN', name: 'Спуск стояков', dock: 'house', where: 'модуль «Дом и ПТО»' },
+    vHV: { key: 'HOUSE_VENT', name: 'Воздушники 9 этажа', dock: 'house', where: 'модуль «Дом и ПТО»' },
+    vNDR: { key: 'NET_DRAIN', name: 'Дренаж сетевого участка', dock: 'house', where: 'модуль «Дом и ПТО»' },
+    vNVT: { key: 'NET_VENT', name: 'Воздушник сетевого участка', dock: 'house', where: 'модуль «Дом и ПТО»' },
+    vDR: { key: 'DRAIN', name: 'Дренаж контура ИТП', dock: 'makeup', where: 'модуль «Подпитка и защита»' },
+    vB1: { key: 'DHW_B1_VALVE', name: 'Вводной кран ХВС В1', dock: 'dhw', where: 'модуль «Контур ГВС», кнопка «В1»' },
+    vDhwNetSup: { key: 'DHW_NET_SUP', name: 'Кс1 — врезка ветки ГВС (сеть)', dock: 'dhw', where: 'пульт «Узел ГВС»' },
+    vDhwNetRet: { key: 'DHW_NET_RET', name: 'Кс2 — возврат ветки ГВС (сеть)', dock: 'dhw', where: 'пульт «Узел ГВС»' },
+    vSt1In: { key: 'DHW_ST1_IN', name: 'Кс3 — вход сети в I ступень', dock: 'dhw', where: 'пульт «Узел ГВС»' },
+    vSt1Out: { key: 'DHW_ST1_OUT', name: 'Кс4 — выход сети из I ступени', dock: 'dhw', where: 'пульт «Узел ГВС»' },
+    vSt1Byp: { key: 'DHW_ST1_BYP', name: 'Кс5 — обвод I ступени по сети', dock: 'dhw', where: 'пульт «Узел ГВС»' },
+    vSt1WIn: { key: 'DHW_ST1_WIN', name: 'Кв1 — вход холодной воды в I ступень', dock: 'dhw', where: 'пульт «Узел ГВС»' },
+    vSt1WOut: { key: 'DHW_ST1_WOUT', name: 'Кв2 — выход воды из I ступени', dock: 'dhw', where: 'пульт «Узел ГВС»' },
+    vSt1WByp: { key: 'DHW_ST1_WBYP', name: 'Кв5 — обвод I ступени по воде', dock: 'dhw', where: 'пульт «Узел ГВС»' },
+    vDhwHex2In: { key: 'DHW_HEX2_WIN', name: 'Кв3 — вход воды во II ступень', dock: 'dhw', where: 'пульт «Узел ГВС»' },
+    vDhwHex2Out: { key: 'DHW_HEX2_WOUT', name: 'Кв4 — выход горячей воды T3 в дом', dock: 'dhw', where: 'пульт «Узел ГВС»' },
+    vDhwCircIn: { key: 'DHW_CIRC_IN', name: 'Кн1 — кран до насоса Нц', dock: 'dhw', where: 'пульт «Узел ГВС»' },
+    vDhwCircOut: { key: 'DHW_CIRC_OUT', name: 'Кн2 — кран после насоса Нц', dock: 'dhw', where: 'пульт «Узел ГВС»' }
+  };
+  let valveSel = null;
+  const valveOpen = v => v.gate ? sim.controls[v.gate + 'cmd'] === 'open' : sim.controls[v.key] !== false && !!sim.controls[v.key];
+  $('valveToggleBtn').addEventListener('click', () => {
+    const v = valveSel && VALVES[valveSel];
+    if (!v) return;
+    if (v.gate) { $('gateBtn' + v.gate).click(); renderInspector(); return; }
+    const btn = document.querySelector(`[data-toggle="${v.key}"]`);
+    if (btn) btn.click(); else sim.controls[v.key] = !sim.controls[v.key];
+    renderInspector();
+  });
   const PANEL_DOCK = { valves: 'inlet', strainer: 'inlet', kzr: 'kzr', kzrBypass: 'kzr', pump: 'pumps', makeup: 'makeup', protect: 'makeup',
     netdrain: 'house', house: 'house', hex: 'house', dhwKzr: 'dhw', dhw: 'dhw' };
   let inspPanel = null;
   let inspAuto = false;     // открыт уроком, а не оператором
 
   function openInspector(key, nodeEl, auto) {
-    const panel = INSP_PANEL[key] || key;
+    // клик по крану — пульт именно этого крана
+    const vEl = nodeEl && nodeEl.querySelector && [...nodeEl.querySelectorAll('[id]')].find(e => VALVES[e.id]);
+    valveSel = vEl ? vEl.id : null;
+    const panel = valveSel ? 'valve' : (INSP_PANEL[key] || key);
     const box = $('inspector');
     if (!document.querySelector(`[data-insp="${panel}"]`)) return;
     const infoKey = INFO[key] ? key : (PANEL_INFO[panel] || panel);
@@ -406,10 +447,11 @@
     box.classList.toggle('at-left', left);
     box.classList.toggle('at-right', !left);
     box.hidden = false;
-    flashDock(PANEL_DOCK[panel]);
+    flashDock(valveSel ? VALVES[valveSel].dock : PANEL_DOCK[panel]);
+    if (valveSel) $('inspTitle').textContent = VALVES[valveSel].name;
     renderInspector();
   }
-  function closeInspector() { $('inspector').hidden = true; inspPanel = null; inspAuto = false; }
+  function closeInspector() { $('inspector').hidden = true; inspPanel = null; inspAuto = false; valveSel = null; }
   function flashDock(id) {
     document.querySelectorAll('.dmod.dock-flash').forEach(m => m.classList.remove('dock-flash'));
     const m = id && document.querySelector(`[data-dock="${id}"]`);
@@ -443,6 +485,19 @@
   }
   function renderInspector() {
     if (!inspPanel || $('inspector').hidden) return;
+    if (inspPanel === 'valve' && valveSel) {
+      const v = VALVES[valveSel], open = valveOpen(v);
+      const moving = v.gate && gateMoving(v.gate);
+      $('valveName').textContent = v.gate ? 'Положение задвижки' : 'Положение крана';
+      $('valveState').textContent = moving ? `ход ${Math.round(sim.controls[v.gate])} %` : (open ? 'ОТКРЫТ' : 'ЗАКРЫТ');
+      $('valveState').style.color = moving ? '#B45309' : (open ? '#166534' : '#991B1B');
+      const lbl = open ? 'Закрыть' : 'Открыть';
+      if ($('valveToggleBtn').textContent !== lbl) $('valveToggleBtn').textContent = lbl;
+      $('valveToggleBtn').className = 'btn w-full mt-2 ' + (open ? 'btn-close' : 'btn-open');
+      $('valveNote').textContent = 'Тот же кран на пульте: ' + v.where + '.';
+      $('inspParams').innerHTML = '';
+      return;
+    }
     $('inspParams').innerHTML = inspectorRows(inspPanel).map(([k, v]) => `<span class="k">${k}</span><span class="v">${v}</span>`).join('');
   }
   $('infoClose').addEventListener('click', closeInfo);
@@ -751,7 +806,9 @@
   let sheetH = 520, sheetAnim = null;
   // Фокус просмотра листа с контуром ГВС: весь лист, только отопление или только ГВС
   let viewFocus = 'all';
+  let zoomBox = null;          // свободный масштаб: {x, y, w, h} в координатах листа
   function viewBoxFor(h) {
+    if (zoomBox && !sheetAnim) return `${zoomBox.x.toFixed(1)} ${zoomBox.y.toFixed(1)} ${zoomBox.w.toFixed(1)} ${zoomBox.h.toFixed(1)}`;
     if (h > 520 && !sheetAnim) {
       if (viewFocus === 'heat') return '0 0 1000 520';
       if (viewFocus === 'dhw') return `0 ${h - 520} 1000 520`;
@@ -760,10 +817,72 @@
   }
   function setViewFocus(f) {
     viewFocus = f;
+    zoomBox = null;
     document.querySelectorAll('[data-focus]').forEach(b => b.classList.toggle('is-active', b.dataset.focus === f));
     if (!sheetAnim) $('scheme').setAttribute('viewBox', viewBoxFor(sheetH));
   }
   document.querySelectorAll('[data-focus]').forEach(b => b.addEventListener('click', e => { e.stopPropagation(); setViewFocus(b.dataset.focus); }));
+
+  // Масштаб колесом мыши и сдвиг перетаскиванием (как в SCADA): удобно разглядывать узел ГВС на большом листе
+  function currentBox() {
+    const v = $('scheme').getAttribute('viewBox').split(/\s+/).map(Number);
+    return { x: v[0], y: v[1], w: v[2], h: v[3] };
+  }
+  function clampBox(b) {
+    const W = 1000, H = sheetH;
+    b.w = Math.min(W, Math.max(180, b.w));
+    b.h = Math.min(H, b.h);
+    b.x = Math.min(W - b.w, Math.max(0, b.x));
+    b.y = Math.min(H - b.h, Math.max(0, b.y));
+    return b;
+  }
+  function applyZoom(b) {
+    if (sheetAnim) return;
+    // весь лист целиком — обычный режим без свободного масштаба
+    if (b.w >= 999 && b.h >= sheetH - 1) { setViewFocus('all'); return; }
+    zoomBox = clampBox(b);
+    viewFocus = 'custom';
+    document.querySelectorAll('[data-focus]').forEach(x => x.classList.remove('is-active'));
+    $('scheme').setAttribute('viewBox', viewBoxFor(sheetH));
+  }
+  function toSheet(cx, cy) {
+    const svg = $('scheme'), pt = svg.createSVGPoint();
+    pt.x = cx; pt.y = cy;
+    return pt.matrixTransform(svg.getScreenCTM().inverse());
+  }
+  $('scene').addEventListener('wheel', e => {
+    if (e.target.closest('#inspector')) return;
+    e.preventDefault();
+    const b = currentBox(), p = toSheet(e.clientX, e.clientY);
+    const k = e.deltaY > 0 ? 1.15 : 1 / 1.15;
+    const ratio = b.h / b.w;
+    let w = Math.min(1000, Math.max(180, b.w * k));
+    let h = w * ratio;
+    if (h > sheetH) { h = sheetH; w = Math.min(1000, h / ratio); }
+    applyZoom({ x: p.x - (p.x - b.x) * (w / b.w), y: p.y - (p.y - b.y) * (h / b.h), w, h });
+  }, { passive: false });
+  let pan = null, panMoved = false;
+  $('scene').addEventListener('pointerdown', e => {
+    if (e.button !== 0 || e.target.closest('.node') || e.target.closest('#inspector') || e.target.closest('#viewFocus')) return;
+    pan = { x: e.clientX, y: e.clientY, box: currentBox(), scale: $('scheme').getScreenCTM().a };
+    panMoved = false;
+  });
+  window.addEventListener('pointermove', e => {
+    if (!pan) return;
+    const dx = e.clientX - pan.x, dy = e.clientY - pan.y;
+    if (!panMoved && Math.hypot(dx, dy) < 4) return;
+    panMoved = true;
+    $('scene').classList.add('panning');
+    applyZoom({ x: pan.box.x - dx / pan.scale, y: pan.box.y - dy / pan.scale, w: pan.box.w, h: pan.box.h });
+  });
+  window.addEventListener('pointerup', () => { pan = null; $('scene').classList.remove('panning'); });
+  $('scene').addEventListener('click', e => { if (panMoved) { e.stopImmediatePropagation(); panMoved = false; } }, true);
+  $('scene').addEventListener('dblclick', e => { if (!e.target.closest('#inspector')) setViewFocus('all'); });
+  /** Показать точки листа: если хоть одна вне кадра — весь лист (для подсветки целей урока). */
+  function ensureVisible(points) {
+    const b = currentBox();
+    if (points.some(([x, y]) => x < b.x || x > b.x + b.w || y < b.y || y > b.y + b.h)) setViewFocus('all');
+  }
   function setSheetHeight(target) {
     if (sheetAnim && sheetAnim.target === target) return;
     if (!sheetAnim && sheetH === target) return;
@@ -805,11 +924,12 @@
     $('dhwControls').toggleAttribute('hidden', !dhw);
     $('dockNoDhw').toggleAttribute('hidden', dhw);
     $('viewFocus').toggleAttribute('hidden', !dhw);
-    if (!dhw && viewFocus !== 'all') setViewFocus('all');
+    if (!dhw && viewFocus !== 'all' && viewFocus !== 'custom') setViewFocus('all');
     document.querySelectorAll('.dhw2-only').forEach(el => el.toggleAttribute('hidden', !two));
     const layout = cfg.dhwScheme;
     if (dhwLayout !== layout) {
       dhwLayout = layout;
+      if (zoomBox) setViewFocus('all');
       $('pipeP2a').setAttribute('d', two ? P2A_D.st2 : P2A_D.base);
       $('flowP2').setAttribute('d', two ? FLOWP2_D.st2 : FLOWP2_D.base);
       $('dhwSchemeLbl').textContent = two ? '2-ступ. смешанная схема' : '1-ступ. параллельная схема';
@@ -1234,6 +1354,16 @@
         const f4 = o.fill[4] < 0.2;
         $('pipeDhwR2').style.stroke = tempColor(o.T2_dhw);
         $('pipeSt1In').style.stroke = f4 ? EMPTY : tempColor(o.T2_mix);
+        // участки внутри обводов: через теплообменник I ступени идет только своя доля потока
+        const st1NetOutT = o.G_st1_net > 0 ? o.T2_mix - o.Q_dhw_stage1 / (o.G_st1_net * C.C_WATER) : o.T2_mix;
+        $('pipeSt1NetIn').style.stroke = f4 ? EMPTY : tempColor(o.T2_mix);
+        $('pipeSt1NetOut').style.stroke = f4 ? EMPTY : tempColor(st1NetOutT);
+        $('pipeSt1Cold').style.stroke = tempColor(o.G_st1_w > 0 ? o.T_B1 : o.T_st1_w);
+        $('pipeSt1Warm').style.stroke = tempColor(o.T_st1_w);
+        setFlow('flowSt1NetIn', o.G_st1_net, 4);
+        setFlow('flowSt1NetOut', o.G_st1_net, 4);
+        setFlow('flowSt1Cold', o.G_st1_w, 8);
+        setFlow('flowSt1Warm', o.G_st1_w, 8);
         $('pipeSt1Byp').style.stroke = f4 ? EMPTY : tempColor(o.T2_mix);
         $('pipeSt1Out').style.stroke = f4 ? EMPTY : tempColor(o.T2);
         $('pipeDhwB1b').style.stroke = tempColor(o.T_B1);
@@ -1376,7 +1506,7 @@
     render,
     syncControlsUI,
     clearTrend() { trend.length = 0; },
-    openInspector, closeInspector, setViewFocus, flashDock,
+    openInspector, closeInspector, setViewFocus, flashDock, ensureVisible,
     inspectorAuto: () => inspAuto && !$('inspector').hidden,
     viewFocus: () => viewFocus,
     setPaused(v) { paused = v; setSpeed(speed); },

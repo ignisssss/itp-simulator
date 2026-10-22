@@ -848,8 +848,7 @@
     });
     if (!opened && app.inspectorAuto()) app.closeInspector();
     // Кольцо вне текущего масштаба листа — показать весь лист
-    const f = app.viewFocus();
-    if ((f === 'heat' && rings.some(r => r[1] > 515)) || (f === 'dhw' && rings.some(r => r[1] < 400))) app.setViewFocus('all');
+    app.ensureVisible(rings.map(r => [r[0], r[1]]));
   }
 
   function renderHold() {

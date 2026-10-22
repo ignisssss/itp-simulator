@@ -246,7 +246,8 @@
     .abadge.info { background: #F0F9FF; border-color: #BAE6FD; color: #075985; }
     .alarm-pop { position: fixed; z-index: 46; width: 420px; background: #FFFFFF; border: 1px solid var(--line); border-left-width: 4px; border-radius: 6px; box-shadow: 0 14px 28px rgba(15,23,42,.18); padding: 8px 12px; }
     .alarm-pop.alarm { border-left-color: var(--bad); } .alarm-pop.warn { border-left-color: var(--warn); } .alarm-pop.ok { border-left-color: var(--ok); } .alarm-pop.info { border-left-color: var(--accent); }
-    .scene { width: 100%; height: 100%; background: #FAFBFD; border: 1px solid #CBD5E1; border-radius: 6px; position: relative; overflow: hidden; box-shadow: inset 0 1px 3px rgba(15,23,42,.06); }
+    .scene.panning { cursor: grabbing; }
+    .scene { cursor: grab; width: 100%; height: 100%; background: #FAFBFD; border: 1px solid #CBD5E1; border-radius: 6px; position: relative; overflow: hidden; box-shadow: inset 0 1px 3px rgba(15,23,42,.06); }
     #scheme { width: 100%; height: 100%; display: block; }
     #scheme .node:hover { opacity: .85; }
     .scheme-hint { position: absolute; right: 10px; bottom: 6px; font-size: 11px; color: var(--ink-3); pointer-events: none; }
@@ -509,8 +510,8 @@
           <!-- Дренаж и воздушник сетевого участка -->
           <!-- 2-ступ. ГВС: общая обратка после I ступени поднимается к V2 -->
           <g id="svgDhw2StageNet" hidden>
-            <path id="pipeSt1Out" class="pipe" style="stroke-width:6" d="M170 740 H242 V628 A8 8 0 0 1 242 612 V430 H234"/>
-            <path id="flowSt1Out" class="flow" style="stroke-width:2" d="M170 740 H242 V628 A8 8 0 0 1 242 612 V430 H20"/>
+            <path id="pipeSt1Out" class="pipe" style="stroke-width:6" d="M222 740 H242 V628 A8 8 0 0 1 242 612 V430 H234"/>
+            <path id="flowSt1Out" class="flow" style="stroke-width:2" d="M222 740 H242 V628 A8 8 0 0 1 242 612 V430 H20"/>
           </g>
           <path id="pipeNetDr" class="pipe-thin" d="M300 430 V478"/>
           <path id="pipeVent" class="pipe-thin" d="M410 90 V56"/>
@@ -834,7 +835,7 @@
             <g id="svgDhw2StageGroup" hidden>
               <!-- обратка II ступени поднимается к точке слияния с обраткой системы отопления; дальше — в I ступень -->
               <path id="pipeDhwR2" class="pipe" style="stroke-width:6" d="M256 720 V620"/><path id="flowDhwR2" class="flow" style="stroke-width:2" d="M256 720 V620"/>
-              <path id="pipeSt1In" class="pipe" style="stroke-width:6" d="M256 620 H170"/><path id="flowSt1In" class="flow" style="stroke-width:2" d="M256 620 H170"/>
+              <path id="pipeSt1In" class="pipe" style="stroke-width:6" d="M256 620 H222"/><path id="flowSt1In" class="flow" style="stroke-width:2" d="M256 620 H222"/><path id="pipeSt1NetIn" class="pipe" style="stroke-width:6" d="M222 620 H170"/><path id="flowSt1NetIn" class="flow" style="stroke-width:2" d="M222 620 H170"/><path id="pipeSt1NetOut" class="pipe" style="stroke-width:6" d="M170 740 H222"/><path id="flowSt1NetOut" class="flow" style="stroke-width:2" d="M170 740 H222"/>
               <circle cx="256" cy="620" r="4" fill="#334155"/>
               <path id="pipeSt1Byp" class="pipe" style="stroke-width:5" d="M222 620 V740"/><path id="flowSt1Byp" class="flow" style="stroke-width:2" d="M222 620 V740"/>
               <circle cx="222" cy="620" r="4" fill="#334155"/><circle cx="222" cy="740" r="4" fill="#334155"/>
@@ -843,11 +844,11 @@
               <g class="node" data-info="dhwValves"><rect class="hl" x="208" y="664" width="28" height="32" rx="3"/><path id="vSt1Byp" class="valve-body valve-closed" d="M214 668 L230 692 L214 692 L230 668 Z"/><text x="210" y="684" text-anchor="end" class="lbl-s" style="fill:#334155;font-weight:600">Кс5</text></g>
               <g class="node" data-info="dhw2stage"><rect class="hl" x="84" y="594" width="92" height="172" rx="4"/><rect x="90" y="600" width="80" height="160" rx="3" fill="#F1F5F9" stroke="#1E293B" stroke-width="1.8"/><rect x="90" y="600" width="80" height="10" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/><rect x="90" y="750" width="80" height="10" fill="url(#metalGrad)" stroke="#1E293B" stroke-width="1"/><g stroke="#94A3B8" stroke-width="1.1"><line x1="110" y1="614" x2="110" y2="746"/><line x1="120" y1="614" x2="120" y2="746"/><line x1="140" y1="614" x2="140" y2="746"/><line x1="150" y1="614" x2="150" y2="746"/></g><path id="flowSt1HexP" class="flow thin" d="M160 620 V740"/><path id="flowSt1HexS" class="flow thin" d="M100 740 V620"/><rect x="112.0" y="652.0" width="36" height="56" rx="2" fill="#FFFFFF" stroke="#334155" stroke-width="1"/><rect x="112.0" y="652.0" width="36" height="11" fill="#334155"/><text x="130.0" y="660.5" text-anchor="middle" class="tag-head" style="font-size:7px">Q I ст.</text><text id="txtQst1" x="130.0" y="686.0" text-anchor="middle" class="tag-val" style="font-size:13px">0</text><text x="130.0" y="700.0" text-anchor="middle" class="tag-name">кВт</text><text id="st1Lbl" x="130.0" y="592" text-anchor="middle" class="lbl" style="font-size:10px;letter-spacing:.06em">ПТО ГВС · I ст.</text></g>
               <!-- холодная вода: продолжение ввода к I ступени, обвод Кв5, ПК1 -->
-              <path id="pipeDhwB1b" class="pipe" style="stroke-width:6" d="M680 880 H120 V760"/><path id="flowDhwB1b" class="flow" style="stroke-width:2" d="M680 880 H120 V760"/>
+              <path id="pipeDhwB1b" class="pipe" style="stroke-width:6" d="M680 880 H320"/><path id="flowDhwB1b" class="flow" style="stroke-width:2" d="M680 880 H320"/><path id="pipeSt1Cold" class="pipe" style="stroke-width:6" d="M320 880 H120 V760"/><path id="flowSt1Cold" class="flow" style="stroke-width:2" d="M320 880 H120 V760"/>
               <g class="node" data-info="dhwValves"><rect class="hl" x="224" y="866" width="32" height="28" rx="3"/><path id="vSt1WIn" class="valve-body valve-open" d="M228 872 L252 888 L252 872 L228 888 Z"/><text x="240" y="868" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Кв1</text></g>
               <g class="node" data-info="dhwRelief"><rect class="hl" x="160" y="850" width="44" height="34" rx="3"/><path d="M170 880 V866" stroke="#1E293B" stroke-width="2"/><path id="rvDhw1" d="M164 854 L176 854 L170 866 Z" fill="#E2E8F0" stroke="#1E293B" stroke-width="1.3"/><path d="M176 860.0 H188" stroke="#1E293B" stroke-width="1.5"/><path d="M185 857.0 L189 860.0 L185 863.0" fill="none" stroke="#1E293B" stroke-width="1.2"/><text x="192" y="863.0" class="lbl-s" style="fill:#334155;font-weight:600">ПК1</text><text id="txtPlock1" x="192" y="873.0" class="lbl-s" style="font-family:var(--mono);font-size:8.5px">4.0 бар</text></g>
               <!-- подогретая вода T_меж: из I ступени через Кв2 к точке смешения с T4 -->
-              <path id="pipeDhwMid" class="pipe" style="stroke-width:6" d="M90 620 H40 V820 H112 A8 8 0 0 1 128 820 H680 V720"/><path id="flowDhwMid" class="flow" style="stroke-width:2" d="M90 620 H40 V820 H112 A8 8 0 0 1 128 820 H680 V720"/>
+              <path id="pipeSt1Warm" class="pipe" style="stroke-width:6" d="M90 620 H40 V820 H112 A8 8 0 0 1 128 820 H320"/><path id="flowSt1Warm" class="flow" style="stroke-width:2" d="M90 620 H40 V820 H112 A8 8 0 0 1 128 820 H320"/><path id="pipeDhwMid" class="pipe" style="stroke-width:6" d="M320 820 H680 V720"/><path id="flowDhwMid" class="flow" style="stroke-width:2" d="M320 820 H680 V720"/>
               <g class="node" data-info="dhwValves"><rect class="hl" x="224" y="806" width="32" height="28" rx="3"/><path id="vSt1WOut" class="valve-body valve-open" d="M228 812 L252 828 L252 812 L228 828 Z"/><text x="240" y="808" text-anchor="middle" class="lbl-s" style="fill:#334155;font-weight:600">Кв2</text></g>
               <path id="pipeSt1WByp" class="pipe" style="stroke-width:5" d="M320 880 V820"/><path id="flowSt1WByp" class="flow" style="stroke-width:2" d="M320 880 V820"/>
               <circle cx="320" cy="820" r="4" fill="#334155"/><circle cx="320" cy="880" r="4" fill="#334155"/>
@@ -871,7 +872,7 @@
         <button data-focus="heat" class="seg-btn">Отопление</button>
         <button data-focus="dhw" class="seg-btn">ГВС</button>
       </div>
-      <div class="scheme-hint">Нажмите на узел схемы — откроется его пульт и справка</div>
+      <div class="scheme-hint">Клик по узлу или крану — его пульт и справка · колесо — масштаб · перетаскивание — сдвиг · двойной клик — весь лист</div>
 
       <!-- Контекстный пульт узла -->
       <div id="inspector" class="inspector at-right" hidden>
@@ -882,6 +883,15 @@
         </div>
         <div id="inspParams" class="insp-params"></div>
         <div id="inspPanels">
+          <div data-insp="valve" hidden>
+            <div class="flex items-center gap-2">
+              <span id="valveName" class="text-[12.5px] font-semibold"></span>
+              <span id="valveState" class="mono text-[11px] font-semibold ml-auto"></span>
+            </div>
+            <button id="valveToggleBtn" class="btn w-full mt-2"></button>
+            <p id="valveNote" class="insp-note"></p>
+          </div>
+
           <div data-insp="valves" hidden><p class="insp-note">Задвижки V1 и V2, плакаты и перепад на грязевике — модуль «Ввод теплосети» внизу.</p></div>
 
           <div data-insp="strainer" hidden>
@@ -1128,8 +1138,8 @@
           </div>
           <div class="grid grid-cols-3 gap-1">
             <button id="dhwAutoBtn" data-toggle="DHW_KZR_AUTO" data-on="АВТО 62°" data-off="РУЧН" data-tone="blue" data-label="Регулятор ГВС" class="tbtn tbtn-sm"></button>
-            <button id="dhwB1Btn" data-toggle="DHW_B1_VALVE" data-on="В1" data-off="В1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Ввод ХВС В1" class="tbtn tbtn-sm"></button>
-            <button id="dhwPumpBtn" data-toggle="DHW_PUMP" data-on="Нц" data-off="Нц: СТОП" data-tone="green" data-label="Насос циркуляции ГВС Нц" class="tbtn tbtn-sm"></button>
+            <button id="dhwB1Btn" data-toggle="DHW_B1_VALVE" data-on="В1: ОТКР" data-off="В1: ЗАКР" data-tone="slate" data-inverse="1" data-label="Ввод ХВС В1" class="tbtn tbtn-sm"></button>
+            <button id="dhwPumpBtn" data-toggle="DHW_PUMP" data-on="Нц: ВКЛ" data-off="Нц: СТОП" data-tone="green" data-label="Насос циркуляции ГВС Нц" class="tbtn tbtn-sm"></button>
           </div>
           <div class="grid grid-cols-2 gap-1 mt-auto">
             <button class="btn btn-sm" data-open-insp="dhwKzr">КЗР ГВС</button>

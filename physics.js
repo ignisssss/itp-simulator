@@ -1002,7 +1002,7 @@
       makeupFlow, drainFlow, reliefFlow,
       dhwOn, dhw2, G1_dhw, G1_total: G1 + G1_dhw, G_draw, G_circ, G_dhw_total: G_dhw_sec,
       Q_dhw: Q_dhw + Q_st1, Q_dhw_stage1: Q_st1, Q_dhw_stage2: Q_dhw, T_dhw_in,
-      T_dhw_mid: dhw2 ? s.T_dhw_mid : C.T_B1, T2_after_stage1: s.T2_after_stage1,
+      T_dhw_mid: dhw2 ? s.T_dhw_mid : C.T_B1, T2_after_stage1: s.T2_after_stage1, T_st1_w: s.T_st1w,
       dhwWaterOK: waterOK, G_drawCap, dP_cwFilter, cwFoul: c.dhwCwFoul, circFoul: c.dhwCircFoul, circDeadhead,
       G_st1_net: G_st1n, G_st1_w: G_st1w, st1Blocked: dhw2 && st1Kv === 0, st1Bypass: dhw2 && !!c.DHW_ST1_BYP,
       P_lock1: s.P_lock1, P_lock2: s.P_lock2, dhwRelief1: relief1, dhwRelief2: relief2, dhwMeter: s.dhwMeter,
