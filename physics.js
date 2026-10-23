@@ -102,7 +102,7 @@
     DHW_SCALD: 75.0,       // °C, выше — опасность ожога (верхняя граница СанПиН)
     DHW_LOW: 55.0,         // °C, ниже — недогрев
     // ГВС, двухступенчатая смешанная схема: I ступень на общей обратке перед V2
-    DHW_ST1_KV: 28,        // Kv I ступени ПТО ГВС по сетевой стороне
+    DHW_ST1_KV: 40,        // Kv I ступени ПТО ГВС по сетевой стороне
     DHW_ST1_EFF: 0.78,     // эффективность I ступени
     TAU_DHW_ST1: 2.5,      // с, инерция I ступени
     DHW_ST1_BYP_KV: 40,    // Kv обвода I ступени по сетевой воде (задвижка открыта)
@@ -1065,7 +1065,9 @@
       });
     }
 
-    if (!isOpen(c.V2) && isOpen(c.V1) && isOpen(c.KZR)) {
+    // узел КЗР открыт, если открыт сам клапан при открытых отсечных кранах или открыт байпас
+    const kzrNodeOpen = (c.KZR_ISO !== false && isOpen(c.KZR)) || isOpen(c.KZR_BYPASS || 0);
+    if (!isOpen(c.V2) && isOpen(c.V1) && kzrNodeOpen) {
       list.push({
         id: 'hex_overpressure', level: 'alarm',
         title: 'АВАРИЯ: Опрессовка ПТО подающим давлением!',
@@ -1097,7 +1099,7 @@
         detail: `P21 = ${f2(o.P21)} бар, P в ПТО (сеть) = ${f2(o.P_hex_net)} бар`
       });
     }
-    if (c.RELIEF_ISO === false && isOpen(c.V1) && isOpen(c.KZR)) {
+    if (c.RELIEF_ISO === false && isOpen(c.V1) && kzrNodeOpen) {
       list.push({
         id: 'relief_isolated_alarm', level: 'alarm',
         title: 'АВАРИЯ: Заглушен предохранительный клапан при работающем нагреве!',
