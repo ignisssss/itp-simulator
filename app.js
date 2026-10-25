@@ -85,6 +85,18 @@
   // Справочник «Зачем нужен этот элемент?»
   // ---------------------------------------------------------------------------
   const INFO = {
+    uute: {
+      icon: 'gauge', title: 'Тепловычислитель УУТЭ',
+      body: `<p><b>Узел учета тепловой энергии (УУТЭ)</b> — коммерческий прибор: по его архиву теплоснабжающая организация выставляет счет.</p>
+        <p class="mt-2">Состав: <b>ПР1</b> и <b>ТП1</b> — расходомер и термопреобразователь на подаче после грязевика, <b>ПР2</b> и <b>ТП2</b> —
+        на обратке перед V2, уже после врезки подпитки. Тепловычислитель считает тепло по закрытой схеме с учетом утечки:
+        <b>Q = M1·(T1 − T2) + (M1 − M2)·(T2 − Tхв)</b>, где Tхв = 5 °C.</p>
+        <p class="mt-2"><b>Нештатные ситуации (НС)</b>: расход ниже порога ПР1 (G &lt; 0.6 т/ч), небаланс масс |M1 − M2| больше 2.5 %,
+        разность температур меньше 3 °C. Пока есть НС, вычислитель копит «время НС», а учет идет по договору.</p>
+        <p class="mt-2">Небаланс бывает реальным — сетевая вода уходит на подпитку при утечке в доме — и ложным, когда электроды ПР2
+        обросли магнетитом и прибор занижает M2. Если при закрытой подпитке M2 меньше M1 — виноват прибор. Заниженный ТП2
+        (высохла термопаста в гильзе) завышает ΔT и начисляет лишнее тепло: сверяйте его с контрольным термометром Т2.</p>`
+    },
     valves: {
       icon: 'valve', title: 'Задвижки V1 / V2',
       body: `<p><b>Запорная арматура</b> на вводе теплосети: V1 — на подающем трубопроводе, V2 — на обратном.</p>
@@ -376,7 +388,7 @@
     p21Cock: 'protect', house: 'house', building: 'house', dhwKzr: 'dhwKzr', dhwHex: 'dhw', dhw2stage: 'dhw',
     dhwValves: 'dhw', dhwFilters: 'dhw', dhwRelief: 'dhw', dhwPump: 'dhw', service: 'kzrBypass',
     // панели, которые открываются кнопками пульта
-    protect: 'protect', dhw: 'dhw'
+    protect: 'protect', dhw: 'dhw', uute: 'uute'
   };
   const PANEL_INFO = { protect: 'hydrotest', dhw: 'dhwHex', makeup: 'makeup' };
   // Краны на схеме: id символа → орган управления (gate — задвижка с приводом хода)
@@ -418,7 +430,7 @@
     renderInspector();
   });
   const PANEL_DOCK = { valves: 'inlet', strainer: 'inlet', kzr: 'kzr', kzrBypass: 'kzr', pump: 'pumps', makeup: 'makeup', protect: 'makeup',
-    netdrain: 'house', house: 'house', hex: 'house', dhwKzr: 'dhw', dhw: 'dhw' };
+    netdrain: 'house', house: 'house', hex: 'house', dhwKzr: 'dhw', dhw: 'dhw', uute: 'inlet' };
   let inspPanel = null;
   let inspAuto = false;     // открыт уроком, а не оператором
 
@@ -529,7 +541,7 @@
     { g: 'dhwTags', x: 712, y: 770, w: 112, head: 'FQ · ВОДОСЧЕТЧИК', m: 'cold', pt: [830, 880], rows: [['G гвс', 'G_draw', 'т/ч', 2], ['V', 'dhwMeter', 'м³', 3]] },
     { g: 'dhwTags', x: 864, y: 790, w: 100, head: 'ВВОД ХВС', m: 'cold', pt: [962, 880], rows: [['T хвс', 'T_B1', '°C', 1], ['P хвс', 'P_B1', 'бар', 1]] },
     // ГВС: только двухступенчатая схема
-    { g: 'dhw2Tags', x: 104, y: 440, w: 92, head: 'TI · T2 I СТ.', m: 'cold', rows: [['после', 'T2_after_stage1', '°C', 1, [242, 467]], ['до', 'T2_mix', '°C', 1, [256, 485]]] },
+    { g: 'dhw2Tags', x: 104, y: 462, w: 92, head: 'TI · ДО I СТ.', m: 'cold', rows: [['T2 до', 'T2_mix', '°C', 1, [256, 485]]] },
     { g: 'dhw2Tags', x: 400, y: 766, w: 96, head: 'TI · ПОСЛЕ I СТ.', m: 'cold', pt: [440, 820], rows: [['T меж', 'T_dhw_mid', '°C', 1]] }
   ];
   const tagEls = {};
@@ -771,6 +783,15 @@
       render();
     });
   });
+  // УУТЭ: ревизия ТП2, чистка ПР2, сброс архива
+  [['btnServiceTP2', 'serviceTP2'], ['btnCleanPR2', 'cleanPR2'], ['btnResetUute', 'resetUuteCounters']].forEach(([id, fn]) => {
+    $(id).addEventListener('click', () => {
+      const r = P[fn](sim);
+      log(r.msg, r.level);
+      if (window.ITPLessons && window.ITPLessons.onService) window.ITPLessons.onService(fn, r);
+      render();
+    });
+  });
   $('p21CockBtn').addEventListener('click', () => {
     sim.controls.P21_COCK = sim.controls.P21_COCK === 'zero' ? 'work' : 'zero';
     log(`Оператор: трехходовой кран манометра P21 — ${sim.controls.P21_COCK === 'zero' ? 'проверка нуля (на атмосферу)' : 'рабочее положение'}`, 'op');
@@ -910,7 +931,7 @@
   }
 
   // Обратка сети: во 2-ступ. схеме она опускается к I ступени ПТО ГВС и возвращается к V2 снизу
-  const P2A_D = { base: 'M440 430 H234', st2: 'M440 430 H256 V620' };
+  const P2A_D = { base: 'M440 430 H144', st2: 'M440 430 H256 V620' };
   const FLOWP2_D = { base: 'M440 430 H20', st2: 'M440 430 H256 V620' };
   let dhwLayout = null;
   function renderConfig() {
@@ -997,7 +1018,9 @@
     pump1Fail: { get: () => sim.env.pump1Fail, set: v => { sim.env.pump1Fail = v; }, name: 'отказ насоса Н1' },
     kzrFail: { get: () => sim.env.kzrFail, set: v => { sim.env.kzrFail = v; }, name: 'отказ привода КЗР' },
     houseLeak: { get: () => sim.env.houseLeak > 0, set: v => { sim.env.houseLeak = v ? 0.006 : 0; }, name: 'утечка в системе отопления дома' },
-    T1: { get: () => sim.env.T1 !== null, set: v => { sim.env.T1 = v ? P.graphT1(sim.env.T_out) - 15 : null; }, name: 'недодача температуры сети' }
+    T1: { get: () => sim.env.T1 !== null, set: v => { sim.env.T1 = v ? P.graphT1(sim.env.T_out) - 15 : null; }, name: 'недодача температуры сети' },
+    pr2Fouling: { get: () => (sim.env.pr2Fouling || 0) > 0, set: v => { sim.env.pr2Fouling = v ? 0.10 : 0; }, name: 'магнетитовые отложения на электродах ПР2 (−10 %)' },
+    tp2Drift: { get: () => (sim.env.tp2Drift || 0) !== 0, set: v => { sim.env.tp2Drift = v ? -4.5 : 0; }, name: 'высохла термопаста в гильзе ТП2 (−4.5 °C)' }
   };
   document.querySelectorAll('[data-env]').forEach(b => b.addEventListener('click', () => {
     const t = ENV_TOGGLES[b.dataset.env];
@@ -1011,6 +1034,43 @@
     $('envToutVal').textContent = tv;
     if (document.activeElement !== $('envTout')) $('envTout').value = sim.env.T_out;
     document.querySelectorAll('[data-env]').forEach(b => b.classList.toggle('btn-close', !!ENV_TOGGLES[b.dataset.env].get()));
+  }
+
+  // ---------------------------------------------------------------------------
+  // УУТЭ: тепловычислитель на схеме и табло в пульте
+  // ---------------------------------------------------------------------------
+  const NS_NAME = { NS_GMIN: 'G < Gmin', NS_IMBALANCE: 'небаланс M1−M2', NS_DT_MIN: 'ΔT < 3 °C' };
+  const hms = t => { t = Math.floor(t || 0); const h = Math.floor(t / 3600), m = Math.floor(t / 60) % 60, s = t % 60; return (h ? h + ':' : '') + String(m).padStart(2, '0') + ':' + String(s).padStart(2, '0'); };
+  function renderUute(o) {
+    if (o.M1_meter === undefined) return;
+    const ns = o.uuteNS || [];
+    $('txtUuteQ').textContent = o.Q_meter_Gcalh.toFixed(3);
+    $('txtUuteNs').textContent = ns.length ? 'КОД НС' : 'НОРМА';
+    $('txtUuteNs').style.fill = ns.length ? '#991B1B' : '#166534';
+    $('uuteNsLamp').setAttribute('fill', ns.length ? '#FEE2E2' : '#DCFCE7');
+    $('uuteNsLamp').setAttribute('stroke', ns.length ? '#FCA5A5' : '#86EFAC');
+    $('pr2Dirt').setAttribute('opacity', Math.min(0.85, (o.pr2Fouling || 0) * 6).toFixed(2));
+    $('tp2Head').setAttribute('fill', Math.abs(o.tp2Drift || 0) > 0.5 ? '#FDE68A' : '#FFFFFF');
+    if (inspPanel !== 'uute' || $('inspector').hidden) return;
+    const st = $('uuteStatus');
+    const stTxt = ns.length ? `КОД НС: ${ns.map(n => NS_NAME[n] || n).join(', ')} · Время НС ${hms(o.nsTime_s)}` : `НОРМА (БЕЗ НС) · Время НС ${hms(o.nsTime_s)}`;
+    if (st.textContent !== stTxt) st.textContent = stTxt;
+    st.className = 'uute-badge ' + (ns.length ? 'ns' : 'ok');
+    const dT2 = o.T2_meter - o.T2;
+    const rows = [
+      ['M1 · ПР1', `${fmt(o.M1_meter, 3)} т/ч`],
+      ['M2 · ПР2', `${fmt(o.M2_meter, 3)} т/ч`],
+      ['ΔM', `${fmt(o.dM_meter, 3)} т/ч · ${fmt(o.dM_pct, 1)} %`, Math.abs(o.dM_pct) > 2.5 && o.M1_meter >= 0.6],
+      ['T1 · ТП1', `${fmt(o.T1_meter, 2)} °C`],
+      ['T2 · ТП2', `${fmt(o.T2_meter, 2)} °C`, Math.abs(dT2) > 1.5],
+      ['T2 · термометр', `${fmt(o.T2, 1)} °C`],
+      ['Q учет', `${o.Q_meter_Gcalh.toFixed(4)} Гкал/ч`],
+      ['Q факт (тренажер)', `${o.Q_actual_Gcalh.toFixed(4)} Гкал/ч`],
+      ['ΣQ архив', `${o.Q_acc_Gcal.toFixed(4)} Гкал`],
+      ['ΣM1 / ΣM2', `${fmt(o.M1_acc_t, 3)} / ${fmt(o.M2_acc_t, 3)} т`],
+      ['Время НС', hms(o.nsTime_s), ns.length > 0]
+    ];
+    $('uuteBoard').innerHTML = rows.map(([k, v, bad]) => `<span class="k">${k}</span><span class="v${bad ? ' bad' : ''}">${v}</span>`).join('');
   }
 
   function setSpeed(s) {
@@ -1280,6 +1340,7 @@
     $('hexScaleRect').setAttribute('opacity', (0.35 * (o.hexScaling || 0)).toFixed(2));
     $('hexScaleBar').style.width = Math.round(100 * (o.hexScaling || 0)) + '%';
     $('hexScaleVal').textContent = Math.round(100 * (o.hexScaling || 0)) + '%';
+    renderUute(o);
     const cockBtn = $('p21CockBtn');
     const cockZero = c.P21_COCK === 'zero';
     const cockLbl = cockZero ? 'Кран P21: ПРОВЕРКА НУЛЯ' : 'Кран P21: РАБОТА';

@@ -304,6 +304,41 @@
           fix: 'Включить циркуляционный насос ГВС Нц. Подача сети упала до 81 °C при графике 95 °C — по графику дом не прогреть: открыть КЗР отопления почти полностью (85…100 %) и сообщить диспетчеру теплосети.'
         }
       ]
+    },
+
+    {
+      id: 'level7', n: 7, title: 'Смена 7. Претензия по учету: тепловычислитель УУТЭ', difficulty: 'Высокая',
+      intro: 'Теплоснабжающая организация грозит счетом за перерасход тепла и сверхнормативную утечку теплоносителя. На вводе стоит узел учета тепловой энергии (УУТЭ): расходомеры ПР1 и ПР2, термопреобразователи ТП1 и ТП2, тепловычислитель. Разберитесь, где ошибается прибор, а где дом действительно теряет воду. Насос отопления защищен автоматикой.',
+      setup() {
+        baseConfig();
+        sim.env.pumpProtection = true;
+        P.settle(sim, 60);
+        P.resetUuteCounters(sim);
+      },
+      incidents: [
+        {
+          id: 'tp2_overbilling', title: 'ТП2 занижает обратку: переучет тепла', at: 0, silent: true,
+          start(sim) { sim.env.tp2Drift = -4.5; },
+          resolved: () => !sim.env.tp2Drift && sim.state.tp2Serviced, hold: 2, norm: 25, deadline: 75, lesson: 'uute',
+          fix: 'ТП2 показывает на 4.5 °C холоднее контрольного термометра T2: высохла термопаста в гильзе, вычислитель завышает ΔT и начисляет ≈ 11 % лишнего тепла. Открыть тепловычислитель и выполнить ревизию гильзы ТП2 — на ходу, без отключения ввода.'
+        },
+        {
+          id: 'real_leak_imbalance', title: 'Открыт спуск стояков: реальная потеря теплоносителя', at: 20,
+          start(sim) { sim.controls.HOUSE_DRAIN = true; sim.controls.MAKEUP = 80; },
+          reveal: t => (o().uuteNS || []).includes('NS_IMBALANCE') || t > 8,
+          message: { from: 'Тепловычислитель УУТЭ', text: 'Код НС: небаланс масс M1 − M2. Подпитка открыта на 80 %, из обратки сети уходит вода.' },
+          resolved: () => !c().HOUSE_DRAIN && c().MAKEUP < 0.5 && o().P21 >= 3.2 && o().P21 <= 4.0 && !o().reliefOpen && o().G_makeup_th < 0.02, hold: 3, norm: 30, deadline: 85, lesson: 'housedrain',
+          fix: 'Сантехник оставил открытым спуск стояков, а подпитка на 80 % доливает сетевую воду — это реальная утечка, ее видит и ПР2. Закрыть спуск стояков, подпитать дом до 3.2…4.0 бар и закрыть подпитку.'
+        },
+        {
+          id: 'pr2_magnetite_fouling', title: 'Магнетит на электродах ПР2: ложный небаланс', at: 55,
+          start(sim) { sim.env.pr2Fouling = 0.12; },
+          reveal: t => t > 6,
+          message: { from: 'Теплоснабжающая организация', text: 'По архиву УУТЭ небаланс 12 % при закрытой подпитке. Выставим счет за сверхнормативную утечку, если не устраните.' },
+          resolved: () => sim.state.pr2Cleaned && !sim.env.pr2Fouling && sectionNormal() && o().pumpRunning && c().KZR >= 40 && !(o().uuteNS || []).length, hold: 3, norm: 45, deadline: 120, lesson: 'uute',
+          fix: 'Подпитка закрыта, а M2 меньше M1 на 12 % — воду никто не теряет, ПР2 занижает расход. Закрыть V1, затем V2, открыть воздушник и дренаж сети, дождаться 0 бар, почистить электроды ПР2, закрыть дренаж, заполнить через V2, закрыть воздушник, открыть V1, насос и КЗР в работе.'
+        }
+      ]
     }
   ];
 
@@ -362,7 +397,8 @@
   function loadStore() { try { return JSON.parse(localStorage.getItem(STORE_KEY) || '{}'); } catch (e) { return {}; } }
   function saveStore(d) { try { localStorage.setItem(STORE_KEY, JSON.stringify(d)); } catch (e) { /* без хранилища */ } }
   let store = loadStore();
-  const unlocked = lv => lv.n === 1 || ((store['l' + (lv.n - 1)] || {}).stars || 0) >= 1;
+  // открыт первый уровень и каждый следующий после хотя бы одной звезды на предыдущем (по его id)
+  const unlocked = lv => { const i = LEVELS.indexOf(lv); return i <= 0 || ((store[LEVELS[i - 1].id] || {}).stars || 0) >= 1; };
 
   function note(kind, text) { timeline.push({ t: now(), kind, text }); }
 

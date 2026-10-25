@@ -3,7 +3,7 @@
  *
  *   node audit.js           — физическое ядро (physics.js), PDF-конспекты, сверка уроков с конспектами
  *   index.html?audit        — то же в браузере + интерфейс «кокпит», цели подсветки всех шагов,
- *                             прохождение всех 20 уроков через пульт и бот по всем 6 сменам
+ *                             прохождение всех 21 уроков через пульт и бот по всем 7 сменам
  *
  * В браузере отчет печатается в консоль и показывается поверх страницы; результат — window.ITPAudit.last.
  * Скрипт ничего не меняет в рабочих файлах; прогресс уроков и смен в localStorage восстанавливается.
@@ -213,6 +213,30 @@
       r.check(G, 'Опрессовка без отсечения ПК: ПК открывается на 6.0 бар и не дает набрать 6.25', b.relief && b.maxP < 6.1, `макс. ${b.maxP.toFixed(2)} бар`);
     }
 
+    // 1.7а Узел учета тепловой энергии
+    {
+      const sim = fresh();
+      P.settle(sim, 300);
+      let o = sim.out;
+      const qHand = (o.M1_meter * (o.T1_meter - o.T2_meter)) * 0.001;
+      r.check(G, 'УУТЭ, штатный режим: M1 = M2, без НС, Q по формуле', Math.abs(o.dM_pct) < 0.01 && o.uuteNS.length === 0 && Math.abs(o.Q_meter_Gcalh - qHand) < 1e-6 && Math.abs(o.Q_meter_Gcalh * 1163 - o.Q) / o.Q < 0.05,
+        `M1 ${o.M1_meter.toFixed(2)} т/ч, Q ${o.Q_meter_Gcalh.toFixed(3)} Гкал/ч ≈ ${(o.Q_meter_Gcalh * 1163).toFixed(0)} кВт (ПТО ${o.Q.toFixed(0)} кВт)`);
+      P.resetUuteCounters(sim);
+      run(sim, 360);
+      r.check(G, 'УУТЭ: интегратор ΣQ за 6 мин = Q · 0.1 ч', Math.abs(sim.out.Q_acc_Gcal - sim.out.Q_meter_Gcalh * 0.1) < 1e-4 && sim.out.nsTime_s === 0, `${sim.out.Q_acc_Gcal.toFixed(4)} Гкал`);
+      sim.env.tp2Drift = -4.5; run(sim, 5); o = sim.out;
+      r.check(G, 'УУТЭ: ТП2 −4.5 °C — переучет тепла и предупреждение', o.Q_meter_Gcalh > o.Q_actual_Gcalh * 1.08 && P.diagnose(sim).some(a => a.id === 'uute_tp2_drift'), `учет ${o.Q_meter_Gcalh.toFixed(3)} / факт ${o.Q_actual_Gcalh.toFixed(3)}`);
+      r.check(G, 'УУТЭ: ревизия ТП2 на ходу', P.serviceTP2(sim).ok && sim.env.tp2Drift === 0);
+      sim.env.pr2Fouling = 0.12; run(sim, 5); o = sim.out;
+      r.check(G, 'УУТЭ: загрязненный ПР2 — НС небаланса и «ложный небаланс»', o.uuteNS.includes('NS_IMBALANCE') && P.diagnose(sim).some(a => a.id === 'uute_pr2_fouled'), `ΔM ${o.dM_pct.toFixed(1)} %`);
+      const ns0 = sim.state.nsTime_s; run(sim, 10);
+      r.check(G, 'УУТЭ: время НС растет, пока есть НС', Math.abs(sim.state.nsTime_s - ns0 - 10) < 0.2);
+      r.check(G, 'УУТЭ: чистка ПР2 на вводе под давлением — авария', !P.cleanPR2(sim).ok && P.diagnose(sim).some(a => a.id === 'open_under_pressure'));
+      const s2 = fresh(); P.settle(s2, 120);
+      s2.controls.MAKEUP = 80; s2.controls.HOUSE_DRAIN = true; run(s2, 15);
+      r.check(G, 'УУТЭ: подпитка при открытом спуске — реальный небаланс (не «ложный»)', s2.out.G_makeup_th > 0.5 && s2.out.uuteNS.includes('NS_IMBALANCE') && !P.diagnose(s2).some(a => a.id === 'uute_pr2_fouled'), `на подпитку ${s2.out.G_makeup_th.toFixed(2)} т/ч`);
+    }
+
     // 1.8 Сервисные операции и защита от вскрытия под давлением
     {
       const sim = fresh();
@@ -238,7 +262,7 @@
     const lessonsSrc = fs.readFileSync(path.join(dir, 'lessons.js'), 'utf8');
     const body = lessonsSrc.slice(lessonsSrc.indexOf('const LESSONS = ['), lessonsSrc.indexOf('const notesUrl'));
     const ids = [...body.matchAll(/^ {6}id: '([a-z0-9]+)'/gm)].map(m => m[1]);
-    r.check(G, 'Уроков в lessons.js', ids.length === 20, ids.length);
+    r.check(G, 'Уроков в lessons.js', ids.length === 21, ids.length);
     r.check(G, 'Конспектов в notes-content.js', notes.length === ids.length, notes.length);
     const miss = [];
     ids.forEach((id, i) => {
@@ -247,7 +271,7 @@
       if (!n || n.n !== i + 1) miss.push(`${id}: номер конспекта ${n ? n.n : '—'} ≠ ${i + 1}`);
       if (!fs.existsSync(f) || fs.statSync(f).size < 20000) miss.push(`нет или пустой ${path.basename(f)}`);
     });
-    r.check(G, 'Для каждого урока есть PDF docs/notes/NN-id.pdf с верным номером', miss.length === 0, miss.join('; ') || '01-tour … 20-kzrbypass');
+    r.check(G, 'Для каждого урока есть PDF docs/notes/NN-id.pdf с верным номером', miss.length === 0, miss.join('; ') || '01-tour … 21-uute');
   }
 
   // ---------------------------------------------------------------------------
@@ -309,7 +333,7 @@
       const G = 'Уроки: цели подсветки';
       const T = L._audit.targets;
       const lessons = L.list;
-      r.check(G, 'Уроков в списке', lessons.length === 20 && lessons.every(Boolean), lessons.length);
+      r.check(G, 'Уроков в списке', lessons.length === 21 && lessons.every(Boolean), lessons.length);
       const badKey = [], badSel = [], badXY = [];
       lessons.forEach(l => l.steps.forEach((st, i) => { if (!st.target || !T[st.target]) badKey.push(`${l.id}#${i + 1}: «${st.target}»`); }));
       Object.entries(T).forEach(([k, t]) => {
@@ -381,7 +405,7 @@
       L.exit();
     }
 
-    // ----- 3.4 Прохождение всех 20 уроков через пульт -----
+    // ----- 3.4 Прохождение всех 21 уроков через пульт -----
     {
       const G = 'Уроки: прохождение через пульт';
       document.querySelector('[data-cfg="dhwScheme"][data-val="2stage"]').click();
@@ -415,7 +439,8 @@
         gaugechange() { q('p21CockBtn').click(); run(1); q('replaceGaugeBtn').click(); run(1); q('p21CockBtn').click(); run(1); setR('MAKEUP', 15); run(60, () => o().P21 >= 3.5); setR('MAKEUP', 0); run(5); },
         hydrotest() { ack(); q('reliefIsoBtn').click(); run(1); q('pressPumpBtn').click(); run(60, () => o().P21 >= 6.15); q('pressPumpBtn').click(); run(8); q('drainBtn').click(); run(30, () => o().P21 <= 3.6); q('drainBtn').click(); run(1); q('reliefIsoBtn').click(); run(5); },
         burst() { q('pumpBtn').click(); setR('KZRcmd', 0); run(15, () => c().KZR <= 1); run(0.5); q('houseSupBtn').click(); q('houseRetBtn').click(); q('houseDrainBtn').click(); q('houseVentBtn').click(); run(150, () => S().env.burst === 0); run(1); q('houseDrainBtn').click(); q('houseRetBtn').click(); q('houseSupBtn').click(); setR('MAKEUP', 100); run(400, () => o().houseFill >= 0.999); run(0.5); q('houseVentBtn').click(); run(60, () => o().P21 >= 3.45); setR('MAKEUP', 0); run(1); q('pumpBtn').click(); setR('KZRcmd', 48); run(20); },
-        kzrbypass() { setR('KZR_BYPASS', 30); run(150); q('kzrIsoBtn').click(); setR('KZR_BYPASS', 48); run(150); q('repairKzrBtn').click(); run(1); q('kzrIsoBtn').click(); setR('KZRcmd', 48); setR('KZR_BYPASS', 0); run(200); }
+        kzrbypass() { setR('KZR_BYPASS', 30); run(150); q('kzrIsoBtn').click(); setR('KZR_BYPASS', 48); run(150); q('repairKzrBtn').click(); run(1); q('kzrIsoBtn').click(); setR('KZRcmd', 48); setR('KZR_BYPASS', 0); run(200); },
+        uute() { ack(); q('btnServiceTP2').click(); run(1); setR('MAKEUP', 0); run(5); setR('KZRcmd', 0); run(40, () => c().KZR <= 0); q('gateBtnV1').click(); run(10); q('gateBtnV2').click(); run(10); q('pumpBtn').click(); run(1); q('netVentBtn').click(); q('netDrainBtn').click(); run(60, () => S().state.nodes[4] < 0.1); run(1); q('btnCleanPR2').click(); run(1); q('netDrainBtn').click(); run(0.3); q('gateBtnV2').click(); run(120, () => mf() >= 0.999 && c().V2 >= 100); q('netVentBtn').click(); run(0.3); q('gateBtnV1').click(); run(10); q('pumpBtn').click(); setR('KZRcmd', 48); run(200); }
       };
       let passed = 0;
       for (const l of L.list) {
@@ -432,19 +457,21 @@
       r.check(G, 'Урок 13: греющая вода до открытия В1 — ошибка урока', /без холодной воды/.test(modalTitle()), modalTitle());
       startL('pumpchange'); q('replacePump1Btn').click(); run(1);
       r.check(G, 'Урок 16: снять Н1 с открытыми кранами — ошибка урока', /под давлением/.test(modalTitle()), modalTitle());
+      startL('uute'); ack(); q('btnCleanPR2').click(); run(1);
+      r.check(G, 'Урок 21: чистить ПР2 на вводе под давлением — ошибка урока', /под давлением/.test(modalTitle()), modalTitle());
       closeModal(); L.exit();
       r.note(G, 'Итог', `${passed}/${L.list.length} уроков пройдено`);
       r.summary = r.summary || {}; r.summary.lessons = `${passed}/${L.list.length}`;
     }
 
-    // ----- 3.5 Бот по всем 6 сменам -----
+    // ----- 3.5 Бот по всем 7 сменам -----
     {
       const G = 'Смены (бот)';
       const sim = A.sim, oo = () => sim.out, cc = () => sim.controls;
       const setR = (k, v) => { const el = document.querySelector(`[data-ctl="${k}"] input`); el.value = Math.round(v); el.dispatchEvent(new Event('input')); };
       const ids = () => new Set(P.diagnose(sim).map(a => a.id));
       function makeBot() {
-        let lastK = 0, proc = null, hp = null, reportedP1 = false, reportedPass = false, reportedT1 = false;
+        let lastK = 0, proc = null, hp = null, pr = null, reportedP1 = false, reportedPass = false, reportedT1 = false;
         return function (t) {
           const out = oo(), c2 = cc(), d = ids();
           const pumped = sim.config.makeupType === 'pumped';
@@ -466,6 +493,21 @@
             else if (s === 3 && out.P21 >= 3.5) { setR('MAKEUP', 0); q('houseSupBtn').click(); hp.s = 4; }
             else if (s === 4) { q(pumpKey).click(); q('gateBtnV1').click(); hp.s = 5; }
             else if (s === 5 && c2.V1 >= 100) hp = null;
+            return;
+          }
+          // УУТЭ: ревизия ТП2 на ходу, открытый спуск стояков закрыть
+          if (d.has('uute_tp2_drift')) q('btnServiceTP2').click();
+          if (c2.HOUSE_DRAIN) q('houseDrainBtn').click();
+          // ложный небаланс: чистка ПР2 на отключенном и сброшенном вводе
+          if (!pr && !proc && d.has('uute_pr2_fouled')) pr = { s: 0 };
+          if (pr) {
+            const s = pr.s;
+            if (s === 0) { if (c2.V1cmd === 'open') q('gateBtnV1').click(); pr.s = 1; }
+            else if (s === 1 && c2.V1 === 0) { q('gateBtnV2').click(); pr.s = 2; }
+            else if (s === 2 && c2.V2 === 0) { q('netDrainBtn').click(); q('netVentBtn').click(); pr.s = 3; }
+            else if (s === 3 && sim.state.nodes[4] < 0.1) { q('btnCleanPR2').click(); q('netDrainBtn').click(); q('gateBtnV2').click(); pr.s = 4; }
+            else if (s === 4 && Math.min(...out.fill.slice(1, 5)) >= 0.999) { if (c2.NET_VENT) q('netVentBtn').click(); if (c2.V2 >= 100) { q('gateBtnV1').click(); pr.s = 5; } }
+            else if (s === 5 && c2.V1 >= 100) pr = null;
             return;
           }
           if (!pumped && out.houseFill >= 0.999 && !c2.DRAIN && !c2.HOUSE_DRAIN) {
@@ -500,7 +542,7 @@
           }
         };
       }
-      localStorage.setItem('itp-levels-v1', JSON.stringify({ l1: { best: 100, stars: 3 }, l2: { best: 100, stars: 3 }, l3: { best: 100, stars: 3 }, l4: { best: 100, stars: 3 }, l5: { best: 100, stars: 3 } }));
+      localStorage.setItem('itp-levels-v1', JSON.stringify({ l1: { best: 100, stars: 3 }, l2: { best: 100, stars: 3 }, l3: { best: 100, stars: 3 }, l4: { best: 100, stars: 3 }, l5: { best: 100, stars: 3 }, level6: { best: 100, stars: 3 } }));
       const scores = [];
       for (const lv of LV.list) {
         LV.exitIfActive();
@@ -522,7 +564,7 @@
         const unresolved = dbg.incs.filter(i => i.state !== 'done' && !(i.d.optional && i.revealT === null) && i.state !== 'idle').map(i => i.d.id);
         const reportsOk = dbg.incs.filter(i => i.d.needsReport && i.revealT !== null).every(i => i.reported);
         scores.push(`${lv.n}: ${score}`);
-        r.check(G, `Смена ${lv.n} «${lv.title}» [${cfg}]: ${score} баллов`, score >= (lv.n === 6 ? 90 : 60) && unresolved.length === 0 && !/провалена/i.test(text),
+        r.check(G, `Смена ${lv.n} «${lv.title}» [${cfg}]: ${score} баллов`, score >= (lv.n >= 6 ? 90 : 60) && unresolved.length === 0 && !/провалена/i.test(text),
           [unresolved.length ? 'не решено: ' + unresolved.join(', ') : '', pens.length ? 'штрафы: ' + pens.join('; ') : 'штрафов нет', rate.length ? 'по времени: ' + rate.join(', ') : ''].filter(Boolean).join(' · '));
         if (dbg.incs.some(i => i.d.needsReport)) r.check(G, `Смена ${lv.n}: «Сообщить диспетчеру» засчитано во всех инцидентах с needsReport`, reportsOk && !dbg.penalties.false_report,
           dbg.incs.filter(i => i.d.needsReport).map(i => `${i.d.id}: ${i.revealT === null ? 'не началось' : i.reported ? 'сообщено' : 'НЕ сообщено'}`).join(', '));

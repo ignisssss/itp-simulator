@@ -57,6 +57,12 @@
     KVS_KZR_BYPASS: 16,    // Kvs ручного вентиля на байпасе КЗР
     PRESS_TARGET: 6.25,    // бар, испытательное давление опрессовки = 1.25 × рабочее
     PRESS_RATE: 0.08,      // бар/с, опрессовочный насос (вдали от предела)
+    // Узел учета тепловой энергии (УУТЭ)
+    UUTE_GMIN: 0.6,        // т/ч, нижний предел измерений расходомера ПР1
+    UUTE_IMB_PCT: 2.5,     // %, допустимый небаланс масс M1 − M2 (уставка вычислителя)
+    UUTE_DT_MIN: 3.0,      // °C, минимальная разность T1 − T2 для учета
+    H_CW: 5.0,             // ккал/кг, энтальпия холодной воды на источнике (по договору)
+    MAKEUP_TPH: 10.0,      // т/ч на 1 бар/с — массовый расход подпитки, отобранный из обратки сети
     BUILDING_DT: 30.0,     // °C, остывание воды в системе отопления дома (75 → 45, см. README)
     TAU_T: 3.0,            // с, инерция T11 и T2
     TAU_T21: 8.0,          // с, инерция обратки из дома
@@ -170,7 +176,9 @@
       burst: 0,               // бар/с при 3.5 бар — прорыв радиатора (вода в квартиру)
       v1Passing: 0,           // 1/с — закрытая V1 пропускает воду из теплосети
       p21Stuck: null,         // число — манометр P21 «залип» на этом значении
-      hexScaling: 0           // 0…1 — накипь в ПТО отопления (1 — сильная)
+      hexScaling: 0,          // 0…1 — накипь в ПТО отопления (1 — сильная)
+      pr2Fouling: 0,          // 0…0.25 — доля, на которую загрязненные электроды ПР2 занижают расход
+      tp2Drift: 0             // °C — систематическая погрешность ТП2 (высохла термопаста в гильзе)
     };
   }
 
@@ -328,6 +336,7 @@
       T_dhw_mid: 32.0, T2_after_stage1: 38.0,
       P_lock1: C.P_B1, P_lock2: C.P_B1, dhwMeter: 0, T_st1w: 40, lockRef1: null, lockRef2: null,
       hexWashed: false, pump1Replaced: false, gaugeReplaced: false, kzrRepaired: false,
+      Q_acc_Gcal: 0, M1_acc_t: 0, M2_acc_t: 0, nsTime_s: 0, pr2Cleaned: false, tp2Serviced: false,
       serviceAlarmUntil: -1, serviceAlarmText: ''
     };
     applyConfig(sim);
@@ -539,6 +548,33 @@
     sim.env.p21Stuck = null;
     sim.state.gaugeReplaced = true;
     return { ok: true, level: 'ok', msg: 'Манометр P21 заменен. На атмосфере новый прибор показывает 0.0 бар.' };
+  }
+
+  /** Ревизия защитной гильзы ТП2: гильза вварена в трубу, поэтому работа идет без остановки и без сброса давления. */
+  function serviceTP2(sim) {
+    sim.env.tp2Drift = 0;
+    sim.state.tp2Serviced = true;
+    return { ok: true, level: 'ok', msg: 'Ревизия гильзы ТП2: старая паста удалена, гильза заполнена термопастой, клеммы подтянуты. ТП2 сошелся с контрольным термометром.' };
+  }
+
+  /** Чистка электродов ПР2: только на отключенном вводе со сброшенным до нуля давлением. */
+  function cleanPR2(sim) {
+    const c = sim.controls, s = sim.state;
+    if (c.V1 > 0 || c.V2 > 0) {
+      return underPressure(sim, 'Ввод не отключен: перед снятием расходомера ПР2 закрывают V1, затем V2. Иначе из фланцев ударит сетевая вода 95 °C.');
+    }
+    if (s.nodes[4] >= 0.1) {
+      return underPressure(sim, `На участке с ПР2 еще ${s.nodes[4].toFixed(2)} бар. Сбросьте давление дренажом сети при открытом воздушнике до 0 бар.`);
+    }
+    sim.env.pr2Fouling = 0;
+    s.pr2Cleaned = true;
+    return { ok: true, level: 'ok', msg: 'Электроды ПР2 очищены от магнетитового шлама, футеровка осмотрена, расходомер собран.' };
+  }
+
+  /** Сброс архива тепловычислителя (для учебных проверок). */
+  function resetUuteCounters(sim) {
+    Object.assign(sim.state, { Q_acc_Gcal: 0, M1_acc_t: 0, M2_acc_t: 0, nsTime_s: 0 });
+    return { ok: true, level: 'op', msg: 'Архив тепловычислителя УУТЭ обнулен.' };
   }
 
   /** Ремонт привода КЗР: только при отсеченном кранами клапане. */
@@ -969,6 +1005,30 @@
 
     s.time += dt;
 
+    // Узел учета тепловой энергии. ПР1 и ТП1 — на подаче после грязевика (весь сетевой поток),
+    // ПР2 и ТП2 — на обратке перед V2, после врезки подпитки и после всех врезок обраток ГВС.
+    const G1_total = G1 + G1_dhw;
+    const G_mk = G1_total > 0 ? makeupFlow * C.MAKEUP_TPH : 0;          // т/ч, отбор сетевой воды на подпитку
+    const G2_ret = Math.max(0, G1_total - G_mk);
+    const T2_out = dhwOn ? T2_net : s.T2;
+    const M1_meter = G1_total;
+    const M2_meter = G2_ret * (1 - (env.pr2Fouling || 0));
+    const dM_meter = M1_meter - M2_meter;
+    const dM_pct = M1_meter > 0.1 ? dM_meter / M1_meter * 100 : 0;
+    const T1_meter = T1;
+    const T2_meter = T2_out + (env.tp2Drift || 0);
+    const Q_meter_Gcalh = Math.max(0, (M1_meter * (T1_meter - T2_meter) + Math.max(0, M1_meter - M2_meter) * (T2_meter - C.H_CW)) * 0.001);
+    const Q_actual_Gcalh = Math.max(0, (G1_total * (T1 - T2_out) + Math.max(0, G1_total - G2_ret) * (T2_out - C.H_CW)) * 0.001);
+    const uuteNS = [];
+    if (M1_meter > 0.02 && M1_meter < C.UUTE_GMIN) uuteNS.push('NS_GMIN');
+    if (M1_meter >= C.UUTE_GMIN && Math.abs(dM_pct) > C.UUTE_IMB_PCT) uuteNS.push('NS_IMBALANCE');
+    if (M1_meter >= C.UUTE_GMIN && T1_meter - T2_meter < C.UUTE_DT_MIN) uuteNS.push('NS_DT_MIN');
+    if (s.Q_acc_Gcal === undefined) Object.assign(s, { Q_acc_Gcal: 0, M1_acc_t: 0, M2_acc_t: 0, nsTime_s: 0 });
+    s.Q_acc_Gcal += Q_meter_Gcalh * dt / 3600;
+    s.M1_acc_t += M1_meter * dt / 3600;
+    s.M2_acc_t += M2_meter * dt / 3600;
+    if (uuteNS.length) s.nsTime_s += dt;
+
     sim.out = {
       time: s.time,
       T1, P1: env.P1, P2: env.P2,
@@ -1015,6 +1075,9 @@
       T3: s.T3, T4: s.T4, T2_dhw: s.T2_dhw, DHW_KZR: s.DHW_KZR, P_B1: C.P_B1, T_B1: C.T_B1,
       makeupType: cfg.makeupType, mpRunning: s.mpRunning, mpDryTime: s.mpDryTime, mpTrip: !!s.mpTrip,
       P_makeup_avail, P_node4: s.nodes[4],
+      G_makeup_th: G_mk, G2_return_actual: G2_ret, M1_meter, M2_meter, dM_meter, dM_pct, T1_meter, T2_meter,
+      Q_meter_Gcalh, Q_actual_Gcalh, uuteNS, Q_acc_Gcal: s.Q_acc_Gcal, M1_acc_t: s.M1_acc_t, M2_acc_t: s.M2_acc_t,
+      nsTime_s: s.nsTime_s, pr2Fouling: env.pr2Fouling || 0, tp2Drift: env.tp2Drift || 0,
     };
     return sim.out;
   }
@@ -1089,6 +1152,39 @@
         title: 'АВАРИЯ: Подача теплоносителя без циркуляции отопления!',
         text: 'Циркуляции в доме нет (насос выключен, остановлен или дом отсечен), а сетевая вода идет в ПТО! Вторичный контур в теплообменнике перегревается до 95 °C, выпадает накипь, а дом остывает.',
         detail: `G1 = ${f1(o.G1)} т/ч, T11 = ${f1(o.T11)} °C`
+      });
+    }
+    // Узел учета тепловой энергии
+    const ns = o.uuteNS || [];
+    if (ns.includes('NS_IMBALANCE') && o.G_makeup_th < 0.05) {
+      list.push({
+        id: 'uute_pr2_fouled', level: 'warn',
+        title: 'УУТЭ: Ложный небаланс масс (M1 > M2) при закрытой подпитке',
+        text: 'Отбора воды на подпитку нет, но расходомер ПР2 на обратке занижает показания. Электроды ПР2 загрязнены магнетитом — теплосчетчик фиксирует код НС и начисляет сверхнормативную утечку.',
+        detail: `M1 = ${f2(o.M1_meter)} т/ч, M2 = ${f2(o.M2_meter)} т/ч, небаланс ${f1(o.dM_pct)} %`
+      });
+    } else if (ns.includes('NS_IMBALANCE')) {
+      list.push({
+        id: 'uute_imbalance', level: 'info',
+        title: 'УУТЭ: Код НС — небаланс масс: сетевая вода уходит на подпитку',
+        text: 'Часть сетевой воды отбирается из обратки на подпитку системы отопления до расходомера ПР2. Это реальная потеря теплоносителя: ищите утечку или открытый спуск в доме и закройте подпитку, когда давление в норме.',
+        detail: `M1 = ${f2(o.M1_meter)} т/ч, M2 = ${f2(o.M2_meter)} т/ч, на подпитку ${f2(o.G_makeup_th)} т/ч`
+      });
+    }
+    if (Math.abs(sim.env.tp2Drift || 0) > 1.5 && o.M1_meter > 1.0) {
+      list.push({
+        id: 'uute_tp2_drift', level: 'warn',
+        title: 'УУТЭ: Расхождение датчика ТП2 и контрольного термометра Т2',
+        text: 'Термопреобразователь ТП2 тепловычислителя занижает температуру обратки относительно термометра на трубе (высохла термопаста в защитной гильзе). Идет коммерческий переучет тепла!',
+        detail: `ТП2 = ${f1(o.T2_meter)} °C, термометр Т2 = ${f1(o.T2)} °C, Q учет / факт = ${o.Q_meter_Gcalh.toFixed(3)} / ${o.Q_actual_Gcalh.toFixed(3)} Гкал/ч`
+      });
+    }
+    if (ns.includes('NS_GMIN')) {
+      list.push({
+        id: 'uute_gmin', level: 'info',
+        title: 'УУТЭ: Код НС — расход ниже порога чувствительности ПР1 (G_min < 0.6 т/ч)',
+        text: 'Расход сетевой воды меньше нижнего предела измерений расходомера. Пока он не восстановится, вычислитель ведет учет по договорным значениям и копит время НС.',
+        detail: `M1 = ${f2(o.M1_meter)} т/ч`
       });
     }
     if (s.time < s.serviceAlarmUntil) {
@@ -1387,7 +1483,7 @@
   }
 
   global.ITPPhysics = Object.freeze({
-    CONST: C, foulDhwFilter, cleanDhwFilter, washHEX, replacePump1, replaceGaugeP21, repairKZR,
+    CONST: C, foulDhwFilter, cleanDhwFilter, washHEX, replacePump1, replaceGaugeP21, repairKZR, serviceTP2, cleanPR2, resetUuteCounters,
     createSimulator,
     resetNominal,
     settle,
