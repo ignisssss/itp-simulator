@@ -339,6 +339,48 @@
           fix: 'Подпитка закрыта, а M2 меньше M1 на 12 % — воду никто не теряет, ПР2 занижает расход. Закрыть V1, затем V2, открыть воздушник и дренаж сети, дождаться 0 бар, почистить электроды ПР2, закрыть дренаж, заполнить через V2, закрыть воздушник, открыть V1, насос и КЗР в работе.'
         }
       ]
+    },
+
+    {
+      id: 'level8', n: 8, title: 'Смена 8. Гидравлический удар и прорыв мембраны расширительного бака', difficulty: 'Высокая',
+      intro: 'Зима, −12 °C, к вечеру обещают −18 °C. Перед сменой слесарь обслуживал мембранный расширительный бак (РБ) на 600 л. В тренажере включена полная термодинамика контура: тепловое расширение воды и газовая подушка бака. Насос отопления защищен автоматикой.',
+      setup() {
+        baseConfig();
+        sim.config.enableThermalExpansion = true;
+        sim.env.pumpProtection = true;
+        sim.env.T_out = -12;
+        P.setKZR(sim, 52);
+        P.settle(sim, 300);
+        P.resetUuteCounters(sim);
+      },
+      incidents: [
+        {
+          id: 'exp_overpumped_start', title: 'РБ перекачан до 4.6 бар: нет запаса воды', at: 0, silent: true,
+          start(sim) { sim.state.expPrecharge = 4.6; sim.env.houseLeak = 0.003; },
+          resolved: () => c().EXP_ISO !== false && !c().EXP_DRAIN && sim.state.expPrecharge >= 3.1 && sim.state.expPrecharge <= 3.3 &&
+            o().P21 >= 3.4 && o().P21 <= 4.0 && c().MAKEUP < 0.5 && !c().DRAIN,
+          hold: 3, norm: 30, deadline: 85, lesson: 'exptank',
+          onDone(sim, lvl) { sim.env.houseLeak = 0; lvl.toast('Сантехник', 'Нашли и устранили капельную течь на стояке в подвале.'); },
+          fix: 'Слесарь перекачал воздушную камеру РБ до 4.6 бар — выше статики дома. Груша пуста, запаса воды нет: капельная течь в жестком контуре быстро роняет P21. Отсечь РБ, слить остатки, стравить воздух до 3.1…3.3 бар, закрыть слив, открыть кран РБ и подпитать дом до 3.4…4.0 бар.'
+        },
+        {
+          id: 'exp_membrane_rupture', title: 'Прорыв мембраны РБ при похолодании', at: 35,
+          start(sim) { sim.env.expMembraneBurst = true; },
+          update: ramp(-12, -18, 60),
+          message: { from: 'Слесарь', text: 'Из воздушного ниппеля расширительного бака бежит вода! Похолодало, давление на всасе растет.' },
+          resolved: () => sim.state.expMembraneReplaced && !sim.env.expMembraneBurst && c().EXP_ISO !== false && !c().EXP_DRAIN &&
+            sim.state.expPrecharge >= 3.1 && sim.state.expPrecharge <= 3.3 && o().P21 >= 3.4 && o().P21 <= 4.2 && !o().reliefOpen,
+          hold: 3, norm: 40, deadline: 110, lesson: 'exptank',
+          fix: 'Мембрана порвана — газовой подушки нет, контур жесткий: нагрев на 1 °C поднимает P21 на ≈ 0.5 бар и срывает ПК. Отсечь РБ, слить воду из бака, заменить мембрану, накачать 3.1…3.3 бар, закрыть слив, ввести РБ в работу и держать P21 3.4…4.2 бар (лишнее давление — дренажом ИТП, недостающее — подпиткой).'
+        },
+        {
+          id: 'strainer_and_temp_balance', title: 'Мороз −18 °C: вывести отопление на график', at: 80,
+          message: { from: 'Диспетчер теплосети', text: 'На улице −18 °C. Проверьте режим: подача в дом по графику, обратка в норме, учет без нештатных ситуаций.' },
+          resolved: () => onGraph() && !(o().uuteNS || []).length && o().P21 >= 3.2 && o().P21 <= 4.2 && !o().reliefOpen,
+          hold: 4, norm: 35, deadline: 100, lesson: 'regulation',
+          fix: 'После пика мороза T11 должна идти по графику для −18 °C: прибавить КЗР, следя, чтобы обратка T2 не ушла выше нормы. Давление в контуре держать 3.2…4.2 бар.'
+        }
+      ]
     }
   ];
 
@@ -435,6 +477,7 @@
 
   function exit() {
     level = null;
+    sim.config.enableThermalExpansion = true;   // назад в свободный режим
     $('levelPanel').hidden = true;
     $('levelToasts').innerHTML = '';
     document.body.classList.remove('level-mode');

@@ -63,6 +63,15 @@
     UUTE_DT_MIN: 3.0,      // °C, минимальная разность T1 − T2 для учета
     H_CW: 5.0,             // ккал/кг, энтальпия холодной воды на источнике (по договору)
     MAKEUP_TPH: 10.0,      // т/ч на 1 бар/с — массовый расход подпитки, отобранный из обратки сети
+    // Мембранный расширительный бак (РБ) и тепловое расширение воды
+    EXP_V_SYS: 10000,      // л, объем воды в системе отопления дома
+    EXP_V_RB: 600,         // л, полный объем расширительного бака
+    EXP_P0: 3.2,           // бар, штатная предзакачка воздушной камеры (на пустом баке)
+    EXP_VW_MAX: 560,       // л, предел заполнения мембраны водой
+    EXP_DRAIN_LPS: 30,     // л/с, слив водяной полости отсеченного бака
+    EXP_C_PIPE: 9,         // л/бар, податливость контура без воздушной подушки (вода и стенки труб)
+    EXP_TAU_MIX: 300,      // с, усреднение температуры воды СО при циркуляции
+    EXP_TAU_COOL: 14400,   // с, остывание воды в радиаторах без циркуляции (часы, а не минуты)
     BUILDING_DT: 30.0,     // °C, остывание воды в системе отопления дома (75 → 45, см. README)
     TAU_T: 3.0,            // с, инерция T11 и T2
     TAU_T21: 8.0,          // с, инерция обратки из дома
@@ -178,11 +187,34 @@
       p21Stuck: null,         // число — манометр P21 «залип» на этом значении
       hexScaling: 0,          // 0…1 — накипь в ПТО отопления (1 — сильная)
       pr2Fouling: 0,          // 0…0.25 — доля, на которую загрязненные электроды ПР2 занижают расход
-      tp2Drift: 0             // °C — систематическая погрешность ТП2 (высохла термопаста в гильзе)
+      tp2Drift: 0,            // °C — систематическая погрешность ТП2 (высохла термопаста в гильзе)
+      expMembraneBurst: false // разрыв мембраны расширительного бака
     };
   }
 
   const houseFull0 = s => s.houseFill >= 0.999;
+
+  // ---------------------------------------------------------------------------
+  // Расширительный бак: изотерма Бойля-Мариотта и тепловое расширение воды
+  // ---------------------------------------------------------------------------
+  /** Относительное расширение воды от 20 °C. */
+  const eTherm = T => Math.max(0, 0.00021 * (T - 20) + 0.0000032 * Math.pow(Math.max(0, T - 20), 2));
+  /** Объем воды в исправном баке при давлении P (изотерма газовой камеры), л. */
+  const expBoyle = (P, P0) => Math.min(C.EXP_VW_MAX, Math.max(0, C.EXP_V_RB * (1 - (P0 + 1) / (Math.max(0.1, P) + 1))));
+  /** Податливость бака dV/dP в рабочем диапазоне, л/бар. */
+  const expCompl = (P, P0) => C.EXP_V_RB * (P0 + 1) / Math.pow(P + 1, 2);
+  /** Податливость контура с исправным баком в штатной точке (3.5 бар, предзакачка 3.2) — к ней привязаны старые расходы в бар/с. */
+  const EXP_C_REF = C.EXP_C_PIPE + C.EXP_V_RB * (C.EXP_P0 + 1) / Math.pow(C.P21_DEFAULT + 1, 2);
+  /** Учитывать тепловое расширение и жесткость контура (иначе — прежняя модель, балансы уроков 1–21 и смен 1–7 не меняются). */
+  function expThermalActive(sim) {
+    const c = sim.controls, s = sim.state, env = sim.env;
+    if (sim.config && sim.config.enableThermalExpansion) return true;
+    if (env.expMembraneBurst) return true;
+    if (Math.abs((s.expPrecharge === undefined ? C.EXP_P0 : s.expPrecharge) - C.EXP_P0) > 0.3) return true;
+    // На опрессовке (ПК отсечен или работает опрессовочный насос) бак отсекают штатно, вода холодная и не греется
+    if (c.EXP_ISO === false && !(c.RELIEF_ISO === false || c.PRESS_PUMP)) return true;
+    return false;
+  }
 
   function kvOf(pct, kvs) {
     return pct < C.CLOSED_PCT ? 0 : kvs * pct / 100;
@@ -252,7 +284,9 @@
       KZR_BYPASS: 0,         // ручной регулирующий вентиль на байпасе КЗР, %
       P21_COCK: 'work',      // трехходовой кран манометра P21: 'work' — на трубе, 'zero' — на атмосфере
       RELIEF_ISO: true,      // кран перед ПК (false — ПК отсечен на время опрессовки)
-      PRESS_PUMP: false      // опрессовочный насос
+      PRESS_PUMP: false,     // опрессовочный насос
+      EXP_ISO: true,         // отсечной кран расширительного бака РБ (false — бак отсечен)
+      EXP_DRAIN: false       // сливной кран водяной полости РБ
     };
   }
 
@@ -261,7 +295,8 @@
     return {
       makeupType: 'direct',  // 'direct' — безнасосная подпитка от P2; 'pumped' — станция подпитки Нп + РД
       dhwScheme: 'none',     // задел: 'none' | '1stage' | '2stage'
-      network: 'normal'      // 'normal' — P1/P2 = 6.5/4.5 бар; 'low' — пониженный напор 4.5/2.5 бар
+      network: 'normal',     // 'normal' — P1/P2 = 6.5/4.5 бар; 'low' — пониженный напор 4.5/2.5 бар
+      enableThermalExpansion: false   // тепловое расширение воды и жесткость контура (свободный режим, урок 22, смена 8)
     };
   }
 
@@ -337,6 +372,8 @@
       P_lock1: C.P_B1, P_lock2: C.P_B1, dhwMeter: 0, T_st1w: 40, lockRef1: null, lockRef2: null,
       hexWashed: false, pump1Replaced: false, gaugeReplaced: false, kzrRepaired: false,
       Q_acc_Gcal: 0, M1_acc_t: 0, M2_acc_t: 0, nsTime_s: 0, pr2Cleaned: false, tp2Serviced: false,
+      expPrecharge: C.EXP_P0, expWaterVol: 40.0, expMembraneReplaced: false, expIsoPrev: true, expIsoP: C.P21_DEFAULT,
+      T_w: C.T11_TARGET - C.BUILDING_DT / 2, expThermL: 0, expPrechargeBlockedUntil: -1,
       serviceAlarmUntil: -1, serviceAlarmText: ''
     };
     applyConfig(sim);
@@ -577,6 +614,47 @@
     return { ok: true, level: 'op', msg: 'Архив тепловычислителя УУТЭ обнулен.' };
   }
 
+  /** Давление воды в баке, бар. */
+  function expWaterPressure(sim) {
+    const c = sim.controls, s = sim.state;
+    if (c.EXP_ISO !== false) return s.P21;
+    if (s.expWaterVol <= 1) return 0;
+    if (sim.env.expMembraneBurst) return c.EXP_DRAIN ? 0.2 : s.expIsoP;
+    return (s.expPrecharge + 1) * C.EXP_V_RB / Math.max(30, C.EXP_V_RB - s.expWaterVol) - 1;
+  }
+  /** Манометр на воздушном ниппеле РБ, бар. */
+  function expAirPressure(sim) {
+    const c = sim.controls, s = sim.state;
+    if (sim.env.expMembraneBurst) return expWaterPressure(sim);   // из ниппеля идет вода
+    if (c.EXP_ISO !== false) return Math.max(s.expPrecharge, s.P21);
+    if (s.expWaterVol > 0.5) return (s.expPrecharge + 1) * C.EXP_V_RB / Math.max(30, C.EXP_V_RB - s.expWaterVol) - 1;
+    return s.expPrecharge;                                        // пустой отсеченный бак — истинная предзакачка
+  }
+
+  /** Подкачка или стравливание воздуха РБ: только на отсеченном и слитом баке. */
+  function setExpPrecharge(sim, targetBar) {
+    const c = sim.controls, s = sim.state;
+    if (c.EXP_ISO !== false || s.expWaterVol >= 1.0) {
+      s.expPrechargeBlockedUntil = s.time + 10;
+      return { ok: false, level: 'warn', msg: c.EXP_ISO !== false
+        ? 'Бак не отсечен: на ниппель давит вода системы, манометр показывает P21, а не предзакачку. Закройте кран РБ и слейте бак.'
+        : `В баке еще ${Math.round(s.expWaterVol)} л воды: она сжимает воздух, предзакачку не выставить. Откройте слив РБ и дождитесь 0 л.` };
+    }
+    s.expPrecharge = Math.min(5.0, Math.max(0, Number(targetBar) || 0));
+    return { ok: true, level: 'ok', msg: `Предзакачка РБ выставлена: ${s.expPrecharge.toFixed(2)} бар (на пустом отсеченном баке).` };
+  }
+
+  /** Замена мембраны (груши) РБ: только на отсеченном и полностью слитом баке. */
+  function replaceExpMembrane(sim) {
+    const c = sim.controls, s = sim.state;
+    if (c.EXP_ISO !== false) return underPressure(sim, 'Бак РБ не отсечен от системы: под фланцем мембраны давление контура. Закройте кран РБ и слейте бак.');
+    if (s.expWaterVol >= 1.0) return underPressure(sim, `В баке РБ еще ${Math.round(s.expWaterVol)} л воды под давлением. Откройте слив РБ и дождитесь полного опорожнения.`);
+    sim.env.expMembraneBurst = false;
+    s.expMembraneReplaced = true;
+    s.expPrecharge = 1.5;
+    return { ok: true, level: 'ok', msg: 'Мембрана РБ заменена. Начальная накачка 1.5 бар — докачайте воздушную камеру до 3.2 бар.' };
+  }
+
   /** Ремонт привода КЗР: только при отсеченном кранами клапане. */
   function repairKZR(sim) {
     const c = sim.controls;
@@ -790,6 +868,13 @@
       drainFlow = C.K_DRAIN * (s.P21 - C.DRAIN_P);
       dP21 -= drainFlow;
     }
+    // Сливной кран РБ при открытом отсечном кране: прямой сброс воды контура в дренаж
+    if (s.expPrecharge === undefined) Object.assign(s, { expPrecharge: C.EXP_P0, expWaterVol: 40, expMembraneReplaced: false, expIsoPrev: true, expIsoP: s.P21, T_w: 0.5 * (s.T11 + s.T21), expThermL: 0, expPrechargeBlockedUntil: -1 });
+    let expDrainFlow = 0;
+    if (c.EXP_DRAIN && c.EXP_ISO !== false && s.P21 > C.DRAIN_P) {
+      expDrainFlow = C.K_DRAIN * (s.P21 - C.DRAIN_P);
+      dP21 -= expDrainFlow;
+    }
 
     // Насосы Н1 (рабочий) и Н2 (резервный), каждый со своими кранами
     const p1Avail = c.PUMP && !env.pump1Fail;
@@ -809,7 +894,54 @@
       dP21 -= reliefFlow;
     }
 
-    s.P21 = Math.max(0, s.P21 + dP21 * dt);
+    // Расширительный бак: подключение отсеченного бака выравнивает давления (жесткий контур отдает или принимает воду)
+    const expConn = c.EXP_ISO !== false;
+    if (expConn && !s.expIsoPrev && !env.expMembraneBurst && s.houseFill >= 0.999) {
+      const P0 = s.expPrecharge, V0 = s.expWaterVol, P21was = s.P21;
+      const g = P => expBoyle(P, P0) - V0 - C.EXP_C_PIPE * (P21was - P);
+      let lo = 0, hi = Math.max(P21was, 8);
+      for (let i = 0; i < 40; i++) { const mid = 0.5 * (lo + hi); if (g(mid) > 0) hi = mid; else lo = mid; }
+      s.P21 = 0.5 * (lo + hi);
+    }
+    if (!expConn && s.expIsoPrev) s.expIsoP = s.P21;
+    s.expIsoPrev = expConn;
+
+    const expThermal = expThermalActive(sim);
+    let expStiff = false;
+    if (!expThermal || s.houseFill < 0.999 || !(dt > 0)) {
+      s.P21 = Math.max(0, s.P21 + dP21 * dt);
+      if (dt > 0) s.expThermL = 0;
+    } else {
+      // Податливость контура: жесткий контур (вода, трубы) плюс газовая подушка исправного бака в рабочем диапазоне
+      const P = s.P21, P0 = s.expPrecharge;
+      const cushion = expConn && !env.expMembraneBurst && P > P0 && s.expWaterVol <= 520;
+      expStiff = !cushion;
+      const Ctot = C.EXP_C_PIPE + (cushion ? expCompl(P, P0) : 0);
+      const m = EXP_C_REF / Ctot;               // старые расходы заданы в бар/с для штатного бака
+      const dTh = houseConn ? s.expThermL : 0;  // л, прирост объема воды за шаг от нагрева
+      s.expThermL = 0;
+      const flows = dP21 - pressFlow;           // опрессовочный насос регулирует скорость подъема давления сам
+      // Линейные по давлению стоки и притоки — экспоненциальное интегрирование (жесткий контур, устойчиво при dt = 0.1)
+      let A = 0;
+      if (makeupFlow > 0 && makeupSource > P) A += makeupFlow / (makeupSource - P);
+      if (drainFlow > 0) A += C.K_DRAIN;
+      if (expDrainFlow > 0) A += C.K_DRAIN;
+      if (reliefFlow > 0) A += C.K_RELIEF;
+      if (houseConn && houseDrainFlow > 0) A += C.K_HOUSE_DRAIN;
+      A *= m;
+      const F = m * flows + pressFlow + dTh / Ctot / dt;
+      const k = A > 1e-9 ? (1 - Math.exp(-A * dt)) / A : dt;
+      s.P21 = Math.max(0, P + F * k);
+    }
+    // Вода в баке
+    if (env.expMembraneBurst) {
+      if (expConn) s.expWaterVol = C.EXP_V_RB;
+      else if (c.EXP_DRAIN) s.expWaterVol = Math.max(0, s.expWaterVol - C.EXP_DRAIN_LPS * dt);
+    } else if (expConn) {
+      s.expWaterVol = s.houseFill >= 0.999 ? expBoyle(s.P21, s.expPrecharge) : 0;
+    } else if (c.EXP_DRAIN) {
+      s.expWaterVol = Math.max(0, s.expWaterVol - C.EXP_DRAIN_LPS * dt);
+    }
     if (houseConn) s.P_house = s.P21;
 
     // Защита насосов по низкому давлению на всасе: через PUMP_TRIP_S с останавливает оба насоса
@@ -995,6 +1127,15 @@
       tau21 = C.TAU_HOUSE_COOL;
     }
     s.T21 += (dt / tau21) * (T21target - s.T21);
+    // Средняя температура воды СО для теплового расширения: при циркуляции — по T11 и T21,
+    // без циркуляции вода в радиаторах остывает часами (T11 и T21 на трубах ИТП остывают быстро)
+    if (s.houseFill < 0.999) { s.T_w = 0.5 * (s.T11 + s.T21); s.expThermL = 0; }
+    else {
+      const Tw0 = s.T_w;
+      if (G2 > 0) s.T_w += (dt / C.EXP_TAU_MIX) * (0.5 * (s.T11 + s.T21) - s.T_w);
+      else s.T_w += (dt / C.EXP_TAU_COOL) * (20 - s.T_w);
+      s.expThermL += C.EXP_V_SYS * (eTherm(s.T_w) - eTherm(Tw0));
+    }
     // Температура в квартирах: приход от радиаторов минус теплопотери через ограждения
     s.T_room += dt * (Q_rad - UA_BLD * (s.T_room - env.T_out)) / C_BLD;
 
@@ -1078,6 +1219,9 @@
       G_makeup_th: G_mk, G2_return_actual: G2_ret, M1_meter, M2_meter, dM_meter, dM_pct, T1_meter, T2_meter,
       Q_meter_Gcalh, Q_actual_Gcalh, uuteNS, Q_acc_Gcal: s.Q_acc_Gcal, M1_acc_t: s.M1_acc_t, M2_acc_t: s.M2_acc_t,
       nsTime_s: s.nsTime_s, pr2Fouling: env.pr2Fouling || 0, tp2Drift: env.tp2Drift || 0,
+      expPrecharge: s.expPrecharge, expWaterVol: s.expWaterVol, expFillPct: s.expWaterVol / C.EXP_V_RB * 100,
+      P_exp_air: expAirPressure(sim), P_exp_water: expWaterPressure(sim), expMembraneBurst: !!env.expMembraneBurst,
+      expThermal, expStiff, T_w: s.T_w, expDrainFlow,
     };
     return sim.out;
   }
@@ -1154,6 +1298,41 @@
         detail: `G1 = ${f1(o.G1)} т/ч, T11 = ${f1(o.T11)} °C`
       });
     }
+    // Расширительный бак
+    if (sim.env.expMembraneBurst) {
+      list.push({
+        id: 'exp_membrane_burst', level: 'alarm',
+        title: 'Прорыв мембраны расширительного бака РБ!',
+        text: 'Воздушная подушка потеряна, бак полностью затоплен водой (из воздушного ниппеля идет вода). Система не компенсирует тепловое расширение — отсеките и слейте РБ для замены мембраны!',
+        detail: `P21 = ${f2(o.P21)} бар, вода в баке ${Math.round(s.expWaterVol)} л`
+      });
+    } else {
+      if (s.expPrecharge < 2.2) list.push({
+        id: 'exp_precharge_low', level: 'warn',
+        title: 'Стравлен воздух в расширительном баке РБ (низкое давление предзакачки)',
+        text: 'Давление воздушной камеры ниже нормы (3.2 бар). Большая часть объема бака занята балластной водой, полезный объем компенсации исчерпан.',
+        detail: `Предзакачка ${f2(s.expPrecharge)} бар, вода в баке ${Math.round(s.expWaterVol)} л`
+      });
+      if (s.expPrecharge > 3.8) list.push({
+        id: 'exp_precharge_high', level: 'warn',
+        title: 'Перекачан расширительный бак РБ (P_возд > P_стат)',
+        text: 'Давление воздуха превышает статическое давление дома. В баке нет запаса воды на охлаждение и утечки — при остывании давление P21 мгновенно упадет!',
+        detail: `Предзакачка ${f2(s.expPrecharge)} бар, P21 = ${f2(o.P21)} бар, вода в баке ${Math.round(s.expWaterVol)} л`
+      });
+    }
+    if (c.EXP_ISO === false && o.G1 > 0.1 && !c.PRESS_PUMP) list.push({
+      id: 'exp_isolated', level: 'warn',
+      title: 'Отсечен расширительный бак РБ!',
+      text: 'Кран перед расширительным баком закрыт. Контур отопления стал гидравлически жестким — при нагреве воды давление P21 резко вырастет и сорвет предохранительный клапан ПК!',
+      detail: `P21 = ${f2(o.P21)} бар, средняя температура воды СО ${f1(s.T_w)} °C`
+    });
+    if (s.time < (s.expPrechargeBlockedUntil || -1)) list.push({
+      id: 'exp_precharge_blocked', level: 'warn',
+      title: 'Предзакачку РБ нельзя настроить под напором системы',
+      text: 'На манометре ниппеля давит подпор воды системы, точная настройка предзакачки невозможна. Отсеките бак краном РБ и слейте воду до 0 л.',
+      detail: `Ниппель показывает ${f2(o.P_exp_air)} бар, вода в баке ${Math.round(s.expWaterVol)} л`
+    });
+
     // Узел учета тепловой энергии
     const ns = o.uuteNS || [];
     if (ns.includes('NS_IMBALANCE') && o.G_makeup_th < 0.05) {
@@ -1483,7 +1662,7 @@
   }
 
   global.ITPPhysics = Object.freeze({
-    CONST: C, foulDhwFilter, cleanDhwFilter, washHEX, replacePump1, replaceGaugeP21, repairKZR, serviceTP2, cleanPR2, resetUuteCounters,
+    CONST: C, foulDhwFilter, cleanDhwFilter, washHEX, replacePump1, replaceGaugeP21, repairKZR, serviceTP2, cleanPR2, resetUuteCounters, setExpPrecharge, replaceExpMembrane,
     createSimulator,
     resetNominal,
     settle,

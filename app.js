@@ -12,6 +12,7 @@
   const SVG_NS = 'http://www.w3.org/2000/svg';
 
   const sim = P.createSimulator();
+  sim.config.enableThermalExpansion = true;   // свободный режим: полная термодинамика контура
   P.step(sim, 0); // заполнить sim.out
   let speed = 1;
   let paused = false;
@@ -85,6 +86,20 @@
   // Справочник «Зачем нужен этот элемент?»
   // ---------------------------------------------------------------------------
   const INFO = {
+    expTank: {
+      icon: 'gauge', title: 'Мембранный расширительный бак (РБ)',
+      body: `<p>Вода при нагреве расширяется: 10 м³ системы отопления от 20 до 60 °C прибавляют ≈ 135 л. Закрытый контур почти несжимаем,
+        поэтому лишний объем принимает <b>расширительный бак</b> — стальной корпус, внутри которого эластичная мембрана (груша)
+        отделяет воду контура от газовой подушки (азот или воздух).</p>
+        <p class="mt-2">Газ подчиняется закону Бойля-Мариотта: <b>(P<sub>0</sub> + 1)·V<sub>РБ</sub> = (P + 1)·(V<sub>РБ</sub> − V<sub>в</sub>)</b>
+        (давления избыточные, +1 — атмосфера). Пока давление в системе выше <b>предзакачки P<sub>0</sub></b>, в груше есть вода, и бак
+        работает как пружина: принимает воду при нагреве и отдает при остывании или утечке.</p>
+        <p class="mt-2">Предзакачку ставят на 0.2–0.3 бар ниже статического давления (у нас 3.2 при 3.5 бар): в баке всегда есть ≈ 40 л запаса.
+        Стравленный воздух — бак затоплен балластной водой, перекачанный — груша пуста, запаса нет. Без газовой подушки
+        (бак отсечен, мембрана порвана) контур становится <b>жестким</b>: 1 °C нагрева — ≈ +0.5 бар, малейшая утечка обрушивает P21.</p>
+        <p class="mt-2">Манометр на воздушном ниппеле показывает истинную предзакачку только на <b>отсеченном и слитом</b> баке.
+        Под напором системы он показывает давление воды P21. Вода из ниппеля — признак порванной мембраны.</p>`
+    },
     uute: {
       icon: 'gauge', title: 'Тепловычислитель УУТЭ',
       body: `<p><b>Узел учета тепловой энергии (УУТЭ)</b> — коммерческий прибор: по его архиву теплоснабжающая организация выставляет счет.</p>
@@ -388,7 +403,7 @@
     p21Cock: 'protect', house: 'house', building: 'house', dhwKzr: 'dhwKzr', dhwHex: 'dhw', dhw2stage: 'dhw',
     dhwValves: 'dhw', dhwFilters: 'dhw', dhwRelief: 'dhw', dhwPump: 'dhw', service: 'kzrBypass',
     // панели, которые открываются кнопками пульта
-    protect: 'protect', dhw: 'dhw', uute: 'uute'
+    protect: 'protect', dhw: 'dhw', uute: 'uute', expTank: 'expTank'
   };
   const PANEL_INFO = { protect: 'hydrotest', dhw: 'dhwHex', makeup: 'makeup' };
   // Краны на схеме: id символа → орган управления (gate — задвижка с приводом хода)
@@ -417,7 +432,9 @@
     vDhwHex2In: { key: 'DHW_HEX2_WIN', name: 'Кв3 — вход воды во II ступень', dock: 'dhw', where: 'пульт «Узел ГВС»' },
     vDhwHex2Out: { key: 'DHW_HEX2_WOUT', name: 'Кв4 — выход горячей воды T3 в дом', dock: 'dhw', where: 'пульт «Узел ГВС»' },
     vDhwCircIn: { key: 'DHW_CIRC_IN', name: 'Кн1 — кран до насоса Нц', dock: 'dhw', where: 'пульт «Узел ГВС»' },
-    vDhwCircOut: { key: 'DHW_CIRC_OUT', name: 'Кн2 — кран после насоса Нц', dock: 'dhw', where: 'пульт «Узел ГВС»' }
+    vDhwCircOut: { key: 'DHW_CIRC_OUT', name: 'Кн2 — кран после насоса Нц', dock: 'dhw', where: 'пульт «Узел ГВС»' },
+    vExpIso: { key: 'EXP_ISO', name: 'Отсечной кран расширительного бака РБ', dock: 'makeup', where: 'пульт «РБ» в модуле «Подпитка и защита»' },
+    vExpDrain: { key: 'EXP_DRAIN', name: 'Сливной кран расширительного бака РБ', dock: 'makeup', where: 'пульт «РБ» в модуле «Подпитка и защита»' }
   };
   let valveSel = null;
   const valveOpen = v => v.gate ? sim.controls[v.gate + 'cmd'] === 'open' : sim.controls[v.key] !== false && !!sim.controls[v.key];
@@ -430,7 +447,7 @@
     renderInspector();
   });
   const PANEL_DOCK = { valves: 'inlet', strainer: 'inlet', kzr: 'kzr', kzrBypass: 'kzr', pump: 'pumps', makeup: 'makeup', protect: 'makeup',
-    netdrain: 'house', house: 'house', hex: 'house', dhwKzr: 'dhw', dhw: 'dhw', uute: 'inlet' };
+    netdrain: 'house', house: 'house', hex: 'house', dhwKzr: 'dhw', dhw: 'dhw', uute: 'inlet', expTank: 'makeup' };
   let inspPanel = null;
   let inspAuto = false;     // открыт уроком, а не оператором
 
@@ -530,7 +547,8 @@
     { x: 560, y: 16, w: 100, head: 'ПОДАЧА В ДОМ', m: 'hot', rows: [['T11', 'T11', '°C', 1], ['G2', 'G2', 'т/ч', 1]] },
     { x: 532, y: 452, w: 88, head: 'НАГНЕТАНИЕ', m: 'cold', rows: [['P11', 'P11', 'бар', 2]] },
     { x: 664, y: 452, w: 88, head: 'ВСАС', m: 'cold', rows: [['P21', 'P21_disp', 'бар', 2]] },
-    { x: 736, y: 372, w: 88, head: 'ОБРАТКА ДОМА', m: 'cold', rows: [['T21', 'T21', '°C', 1]] },
+    { x: 790, y: 372, w: 88, head: 'ОБРАТКА ДОМА', m: 'cold', rows: [['T21', 'T21', '°C', 1]] },
+    { x: 660, y: 288, w: 90, head: 'РБ · НИППЕЛЬ', m: 'gen', pt: [770, 286], rows: [['P', 'P_exp_air', 'бар', 2]] },
     { x: 806, y: 16, w: 120, head: 'ВЫХОД ИТП', m: 'hot', rows: [['P подача', 'P_house_supply', 'бар', 2]] },
     { x: 694, y: 184, w: 128, head: 'ДОМ', m: 'gen', rows: [['P 9 эт.', 'P_top', 'бар', 2], ['ΔP дома', 'dP_house', 'бар', 2], ['P низ дома', 'P_house', 'бар', 2], ['T кварт.', 'T_room', '°C', 1]] },
     // ГВС: общие для обеих схем. pt — точка измерения на трубе (к ней идет выноска)
@@ -783,6 +801,16 @@
       render();
     });
   });
+  // Расширительный бак: компрессор и замена мембраны
+  const expSvc = r => { log(r.msg, r.level); if (window.ITPLessons && window.ITPLessons.onService) window.ITPLessons.onService('exp', r); render(); };
+  $('sliderExpPrecharge').addEventListener('input', e => { $('expPrechargeVal').textContent = Number(e.target.value).toFixed(1) + ' бар'; });
+  $('sliderExpPrecharge').addEventListener('change', e => expSvc(P.setExpPrecharge(sim, Number(e.target.value))));
+  $('btnPumpExpNominal').addEventListener('click', () => {
+    $('sliderExpPrecharge').value = 3.2; $('expPrechargeVal').textContent = '3.2 бар';
+    expSvc(P.setExpPrecharge(sim, 3.2));
+  });
+  $('btnReplaceMembrane').addEventListener('click', () => expSvc(P.replaceExpMembrane(sim)));
+
   // УУТЭ: ревизия ТП2, чистка ПР2, сброс архива
   [['btnServiceTP2', 'serviceTP2'], ['btnCleanPR2', 'cleanPR2'], ['btnResetUute', 'resetUuteCounters']].forEach(([id, fn]) => {
     $(id).addEventListener('click', () => {
@@ -1020,8 +1048,11 @@
     houseLeak: { get: () => sim.env.houseLeak > 0, set: v => { sim.env.houseLeak = v ? 0.006 : 0; }, name: 'утечка в системе отопления дома' },
     T1: { get: () => sim.env.T1 !== null, set: v => { sim.env.T1 = v ? P.graphT1(sim.env.T_out) - 15 : null; }, name: 'недодача температуры сети' },
     pr2Fouling: { get: () => (sim.env.pr2Fouling || 0) > 0, set: v => { sim.env.pr2Fouling = v ? 0.10 : 0; }, name: 'магнетитовые отложения на электродах ПР2 (−10 %)' },
-    tp2Drift: { get: () => (sim.env.tp2Drift || 0) !== 0, set: v => { sim.env.tp2Drift = v ? -4.5 : 0; }, name: 'высохла термопаста в гильзе ТП2 (−4.5 °C)' }
+    tp2Drift: { get: () => (sim.env.tp2Drift || 0) !== 0, set: v => { sim.env.tp2Drift = v ? -4.5 : 0; }, name: 'высохла термопаста в гильзе ТП2 (−4.5 °C)' },
+    expBurst: { get: () => !!sim.env.expMembraneBurst, set: v => { sim.env.expMembraneBurst = v; }, name: 'разрыв мембраны расширительного бака РБ' }
   };
+  $('envExpLowBtn').addEventListener('click', () => { sim.state.expPrecharge = 1.0; log('Инструктор: из воздушной камеры РБ стравлен воздух до 1.0 бар', 'op'); });
+  $('envExpHighBtn').addEventListener('click', () => { sim.state.expPrecharge = 4.5; log('Инструктор: воздушная камера РБ перекачана до 4.5 бар', 'op'); });
   document.querySelectorAll('[data-env]').forEach(b => b.addEventListener('click', () => {
     const t = ENV_TOGGLES[b.dataset.env];
     const v = !t.get();
@@ -1071,6 +1102,46 @@
       ['Время НС', hms(o.nsTime_s), ns.length > 0]
     ];
     $('uuteBoard').innerHTML = rows.map(([k, v, bad]) => `<span class="k">${k}</span><span class="v${bad ? ' bad' : ''}">${v}</span>`).join('');
+  }
+
+  // ---------------------------------------------------------------------------
+  // Расширительный бак: разрез на схеме и табло пульта
+  // ---------------------------------------------------------------------------
+  function renderExp(o) {
+    if (o.expWaterVol === undefined) return;
+    const c = sim.controls, burst = o.expMembraneBurst;
+    const frac = Math.min(1, Math.max(0, o.expWaterVol / 600));
+    const top = 296, h = 72, y = top + h * (1 - frac);
+    $('expWater').setAttribute('y', y.toFixed(1));
+    $('expWater').setAttribute('height', (top + h - y).toFixed(1));
+    $('expMembrane').setAttribute('d', `M758 ${y.toFixed(1)} Q770 ${(y - 6).toFixed(1)} 782 ${y.toFixed(1)}`);
+    $('expMembrane').toggleAttribute('hidden', burst || frac >= 0.999);
+    $('expMembraneTorn').toggleAttribute('hidden', !burst);
+    $('expNipple').setAttribute('fill', burst ? '#2563EB' : '#334155');
+    $('txtExpFill').textContent = Math.round(frac * 100) + '%';
+    setValve('vExpIso', c.EXP_ISO !== false ? 100 : 0);
+    setValve('vExpDrain', c.EXP_DRAIN ? 100 : 0);
+    $('pipeExp').style.stroke = c.EXP_ISO !== false ? tempColor(o.T21) : '#94A3B8';
+    $('pipeExpDr').style.stroke = c.EXP_DRAIN ? '#2563EB' : '';
+    if (inspPanel !== 'expTank' || $('inspector').hidden) return;
+    const st = $('expStatus');
+    let txt, bad = true;
+    if (burst) txt = 'ПРОРЫВ МЕМБРАНЫ: ВОДА ИЗ НИППЕЛЯ';
+    else if (c.EXP_ISO === false) txt = 'БАК ОТСЕЧЕН — КОНТУР ЖЕСТКИЙ';
+    else if (o.expWaterVol < 0.5) txt = 'ГРУША ПУСТА — НЕТ ЗАПАСА ВОДЫ';
+    else if (o.expWaterVol > 300) txt = 'БАК ЗАТОПЛЕН БАЛЛАСТНОЙ ВОДОЙ';
+    else { txt = 'В РАБОТЕ'; bad = false; }
+    if (st.textContent !== txt) st.textContent = txt;
+    st.className = 'uute-badge ' + (bad ? 'ns' : 'ok');
+    const rows = [
+      ['P возд · ниппель', `${fmt(o.P_exp_air, 2)} бар`, burst],
+      ['P21 · система', `${fmt(o.P21_disp, 2)} бар`, o.P21_disp < 3.2 || o.P21_disp > 4.0],
+      ['Средняя темп. СО', `${fmt(o.T_w, 1)} °C`],
+      ['Вода в баке', `${Math.round(o.expWaterVol)} л (${Math.round(frac * 100)} %) из 600 л`],
+      ['Мембрана', burst ? 'ПРОРЫВ (ВОДА ИЗ НИППЕЛЯ!)' : 'ЦЕЛА', burst],
+      ['Кран / слив РБ', `${c.EXP_ISO !== false ? 'откр' : 'ЗАКР'} / ${c.EXP_DRAIN ? 'ДРЕНАЖ' : 'закр'}`]
+    ];
+    $('expBoard').innerHTML = rows.map(([k, v, b]) => `<span class="k">${k}</span><span class="v${b ? ' bad' : ''}">${v}</span>`).join('');
   }
 
   function setSpeed(s) {
@@ -1341,6 +1412,7 @@
     $('hexScaleBar').style.width = Math.round(100 * (o.hexScaling || 0)) + '%';
     $('hexScaleVal').textContent = Math.round(100 * (o.hexScaling || 0)) + '%';
     renderUute(o);
+    renderExp(o);
     const cockBtn = $('p21CockBtn');
     const cockZero = c.P21_COCK === 'zero';
     const cockLbl = cockZero ? 'Кран P21: ПРОВЕРКА НУЛЯ' : 'Кран P21: РАБОТА';

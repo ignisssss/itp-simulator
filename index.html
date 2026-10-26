@@ -303,8 +303,8 @@
     </div>
     <nav class="flex items-center gap-1 shrink-0" aria-label="Режим тренажера">
       <button data-mode="free" class="mode-btn mode-sm"><span data-icon="gauge"></span>Свободный</button>
-      <button data-mode="lesson" class="mode-btn mode-sm"><span data-icon="book"></span>Обучение <span class="mono opacity-70">(21)</span></button>
-      <button data-mode="levels" class="mode-btn mode-sm"><span data-icon="flag"></span>Смены <span class="mono opacity-70">(7)</span></button>
+      <button data-mode="lesson" class="mode-btn mode-sm"><span data-icon="book"></span>Обучение <span class="mono opacity-70">(22)</span></button>
+      <button data-mode="levels" class="mode-btn mode-sm"><span data-icon="flag"></span>Смены <span class="mono opacity-70">(8)</span></button>
     </nav>
     <div class="flex items-center gap-1.5 mx-auto">
       <button id="cfgToggle" class="btn btn-sm" data-drop="configPanel"><span data-icon="gear"></span>Конфигуратор<span class="wide"> схемы</span><span data-icon="chevDown"></span></button>
@@ -371,6 +371,9 @@
       <button id="envT1Btn" class="btn btn-sm" data-env="T1">Недодача сети −15 °C</button>
       <button id="envPr2Btn" class="btn btn-sm" data-env="pr2Fouling">Загрязнить ПР2 (магнетит 10%)</button>
       <button id="envTp2Btn" class="btn btn-sm" data-env="tp2Drift">Осушить гильзу ТП2 (−4.5 °C)</button>
+      <button id="envExpLowBtn" class="btn btn-sm btn-warn">Стравить воздух РБ (1.0 бар)</button>
+      <button id="envExpHighBtn" class="btn btn-sm btn-warn">Перекачать воздух РБ (4.5 бар)</button>
+      <button id="envExpBurstBtn" class="btn btn-sm" data-env="expBurst">Порвать мембрану РБ</button>
     </div>
     <div class="text-[11px] faint mt-2 leading-4">Возмущения включаются и снимаются повторным нажатием. «Сброс» в шапке возвращает штатный режим.</div>
   </div>
@@ -674,6 +677,36 @@
             <text x="107" y="190" text-anchor="end" class="lbl-s" style="font-size:7.5px">Гкал/ч</text>
             <rect id="uuteNsLamp" x="28" y="194" width="80" height="13" rx="2" fill="#DCFCE7" stroke="#86EFAC" stroke-width="0.8"/>
             <text id="txtUuteNs" x="68" y="203.3" text-anchor="middle" style="font-size:7.5px;font-weight:700;font-family:var(--mono);fill:#166534">НОРМА</text>
+          </g>
+
+          <!-- ========== Мембранный расширительный бак РБ (на обратке дома перед всасом насосов) ========== -->
+          <path id="pipeExp" class="pipe" style="stroke-width:5" d="M770 430 V368"/>
+          <path id="pipeExpDr" class="pipe-thin" d="M770 404 H740 V411"/>
+          <circle cx="770" cy="430" r="3.5" fill="#334155"/>
+          <path d="M734 411 H746 L742 417 H738 Z" fill="#94A3B8" stroke="#475569" stroke-width="0.8"/>
+          <defs><clipPath id="expClip"><rect x="757" y="297" width="26" height="70" rx="10"/></clipPath></defs>
+          <g class="node" data-info="expTank">
+            <rect class="hl" x="748" y="278" width="58" height="96" rx="4"/>
+            <rect x="756" y="296" width="28" height="72" rx="11" fill="#E0F2FE" stroke="#1E293B" stroke-width="1.6"/>
+            <rect id="expWater" clip-path="url(#expClip)" x="756" y="361" width="28" height="7" fill="#60A5FA" opacity="0.9"/>
+            <path id="expMembrane" d="M758 361 Q770 355 782 361" fill="none" stroke="#0F172A" stroke-width="1.3"/>
+            <path id="expMembraneTorn" d="M759 312 l3 -4 l3 5 l3 -5 l3 4 M772 316 l3 4 l3 -4 l3 5" fill="none" stroke="#DC2626" stroke-width="1.4" hidden/>
+            <rect x="756" y="296" width="28" height="72" rx="11" fill="none" stroke="#1E293B" stroke-width="1.6"/>
+            <line x1="770" y1="296" x2="770" y2="289" stroke="#334155" stroke-width="2"/>
+            <rect id="expNipple" x="766" y="284" width="8" height="5" rx="1" fill="#334155"/>
+            <text id="txtExpFill" x="770" y="334" text-anchor="middle" style="font-size:8px;font-weight:700;font-family:var(--mono);fill:#0F172A">7%</text>
+            <text x="788" y="308" class="lbl" style="font-size:10px">РБ</text>
+            <text x="788" y="319" class="lbl-s" style="font-size:7.5px">600 л</text>
+          </g>
+          <g class="node" data-info="expTank">
+            <rect class="hl" x="760" y="376" width="20" height="18" rx="2"/>
+            <path id="vExpIso" class="valve-body valve-open" d="M763 378 L777 378 L763 392 L777 392 Z"/>
+            <text x="759" y="388" text-anchor="end" class="lbl-s" style="font-size:7.5px">кр РБ</text>
+          </g>
+          <g class="node" data-info="expTank">
+            <rect class="hl" x="744" y="396" width="18" height="16" rx="2"/>
+            <path id="vExpDrain" class="valve-body valve-closed" d="M746 398 L760 410 L760 398 L746 410 Z"/>
+            <text x="726" y="402" class="lbl-s" style="font-size:7.5px">слив</text>
           </g>
 
           <!-- ========== Подпитка ========== -->
@@ -992,6 +1025,24 @@
               ПР2 снимают только при закрытых V1, затем V2 и сброшенном до 0 бар сетевом участке (дренаж и воздушник сети — модуль «Дом и ПТО»).</p>
           </div>
 
+          <div data-insp="expTank" hidden>
+            <div id="expStatus" class="uute-badge ok">В РАБОТЕ</div>
+            <div id="expBoard" class="uute-board"></div>
+            <p class="insp-note" style="margin-top:4px">Ниппель показывает истинную предзакачку только на отсеченном и пустом баке: пока в груше вода, воздух сжат давлением системы.</p>
+            <div class="grid grid-cols-2 gap-1.5 mt-2">
+              <button id="btnExpIso" data-toggle="EXP_ISO" data-inverse="1" data-on="Кран РБ: ОТКРЫТ" data-off="Кран РБ: ЗАКРЫТ" data-label="Отсечной кран РБ" class="tbtn tbtn-sm"></button>
+              <button id="btnExpDrain" data-toggle="EXP_DRAIN" data-on="Слив РБ: В ДРЕНАЖ" data-off="Слив РБ: ЗАКРЫТ" data-tone="amber" data-label="Сливной кран РБ" class="tbtn tbtn-sm"></button>
+            </div>
+            <div class="flex items-center gap-2 mt-2 text-[11px]"><span class="mono">Компрессор</span>
+              <input id="sliderExpPrecharge" type="range" min="0.5" max="5" step="0.1" value="3.2" class="flex-1" aria-label="Накачка воздушной камеры РБ, бар">
+              <span id="expPrechargeVal" class="mono w-14 text-right">3.2 бар</span></div>
+            <div class="grid grid-cols-2 gap-1.5 mt-1.5">
+              <button id="btnPumpExpNominal" class="btn btn-sm">Накачать по норме (3.2 бар)</button>
+              <button id="btnReplaceMembrane" class="btn btn-sm">Заменить мембрану РБ</button>
+            </div>
+            <p class="insp-note">Компрессор и замена мембраны — только при закрытом кране РБ и слитой воде (0 л).</p>
+          </div>
+
           <div data-insp="pump" hidden>
             <button id="replacePump1Btn" class="btn btn-sm w-full">Заменить насос Н1</button>
             <p class="insp-note">Пуск, останов и краны насосов — модуль «Насосная группа». Снимать насос можно только выключенным и отсеченным кранами.</p>
@@ -1162,9 +1213,10 @@
           <button id="mpAutoBtn" data-toggle="MAKEUP_AUTO" data-on="РД: АВТО" data-off="РД: РУЧН" data-tone="blue" data-label="Режим РД" class="tbtn tbtn-sm"></button>
           <button id="mpPumpBtn" data-toggle="MAKEUP_PUMP" data-on="Нп: ВКЛ" data-off="Нп: ВЫКЛ" data-tone="green" data-label="Насос Нп" class="tbtn tbtn-sm"></button>
         </div>
-        <div class="grid grid-cols-2 gap-1 mt-auto">
-          <button id="drainBtn" data-toggle="DRAIN" data-on="Дренаж: ОТКР" data-off="Дренаж ИТП" data-tone="amber" data-label="Дренаж ИТП" class="tbtn tbtn-sm"></button>
+        <div class="flex gap-1 mt-auto">
+          <button id="drainBtn" data-toggle="DRAIN" data-on="Дренаж: ОТКР" data-off="Дренаж ИТП" data-tone="amber" data-label="Дренаж ИТП" class="tbtn tbtn-sm flex-1"></button>
           <button class="btn btn-sm" data-open-insp="protect">P21 / ПК</button>
+          <button id="dockExpBtn" class="btn btn-sm" data-open-insp="expTank">РБ</button>
         </div>
       </section>
 

@@ -3,7 +3,7 @@
  *
  *   node audit.js           — физическое ядро (physics.js), PDF-конспекты, сверка уроков с конспектами
  *   index.html?audit        — то же в браузере + интерфейс «кокпит», цели подсветки всех шагов,
- *                             прохождение всех 21 уроков через пульт и бот по всем 7 сменам
+ *                             прохождение всех 22 уроков через пульт и бот по всем 8 сменам
  *
  * В браузере отчет печатается в консоль и показывается поверх страницы; результат — window.ITPAudit.last.
  * Скрипт ничего не меняет в рабочих файлах; прогресс уроков и смен в localStorage восстанавливается.
@@ -237,6 +237,45 @@
       r.check(G, 'УУТЭ: подпитка при открытом спуске — реальный небаланс (не «ложный»)', s2.out.G_makeup_th > 0.5 && s2.out.uuteNS.includes('NS_IMBALANCE') && !P.diagnose(s2).some(a => a.id === 'uute_pr2_fouled'), `на подпитку ${s2.out.G_makeup_th.toFixed(2)} т/ч`);
     }
 
+    // 1.7б Мембранный расширительный бак
+    {
+      const hot = () => { const sim = fresh(); sim.config.enableThermalExpansion = true; P.settle(sim, 120); return sim; };
+      let sim = hot();
+      sim.controls.PUMP = false; sim.controls.KZRcmd = 0; run(sim, 5);
+      const vols = []; let mono = true, prev = -1;
+      sim.controls.PRESS_PUMP = true;     // опрессовочный насос плавно поднимает давление выше располагаемого у подпитки
+      for (let i = 0; i < 2000 && !vols.length; i++) { P.step(sim, 0.1); const v = sim.state.expWaterVol; if (v < prev - 0.05) mono = false; prev = Math.max(prev, v); if (sim.out.P21 >= 4.6) vols.push(v); }
+      const v46 = vols[0];
+      sim.controls.PRESS_PUMP = false; sim.controls.DRAIN = true;
+      run(sim, 40, x => x.out.P21 < 3.0);
+      const v30 = sim.state.expWaterVol; sim.controls.DRAIN = false;
+      r.check(G, 'РБ: изотерма Бойля-Мариотта — при 3.2 → 4.6 бар вода в баке растет монотонно до ≈ 150 л, ниже 3.2 бар бак пуст', mono && v46 > 140 && v46 < 160 && v30 === 0,
+        `V(4.6) = ${v46 === undefined ? '—' : v46.toFixed(0)} л, V(3.0) = ${v30.toFixed(1)} л`);
+      // жесткость: одинаковый нагрев с исправным баком и с порванной мембраной
+      const heatRate = burst => {
+        const x = hot(); x.env.expMembraneBurst = burst; run(x, 1);
+        x.env.T_out = -20; x.controls.KZRcmd = 75;
+        const p0 = x.out.P21; let tRel = null;
+        run(x, 20); const rate = (x.out.P21 - p0) / 20;
+        run(x, 280, y => { if (tRel === null && y.out.reliefOpen) tRel = y.out.time; return false; });
+        return { rate, tRel, pEnd: x.out.P21 };
+      };
+      const ok = heatRate(false), br = heatRate(true);
+      r.check(G, 'РБ: при порванной мембране нагрев поднимает P21 в > 10 раз быстрее и открывает ПК', br.rate > 10 * ok.rate && br.tRel !== null && ok.tRel === null,
+        `исправный ${(ok.rate * 60).toFixed(2)} бар/мин, без подушки ${(br.rate * 60).toFixed(2)} бар/мин, ПК открылся ${br.tRel === null ? 'нет' : 'да'}`);
+      sim = hot();
+      let res = P.setExpPrecharge(sim, 3.2);
+      r.check(G, 'РБ: подкачка воздуха на подключенном баке — отказ и предупреждение', !res.ok && P.diagnose(sim).some(a => a.id === 'exp_precharge_blocked'));
+      res = P.replaceExpMembrane(sim);
+      r.check(G, 'РБ: замена мембраны на неотсеченном баке — авария «вскрытие под давлением»', !res.ok && P.diagnose(sim).some(a => a.id === 'open_under_pressure'));
+      sim = hot(); sim.controls.EXP_ISO = false; sim.controls.EXP_DRAIN = true; run(sim, 25);
+      const air = sim.out.P_exp_air;
+      res = P.replaceExpMembrane(sim);
+      r.check(G, 'РБ: на отсеченном слитом баке ниппель показывает предзакачку, мембрана меняется', Math.abs(air - 3.2) < 0.01 && res.ok && sim.state.expPrecharge === 1.5, `ниппель ${air.toFixed(2)} бар`);
+      const base = fresh(); P.settle(base, 60);
+      r.check(G, 'РБ в штатном положении без термодинамики: P21 = 3.50, 40 л воды, ниппель = P21', Math.abs(base.out.P21 - 3.5) < 0.02 && Math.abs(base.state.expWaterVol - 40) < 1 && Math.abs(base.out.P_exp_air - base.out.P21) < 1e-9);
+    }
+
     // 1.8 Сервисные операции и защита от вскрытия под давлением
     {
       const sim = fresh();
@@ -262,7 +301,7 @@
     const lessonsSrc = fs.readFileSync(path.join(dir, 'lessons.js'), 'utf8');
     const body = lessonsSrc.slice(lessonsSrc.indexOf('const LESSONS = ['), lessonsSrc.indexOf('const notesUrl'));
     const ids = [...body.matchAll(/^ {6}id: '([a-z0-9]+)'/gm)].map(m => m[1]);
-    r.check(G, 'Уроков в lessons.js', ids.length === 21, ids.length);
+    r.check(G, 'Уроков в lessons.js', ids.length === 22, ids.length);
     r.check(G, 'Конспектов в notes-content.js', notes.length === ids.length, notes.length);
     const miss = [];
     ids.forEach((id, i) => {
@@ -271,7 +310,7 @@
       if (!n || n.n !== i + 1) miss.push(`${id}: номер конспекта ${n ? n.n : '—'} ≠ ${i + 1}`);
       if (!fs.existsSync(f) || fs.statSync(f).size < 20000) miss.push(`нет или пустой ${path.basename(f)}`);
     });
-    r.check(G, 'Для каждого урока есть PDF docs/notes/NN-id.pdf с верным номером', miss.length === 0, miss.join('; ') || '01-tour … 21-uute');
+    r.check(G, 'Для каждого урока есть PDF docs/notes/NN-id.pdf с верным номером', miss.length === 0, miss.join('; ') || '01-tour … 22-exptank');
   }
 
   // ---------------------------------------------------------------------------
@@ -333,7 +372,7 @@
       const G = 'Уроки: цели подсветки';
       const T = L._audit.targets;
       const lessons = L.list;
-      r.check(G, 'Уроков в списке', lessons.length === 21 && lessons.every(Boolean), lessons.length);
+      r.check(G, 'Уроков в списке', lessons.length === 22 && lessons.every(Boolean), lessons.length);
       const badKey = [], badSel = [], badXY = [];
       lessons.forEach(l => l.steps.forEach((st, i) => { if (!st.target || !T[st.target]) badKey.push(`${l.id}#${i + 1}: «${st.target}»`); }));
       Object.entries(T).forEach(([k, t]) => {
@@ -405,7 +444,7 @@
       L.exit();
     }
 
-    // ----- 3.4 Прохождение всех 21 уроков через пульт -----
+    // ----- 3.4 Прохождение всех 22 уроков через пульт -----
     {
       const G = 'Уроки: прохождение через пульт';
       document.querySelector('[data-cfg="dhwScheme"][data-val="2stage"]').click();
@@ -437,10 +476,11 @@
         hexwash() { ack(); q('gateBtnV1').click(); run(10); q('gateBtnV2').click(); run(10); q('tagBtnV1').click(); q('tagBtnV2').click(); q('pumpBtn').click(); run(1); q('houseSupBtn').click(); q('houseRetBtn').click(); run(1); q('netVentBtn').click(); q('netDrainBtn').click(); run(200, () => o().fill[3] < 0.1 && o().nodes[3] < 0.1); run(1); q('hexWashBtn').click(); run(1); q('netDrainBtn').click(); q('tagBtnV1').click(); q('tagBtnV2').click(); run(1); q('houseSupBtn').click(); q('houseRetBtn').click(); run(1); q('pumpBtn').click(); run(2); q('gateBtnV2').click(); run(120, () => mf() >= 0.999 && c().V2 >= 100); q('netVentBtn').click(); run(1); q('gateBtnV1').click(); run(10); setR('KZRcmd', 48); run(400); },
         pumpchange() { q('iso2Btn').click(); q('pump2Btn').click(); run(3); q('pumpBtn').click(); q('iso1Btn').click(); run(2); q('replacePump1Btn').click(); run(1); q('iso1Btn').click(); run(1); q('pumpBtn').click(); run(1); q('pump2Btn').click(); run(10); },
         gaugechange() { q('p21CockBtn').click(); run(1); q('replaceGaugeBtn').click(); run(1); q('p21CockBtn').click(); run(1); setR('MAKEUP', 15); run(60, () => o().P21 >= 3.5); setR('MAKEUP', 0); run(5); },
-        hydrotest() { ack(); q('reliefIsoBtn').click(); run(1); q('pressPumpBtn').click(); run(60, () => o().P21 >= 6.15); q('pressPumpBtn').click(); run(8); q('drainBtn').click(); run(30, () => o().P21 <= 3.6); q('drainBtn').click(); run(1); q('reliefIsoBtn').click(); run(5); },
+        hydrotest() { ack(); q('reliefIsoBtn').click(); run(1); q('pressPumpBtn').click(); run(60, () => o().P21 >= 6.15); q('pressPumpBtn').click(); run(8); q('drainBtn').click(); run(30, () => o().P21 <= 3.6); q('drainBtn').click(); run(1); q('reliefIsoBtn').click(); q('btnExpIso').click(); run(5); },
         burst() { q('pumpBtn').click(); setR('KZRcmd', 0); run(15, () => c().KZR <= 1); run(0.5); q('houseSupBtn').click(); q('houseRetBtn').click(); q('houseDrainBtn').click(); q('houseVentBtn').click(); run(150, () => S().env.burst === 0); run(1); q('houseDrainBtn').click(); q('houseRetBtn').click(); q('houseSupBtn').click(); setR('MAKEUP', 100); run(400, () => o().houseFill >= 0.999); run(0.5); q('houseVentBtn').click(); run(60, () => o().P21 >= 3.45); setR('MAKEUP', 0); run(1); q('pumpBtn').click(); setR('KZRcmd', 48); run(20); },
         kzrbypass() { setR('KZR_BYPASS', 30); run(150); q('kzrIsoBtn').click(); setR('KZR_BYPASS', 48); run(150); q('repairKzrBtn').click(); run(1); q('kzrIsoBtn').click(); setR('KZRcmd', 48); setR('KZR_BYPASS', 0); run(200); },
-        uute() { ack(); q('btnServiceTP2').click(); run(1); setR('MAKEUP', 0); run(5); setR('KZRcmd', 0); run(40, () => c().KZR <= 0); q('gateBtnV1').click(); run(10); q('gateBtnV2').click(); run(10); q('pumpBtn').click(); run(1); q('netVentBtn').click(); q('netDrainBtn').click(); run(60, () => S().state.nodes[4] < 0.1); run(1); q('btnCleanPR2').click(); run(1); q('netDrainBtn').click(); run(0.3); q('gateBtnV2').click(); run(120, () => mf() >= 0.999 && c().V2 >= 100); q('netVentBtn').click(); run(0.3); q('gateBtnV1').click(); run(10); q('pumpBtn').click(); setR('KZRcmd', 48); run(200); }
+        uute() { ack(); q('btnServiceTP2').click(); run(1); setR('MAKEUP', 0); run(5); setR('KZRcmd', 0); run(40, () => c().KZR <= 0); q('gateBtnV1').click(); run(10); q('gateBtnV2').click(); run(10); q('pumpBtn').click(); run(1); q('netVentBtn').click(); q('netDrainBtn').click(); run(60, () => S().state.nodes[4] < 0.1); run(1); q('btnCleanPR2').click(); run(1); q('netDrainBtn').click(); run(0.3); q('gateBtnV2').click(); run(120, () => mf() >= 0.999 && c().V2 >= 100); q('netVentBtn').click(); run(0.3); q('gateBtnV1').click(); run(10); q('pumpBtn').click(); setR('KZRcmd', 48); run(200); },
+        exptank() { ack(); q('btnExpIso').click(); run(1); q('btnExpDrain').click(); run(30, () => S().state.expWaterVol < 1); run(0.5); q('btnPumpExpNominal').click(); run(0.5); q('btnExpDrain').click(); run(0.5); q('btnExpIso').click(); run(1); setR('MAKEUP', 15); run(60, () => o().P21 >= 3.6); setR('MAKEUP', 0); run(6); }
       };
       let passed = 0;
       for (const l of L.list) {
@@ -459,19 +499,21 @@
       r.check(G, 'Урок 16: снять Н1 с открытыми кранами — ошибка урока', /под давлением/.test(modalTitle()), modalTitle());
       startL('uute'); ack(); q('btnCleanPR2').click(); run(1);
       r.check(G, 'Урок 21: чистить ПР2 на вводе под давлением — ошибка урока', /под давлением/.test(modalTitle()), modalTitle());
+      startL('exptank'); ack(); q('btnReplaceMembrane').click(); run(1);
+      r.check(G, 'Урок 22: снять мембрану неотсеченного РБ — ошибка урока', /под давлением/.test(modalTitle()), modalTitle());
       closeModal(); L.exit();
       r.note(G, 'Итог', `${passed}/${L.list.length} уроков пройдено`);
       r.summary = r.summary || {}; r.summary.lessons = `${passed}/${L.list.length}`;
     }
 
-    // ----- 3.5 Бот по всем 7 сменам -----
+    // ----- 3.5 Бот по всем 8 сменам -----
     {
       const G = 'Смены (бот)';
       const sim = A.sim, oo = () => sim.out, cc = () => sim.controls;
       const setR = (k, v) => { const el = document.querySelector(`[data-ctl="${k}"] input`); el.value = Math.round(v); el.dispatchEvent(new Event('input')); };
       const ids = () => new Set(P.diagnose(sim).map(a => a.id));
       function makeBot() {
-        let lastK = 0, proc = null, hp = null, pr = null, reportedP1 = false, reportedPass = false, reportedT1 = false;
+        let lastK = 0, proc = null, hp = null, pr = null, ex = null, reportedP1 = false, reportedPass = false, reportedT1 = false;
         return function (t) {
           const out = oo(), c2 = cc(), d = ids();
           const pumped = sim.config.makeupType === 'pumped';
@@ -494,6 +536,15 @@
             else if (s === 4) { q(pumpKey).click(); q('gateBtnV1').click(); hp.s = 5; }
             else if (s === 5 && c2.V1 >= 100) hp = null;
             return;
+          }
+          // РБ: перекачан, стравлен или порвана мембрана — отсечь, слить, заменить грушу, накачать 3.2 бар, ввести в работу
+          if (!ex && (d.has('exp_membrane_burst') || d.has('exp_precharge_high') || d.has('exp_precharge_low'))) ex = { s: 0 };
+          if (ex) {
+            if (ex.s === 0) { if (c2.EXP_ISO !== false) q('btnExpIso').click(); if (!c2.EXP_DRAIN) q('btnExpDrain').click(); ex.s = 1; }
+            else if (ex.s === 1 && sim.state.expWaterVol < 1) {
+              if (sim.env.expMembraneBurst) q('btnReplaceMembrane').click();
+              q('btnPumpExpNominal').click(); q('btnExpDrain').click(); ex.s = 2;
+            } else if (ex.s === 2) { q('btnExpIso').click(); ex = null; }
           }
           // УУТЭ: ревизия ТП2 на ходу, открытый спуск стояков закрыть
           if (d.has('uute_tp2_drift')) q('btnServiceTP2').click();
@@ -542,7 +593,7 @@
           }
         };
       }
-      localStorage.setItem('itp-levels-v1', JSON.stringify({ l1: { best: 100, stars: 3 }, l2: { best: 100, stars: 3 }, l3: { best: 100, stars: 3 }, l4: { best: 100, stars: 3 }, l5: { best: 100, stars: 3 }, level6: { best: 100, stars: 3 } }));
+      localStorage.setItem('itp-levels-v1', JSON.stringify({ l1: { best: 100, stars: 3 }, l2: { best: 100, stars: 3 }, l3: { best: 100, stars: 3 }, l4: { best: 100, stars: 3 }, l5: { best: 100, stars: 3 }, level6: { best: 100, stars: 3 }, level7: { best: 100, stars: 3 } }));
       const scores = [];
       for (const lv of LV.list) {
         LV.exitIfActive();
