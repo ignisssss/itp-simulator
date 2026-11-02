@@ -271,7 +271,7 @@
     .insp-info { margin-top: 8px; border-top: 1px solid var(--line-soft); padding-top: 6px; }
     .insp-info summary { font-size: 12px; font-weight: 600; color: var(--accent); cursor: pointer; }
     body.level-mode .insp-info { display: none; }
-    .dock { height: 10rem; }
+    .dock { min-height: 10rem; }   /* высота по самому высокому модулю: на узком экране кнопки переносятся и не обрезаются */
     #topbar .btn, #topbar .mode-btn { white-space: nowrap; }
     .narrow { display: none; }
     @media (max-width: 1400px) { .wide { display: none; } .narrow { display: inline; } #topbar { gap: 8px; } #topbar .mode-sm { padding: 4px 8px; } }
@@ -303,7 +303,7 @@
     </div>
     <nav class="flex items-center gap-1 shrink-0" aria-label="Режим тренажера">
       <button data-mode="free" class="mode-btn mode-sm"><span data-icon="gauge"></span>Свободный</button>
-      <button data-mode="lesson" class="mode-btn mode-sm"><span data-icon="book"></span>Обучение <span class="mono opacity-70">(22)</span></button>
+      <button data-mode="lesson" class="mode-btn mode-sm"><span data-icon="book"></span>Обучение <span class="mono opacity-70">(23)</span></button>
       <button data-mode="levels" class="mode-btn mode-sm"><span data-icon="flag"></span>Смены <span class="mono opacity-70">(8)</span></button>
     </nav>
     <div class="flex items-center gap-1.5 mx-auto">
@@ -374,6 +374,8 @@
       <button id="envExpLowBtn" class="btn btn-sm btn-warn">Стравить воздух РБ (1.0 бар)</button>
       <button id="envExpHighBtn" class="btn btn-sm btn-warn">Перекачать воздух РБ (4.5 бар)</button>
       <button id="envExpBurstBtn" class="btn btn-sm" data-env="expBurst">Порвать мембрану РБ</button>
+      <button id="envToutOpenBtn" class="btn btn-sm" data-env="toutOpen">Обрыв датчика Тнв</button>
+      <button id="envToutShortBtn" class="btn btn-sm" data-env="toutShort">Замыкание датчика Тнв</button>
     </div>
     <div class="text-[11px] faint mt-2 leading-4">Возмущения включаются и снимаются повторным нажатием. «Сброс» в шапке возвращает штатный режим.</div>
   </div>
@@ -618,6 +620,27 @@
           <g class="node" data-info="kzrBypass">
             <rect class="hl" x="352" y="80" width="16" height="20" rx="2"/>
             <path id="vKzrIso2" class="valve-body valve-open" d="M354 85 L366 95 L366 85 L354 95 Z"/>
+          </g>
+
+          <!-- ========== Погодный регулятор отопления и датчик наружного воздуха ========== -->
+          <path d="M280 30 H300 V54 H316" fill="none" stroke="#64748B" stroke-width="0.9" stroke-dasharray="3 2" pointer-events="none"/>
+          <g class="node" data-info="hc">
+            <rect class="hl" x="144" y="4" width="140" height="48" rx="3"/>
+            <rect x="148" y="8" width="132" height="40" rx="2" fill="#FFFFFF" stroke="#334155" stroke-width="1.2"/>
+            <rect x="148.5" y="8.5" width="131" height="12" fill="#334155"/>
+            <text x="153" y="17.5" class="tag-head">ТР · ПОГОДНЫЙ РЕГУЛЯТОР</text>
+            <text x="153" y="33" class="tag-name">Тнв</text>
+            <text id="txtHcTout" x="210" y="33" text-anchor="end" style="font-size:10px;font-weight:700;font-family:var(--mono);fill:#0F172A">−10.0</text>
+            <text x="218" y="33" class="tag-name">T11з</text>
+            <text id="txtHcSet" x="276" y="33" text-anchor="end" style="font-size:10px;font-weight:700;font-family:var(--mono);fill:#0F172A">75.0</text>
+            <rect id="hcLamp" x="152" y="37" width="124" height="8.5" rx="1.5" fill="#F1F5F9" stroke="#CBD5E1" stroke-width="0.6"/>
+            <text id="txtHcMode" x="214" y="43.6" text-anchor="middle" style="font-size:6.5px;font-weight:700;font-family:var(--mono);fill:#475569">РУЧНОЙ · ЗАДАНИЕ ОТ ОПЕРАТОРА</text>
+          </g>
+          <g class="node" data-info="hc">
+            <rect class="hl" x="796" y="156" width="32" height="24" rx="3"/>
+            <line x1="830" y1="168" x2="826" y2="168" stroke="#334155" stroke-width="1.4"/>
+            <circle id="toutSensorDot" cx="822" cy="168" r="4" fill="#FFFFFF" stroke="#334155" stroke-width="1.3"/>
+            <text x="816" y="164" text-anchor="end" class="lbl-s" style="font-size:7.5px;font-weight:600;fill:#334155">Тнв</text>
           </g>
 
           <!-- ========== КЗР ========== -->
@@ -1043,6 +1066,25 @@
             <p class="insp-note">Компрессор и замена мембраны — только при закрытом кране РБ и слитой воде (0 л).</p>
           </div>
 
+          <div data-insp="hc" hidden>
+            <div id="hcStatus" class="uute-badge ok">РУЧНОЙ РЕЖИМ</div>
+            <div id="hcBoard" class="uute-board"></div>
+            <svg id="hcChart" viewBox="0 0 260 120" class="w-full mt-2" style="background:#F8FAFC;border:1px solid var(--line-soft);border-radius:4px"></svg>
+            <div class="grid grid-cols-2 gap-1.5 mt-2">
+              <button id="hcAutoInspBtn" data-toggle="HEAT_AUTO" data-on="Регулятор: АВТО" data-off="Регулятор: РУЧНОЙ" data-tone="green" data-label="Погодный регулятор" class="tbtn tbtn-sm"></button>
+              <button id="hcEcoBtn" data-toggle="HC_ECO" data-on="Эконом: ВКЛ (−8 °C)" data-off="Эконом: ВЫКЛ" data-tone="blue" data-label="Экономичный режим" class="tbtn tbtn-sm"></button>
+              <button id="hcT2limBtn" data-toggle="HC_T2LIM" data-on="Огранич. обратки: ВКЛ" data-off="Огранич. обратки: ВЫКЛ" data-tone="green" data-label="Ограничение обратки" class="tbtn tbtn-sm col-span-2"></button>
+            </div>
+            <div class="flex items-center gap-2 mt-2 text-[11px]"><span class="mono w-16">Наклон</span>
+              <input id="hcSlope" type="range" min="0.6" max="1.6" step="0.05" value="1" class="flex-1" aria-label="Наклон отопительного графика">
+              <span id="hcSlopeVal" class="mono w-12 text-right">1.00</span></div>
+            <div class="flex items-center gap-2 mt-1 text-[11px]"><span class="mono w-16">Смещение</span>
+              <input id="hcShift" type="range" min="-10" max="10" step="1" value="0" class="flex-1" aria-label="Смещение отопительного графика">
+              <span id="hcShiftVal" class="mono w-12 text-right">0 °C</span></div>
+            <button id="btnReplaceTout" class="btn btn-sm w-full mt-2">Заменить датчик наружного воздуха Тнв</button>
+            <p class="insp-note">Наклон 1.0 и смещение 0 — расчетный график 75/45 °C при −10 °C. Наклон меняет задание сильнее в мороз, смещение — одинаково при любой погоде.</p>
+          </div>
+
           <div data-insp="pump" hidden>
             <button id="replacePump1Btn" class="btn btn-sm w-full">Заменить насос Н1</button>
             <p class="insp-note">Пуск, останов и краны насосов — модуль «Насосная группа». Снимать насос можно только выключенным и отсеченным кранами.</p>
@@ -1162,7 +1204,7 @@
           <div class="meter mt-1"><div class="gate-bar" style="width:100%"></div></div>
           <div class="gate-state"></div>
         </div>
-        <div class="flex items-center gap-1 mt-auto">
+        <div class="flex flex-wrap items-center gap-1 mt-auto">
           <span class="mono text-[10.5px] faint">ΔP гр <span id="dockStrDp" class="font-semibold" style="color:var(--ink)">0.04</span></span>
           <button class="btn btn-sm ml-auto" data-open-insp="strainer">Грязевик</button>
           <button id="dockUuteBtn" class="btn btn-sm" data-open-insp="uute">УУТЭ</button>
@@ -1171,7 +1213,7 @@
 
       <!-- 2. Регулирование системы отопления (КЗР) -->
       <section class="dmod" data-dock="kzr">
-        <div class="dmod-h">КЗР · регулирование СО<button class="qbtn ml-auto" data-info="kzr">?</button></div>
+        <div class="dmod-h"><span class="wide">КЗР · регулирование СО</span><span class="narrow">КЗР · СО</span><button class="qbtn ml-auto" data-info="kzr">?</button></div>
         <div class="ctl" data-ctl="KZRcmd">
           <div class="flex items-center gap-1">
             <button class="kzr-step btn btn-sm mono" data-step="-1">−1</button>
@@ -1182,6 +1224,8 @@
           <div id="kzrPos" class="mono text-[10px] faint mt-0.5 truncate"></div>
         </div>
         <div class="grid grid-cols-2 gap-1 mt-auto">
+          <button id="hcAutoBtn" data-toggle="HEAT_AUTO" data-on="ТР: АВТО" data-off="ТР: РУЧН" title="Погодный регулятор (ТР): автомат или ручной режим" data-tone="green" data-label="Погодный регулятор" class="tbtn tbtn-sm"></button>
+          <button id="dockHcBtn" class="btn btn-sm" data-open-insp="hc">Контроллер</button>
           <button id="kzrManualBtn" data-toggle="KZR_MANUAL" data-on="ШТУРВАЛ" data-off="ПРИВОД" data-tone="amber" data-label="Режим КЗР" class="tbtn tbtn-sm"></button>
           <button class="btn btn-sm" data-open-insp="kzrBypass">Байпас / ремонт</button>
         </div>

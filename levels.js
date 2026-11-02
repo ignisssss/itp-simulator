@@ -500,28 +500,35 @@
   // ---------------------------------------------------------------------------
   const CTL_KEYS = ['V1cmd', 'V2cmd', 'KZRcmd', 'KZR_MANUAL', 'PUMP', 'PUMP2', 'PUMP1_ISO', 'PUMP2_ISO', 'MAKEUP', 'DRAIN',
     'NET_DRAIN', 'NET_VENT', 'V1tag', 'V2tag', 'HOUSE_SUP', 'HOUSE_RET', 'HOUSE_DRAIN', 'HOUSE_VENT',
-    'MAKEUP_AUTO', 'MAKEUP_PUMP', 'DHW_KZR_AUTO', 'DHW_KZRcmd', 'DHW_PUMP', 'DHW_B1_VALVE', 'DHW_DRAW'];
+    'MAKEUP_AUTO', 'MAKEUP_PUMP', 'DHW_KZR_AUTO', 'DHW_KZRcmd', 'DHW_PUMP', 'DHW_B1_VALVE', 'DHW_DRAW',
+    'HEAT_AUTO', 'HC_SLOPE', 'HC_SHIFT', 'HC_T2LIM', 'HC_ECO', 'KZR_ISO', 'KZR_BYPASS', 'RELIEF_ISO', 'EXP_ISO', 'EXP_DRAIN'];
   function snapControls() {
     const s = {};
     CTL_KEYS.forEach(k => { s[k] = sim.controls[k]; });
     if (sim.controls.DHW_KZR_AUTO) s.DHW_KZRcmd = null;   // в автомате задание КЗР ГВС двигает регулятор, а не оператор
+    if (sim.controls.HEAT_AUTO && !sim.controls.KZR_MANUAL) s.KZRcmd = null;   // и задание КЗР отопления — погодный регулятор
     s.clean = sim.controls.strainerFouling;
     return s;
   }
   function describe(k, v) {
     const map = {
       V1cmd: v === 'open' ? 'V1: открыть' : 'V1: закрыть', V2cmd: v === 'open' ? 'V2: открыть' : 'V2: закрыть',
-      KZRcmd: `КЗР → ${Math.round(v)} %`, KZR_MANUAL: v ? 'КЗР: ручной режим' : 'КЗР: автомат',
+      KZRcmd: v === null ? 'КЗР: задание от погодного регулятора' : `КЗР → ${Math.round(v)} %`, KZR_MANUAL: v ? 'КЗР: штурвал' : 'КЗР: привод',
       PUMP: v ? 'Н1: пуск' : 'Н1: стоп', PUMP2: v ? 'Н2: пуск' : 'Н2: стоп',
       PUMP1_ISO: v ? 'Краны Н1: открыть' : 'Краны Н1: закрыть', PUMP2_ISO: v ? 'Краны Н2: открыть' : 'Краны Н2: закрыть',
       HOUSE_SUP: v ? 'Кд1: открыть' : 'Кд1: закрыть', HOUSE_RET: v ? 'Кд2: открыть' : 'Кд2: закрыть',
       HOUSE_DRAIN: v ? 'Спуск стояков: открыть' : 'Спуск стояков: закрыть', HOUSE_VENT: v ? 'Воздушники 9 эт.: открыть' : 'Воздушники 9 эт.: закрыть',
       MAKEUP: `Подпитка → ${Math.round(v)} %`,
-      DRAIN: v ? 'Дренаж дома: открыть' : 'Дренаж дома: закрыть', NET_DRAIN: v ? 'Дренаж сети: открыть' : 'Дренаж сети: закрыть',
+      DRAIN: v ? 'Дренаж ИТП: открыть' : 'Дренаж ИТП: закрыть', NET_DRAIN: v ? 'Дренаж сети: открыть' : 'Дренаж сети: закрыть',
       NET_VENT: v ? 'Воздушник: открыть' : 'Воздушник: закрыть', V1tag: v ? 'Плакат на V1' : 'Плакат с V1 снят', V2tag: v ? 'Плакат на V2' : 'Плакат с V2 снят',
       MAKEUP_AUTO: v ? 'РД: АВТО' : 'РД: ручной', MAKEUP_PUMP: v ? 'Нп: пуск' : 'Нп: стоп',
       DHW_KZR_AUTO: v ? 'Регулятор ГВС: АВТО' : 'Регулятор ГВС: ручной', DHW_KZRcmd: v === null ? 'КЗР ГВС: задание от регулятора' : `КЗР ГВС → ${Math.round(v)} %`,
-      DHW_PUMP: v ? 'Нц: пуск' : 'Нц: стоп', DHW_B1_VALVE: v ? 'В1: открыть' : 'В1: закрыть', DHW_DRAW: `Водоразбор → ${Number(v).toFixed(1)} т/ч`
+      DHW_PUMP: v ? 'Нц: пуск' : 'Нц: стоп', DHW_B1_VALVE: v ? 'В1: открыть' : 'В1: закрыть', DHW_DRAW: `Водоразбор → ${Number(v).toFixed(1)} т/ч`,
+      HEAT_AUTO: v ? 'Погодный регулятор: АВТО' : 'Погодный регулятор: ручной', HC_SLOPE: `Наклон графика → ${Number(v).toFixed(2)}`,
+      HC_SHIFT: `Смещение графика → ${v > 0 ? '+' : ''}${v} °C`, HC_T2LIM: v ? 'Ограничение обратки: вкл' : 'Ограничение обратки: выкл',
+      HC_ECO: v ? 'Эконом-режим: вкл' : 'Эконом-режим: выкл', KZR_ISO: v ? 'Краны КЗР: открыть' : 'Краны КЗР: закрыть',
+      KZR_BYPASS: `Байпас КЗР → ${Math.round(v)} %`, RELIEF_ISO: v ? 'Кран ПК: открыть' : 'Кран ПК: закрыть',
+      EXP_ISO: v ? 'Кран РБ: открыть' : 'Кран РБ: закрыть', EXP_DRAIN: v ? 'Слив РБ: открыть' : 'Слив РБ: закрыть'
     };
     return map[k] || k;
   }

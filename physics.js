@@ -72,6 +72,15 @@
     EXP_C_PIPE: 9,         // л/бар, податливость контура без воздушной подушки (вода и стенки труб)
     EXP_TAU_MIX: 300,      // с, усреднение температуры воды СО при циркуляции
     EXP_TAU_COOL: 14400,   // с, остывание воды в радиаторах без циркуляции (часы, а не минуты)
+    // Погодный регулятор отопления (контроллер с датчиком наружного воздуха Тнв)
+    HC_KP: 1.5,            // %/°C, пропорциональная часть ПИ-регулятора T11
+    HC_KI: 0.08,           // %/(°C·с), интегральная часть
+    HC_T11_MIN: 35,        // °C, нижнее ограничение задания T11
+    HC_T11_MAX: 90,        // °C, верхнее ограничение задания T11
+    HC_T2LIM_K: 2.0,       // °C задания на 1 °C превышения обратки над графиком
+    HC_ECO_DROP: 8,        // °C, снижение задания в экономичном (ночном) режиме
+    HC_TOUT_OPEN: 50,      // °C, что «видит» регулятор при обрыве датчика Тнв (сопротивление → ∞)
+    HC_TOUT_SHORT: -50,    // °C, при коротком замыкании датчика Тнв (сопротивление → 0)
     BUILDING_DT: 30.0,     // °C, остывание воды в системе отопления дома (75 → 45, см. README)
     TAU_T: 3.0,            // с, инерция T11 и T2
     TAU_T21: 8.0,          // с, инерция обратки из дома
@@ -188,11 +197,30 @@
       hexScaling: 0,          // 0…1 — накипь в ПТО отопления (1 — сильная)
       pr2Fouling: 0,          // 0…0.25 — доля, на которую загрязненные электроды ПР2 занижают расход
       tp2Drift: 0,            // °C — систематическая погрешность ТП2 (высохла термопаста в гильзе)
-      expMembraneBurst: false // разрыв мембраны расширительного бака
+      expMembraneBurst: false, // разрыв мембраны расширительного бака
+      toutSensor: null        // неисправность датчика наружного воздуха: null | 'open' (обрыв) | 'short' (замыкание)
     };
   }
 
   const houseFull0 = s => s.houseFill >= 0.999;
+
+  /** Что измеряет датчик наружного воздуха регулятора, °C. */
+  function toutMeasured(sim) {
+    const f = sim.env.toutSensor;
+    return f === 'open' ? C.HC_TOUT_OPEN : f === 'short' ? C.HC_TOUT_SHORT : sim.env.T_out;
+  }
+  /** Задание погодного регулятора: график × наклон + смещение, экономичный режим, ограничение обратки. */
+  function heatingSetpoint(sim) {
+    const c = sim.controls, s = sim.state;
+    const tm = toutMeasured(sim);
+    const slope = c.HC_SLOPE === undefined ? 1 : c.HC_SLOPE;
+    const curve = 20 + slope * (graphT11(tm) - 20) + (c.HC_SHIFT || 0) - (c.HC_ECO ? C.HC_ECO_DROP : 0);
+    const T2lim = Math.min(70, Math.max(35, graphT2max(tm)));
+    let set = Math.min(C.HC_T11_MAX, Math.max(C.HC_T11_MIN, curve));
+    const limiting = c.HC_T2LIM !== false && s.T2 > T2lim;
+    if (limiting) set = Math.max(C.HC_T11_MIN, set - C.HC_T2LIM_K * (s.T2 - T2lim));
+    return { T11set: set, curve, T2lim, Tout_meas: tm, limiting };
+  }
 
   // ---------------------------------------------------------------------------
   // Расширительный бак: изотерма Бойля-Мариотта и тепловое расширение воды
@@ -286,6 +314,11 @@
       RELIEF_ISO: true,      // кран перед ПК (false — ПК отсечен на время опрессовки)
       PRESS_PUMP: false,     // опрессовочный насос
       EXP_ISO: true,         // отсечной кран расширительного бака РБ (false — бак отсечен)
+      HEAT_AUTO: false,      // погодный регулятор ведет задание КЗР (false — задание от оператора)
+      HC_SLOPE: 1.0,         // наклон отопительного графика регулятора (1.0 — расчетный 75/45 °C)
+      HC_SHIFT: 0,           // °C, параллельное смещение графика
+      HC_T2LIM: true,        // ограничение температуры обратки в теплосеть по ее графику
+      HC_ECO: false,         // экономичный (ночной) режим: задание T11 ниже на 8 °C
       EXP_DRAIN: false       // сливной кран водяной полости РБ
     };
   }
@@ -374,6 +407,7 @@
       Q_acc_Gcal: 0, M1_acc_t: 0, M2_acc_t: 0, nsTime_s: 0, pr2Cleaned: false, tp2Serviced: false,
       expPrecharge: C.EXP_P0, expWaterVol: 40.0, expMembraneReplaced: false, expIsoPrev: true, expIsoP: C.P21_DEFAULT,
       T_w: C.T11_TARGET - C.BUILDING_DT / 2, expThermL: 0, expPrechargeBlockedUntil: -1,
+      hcT11prev: C.T11_TARGET, toutReplaced: false,
       serviceAlarmUntil: -1, serviceAlarmText: ''
     };
     applyConfig(sim);
@@ -614,6 +648,13 @@
     return { ok: true, level: 'op', msg: 'Архив тепловычислителя УУТЭ обнулен.' };
   }
 
+  /** Замена датчика наружного воздуха: электрическая работа, ввод не отключают. */
+  function replaceToutSensor(sim) {
+    sim.env.toutSensor = null;
+    sim.state.toutReplaced = true;
+    return { ok: true, level: 'ok', msg: 'Датчик наружного воздуха Тнв заменен, сопротивление проверено, регулятор видит фактическую температуру.' };
+  }
+
   /** Давление воды в баке, бар. */
   function expWaterPressure(sim) {
     const c = sim.controls, s = sim.state;
@@ -731,6 +772,18 @@
 
     // КЗР: привод (или штурвал в ручном режиме) ведет клапан к заданию. При отказе привода клапан стоит.
     if (c.KZRcmd === undefined) c.KZRcmd = c.KZR;
+    // Погодный регулятор: задание T11 по отопительному графику от измеренной Тнв, ПИ-регулятор двигает задание КЗР
+    const hc = heatingSetpoint(sim);
+    // Пропорциональная часть — по изменению измеренной T11 (а не ошибки): смена задания, настроек
+    // или переход из ручного режима в АВТО не дает рывка клапана, задание отрабатывает интегральная часть.
+    if (c.HEAT_AUTO && !c.KZR_MANUAL) {
+      const circ = !sim.out || sim.out.G2 > 0;
+      const e = hc.T11set - s.T11;
+      const dT11 = s.hcT11prev === undefined ? 0 : s.T11 - s.hcT11prev;
+      if (!circ) c.KZRcmd = 0;   // нет циркуляции — регулятор закрывает клапан, чтобы не «запарить» ПТО
+      else c.KZRcmd = Math.min(100, Math.max(0, c.KZRcmd - C.HC_KP * dT11 + C.HC_KI * e * dt));
+    }
+    s.hcT11prev = s.T11;
     if (!env.kzrFail || c.KZR_MANUAL) {
       const rate = (c.KZR_MANUAL ? C.KZR_MANUAL_RATE : C.KZR_RATE) * dt;
       const d = c.KZRcmd - c.KZR;
@@ -1222,6 +1275,8 @@
       expPrecharge: s.expPrecharge, expWaterVol: s.expWaterVol, expFillPct: s.expWaterVol / C.EXP_V_RB * 100,
       P_exp_air: expAirPressure(sim), P_exp_water: expWaterPressure(sim), expMembraneBurst: !!env.expMembraneBurst,
       expThermal, expStiff, T_w: s.T_w, expDrainFlow,
+      HEAT_AUTO: !!c.HEAT_AUTO, HC_T11set: hc.T11set, HC_curve: hc.curve, HC_T2lim: hc.T2lim, HC_limiting: hc.limiting,
+      T_out_meas: hc.Tout_meas, toutSensor: env.toutSensor || null,
     };
     return sim.out;
   }
@@ -1298,6 +1353,22 @@
         detail: `G1 = ${f1(o.G1)} т/ч, T11 = ${f1(o.T11)} °C`
       });
     }
+    // Погодный регулятор
+    if (sim.env.toutSensor) list.push({
+      id: 'hc_sensor_fault', level: 'warn',
+      title: sim.env.toutSensor === 'open' ? 'Обрыв датчика наружного воздуха Тнв регулятора' : 'Короткое замыкание датчика наружного воздуха Тнв',
+      text: sim.env.toutSensor === 'open'
+        ? 'Регулятор «видит» на улице +50 °C и ведет отопление по минимуму, хотя на улице мороз. Переведите регулятор в ручной режим, держите T11 по графику клапаном КЗР и замените датчик.'
+        : 'Регулятор «видит» на улице −50 °C и гонит T11 к верхнему пределу — перетоп и горячая обратка. Переведите регулятор в ручной режим и замените датчик.',
+      detail: `Тнв: регулятор ${f1(o.T_out_meas)} °C, фактически ${f1(o.T_out)} °C`
+    });
+    if (c.HEAT_AUTO && (c.KZR_MANUAL || sim.env.kzrFail)) list.push({
+      id: 'hc_auto_blocked', level: 'info',
+      title: 'Погодный регулятор в АВТО, но клапан КЗР ему не подчиняется',
+      text: c.KZR_MANUAL ? 'КЗР на штурвале: задание регулятора не доходит до клапана.' : 'Привод КЗР не отвечает: регулятор двигает задание, а клапан стоит.',
+      detail: `Задание T11 ${f1(o.HC_T11set)} °C, факт ${f1(o.T11)} °C`
+    });
+
     // Расширительный бак
     if (sim.env.expMembraneBurst) {
       list.push({
@@ -1601,7 +1672,7 @@
       list.push({
         id: 't11_range', level: 'warn',
         title: `ЖАЛОБЫ ЖИЛЬЦОВ: ${under ? 'Недотоп' : 'Перетоп'} здания!`,
-        text: `Температура подачи в дом отклонилась от графика (${f1(o.T11_target)} °C при ${f1(o.T_out)} °C на улице). Отрегулируйте клапан КЗР.`,
+        text: `Температура подачи в дом отклонилась от графика (${f1(o.T11_target)} °C при ${f1(o.T_out)} °C на улице). ${c.HEAT_AUTO ? 'Регулятор в АВТО: проверьте наклон и смещение графика и показание датчика Тнв на табло контроллера.' : 'Отрегулируйте клапан КЗР.'}`,
         detail: `T11 = ${f1(o.T11)} °C, коридор ${f1(o.T11_min)}…${f1(o.T11_max)} °C`
       });
     }
@@ -1662,7 +1733,7 @@
   }
 
   global.ITPPhysics = Object.freeze({
-    CONST: C, foulDhwFilter, cleanDhwFilter, washHEX, replacePump1, replaceGaugeP21, repairKZR, serviceTP2, cleanPR2, resetUuteCounters, setExpPrecharge, replaceExpMembrane,
+    CONST: C, foulDhwFilter, cleanDhwFilter, washHEX, replacePump1, replaceGaugeP21, repairKZR, serviceTP2, cleanPR2, resetUuteCounters, setExpPrecharge, replaceExpMembrane, replaceToutSensor, heatingSetpoint,
     createSimulator,
     resetNominal,
     settle,

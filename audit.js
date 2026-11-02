@@ -3,7 +3,7 @@
  *
  *   node audit.js           — физическое ядро (physics.js), PDF-конспекты, сверка уроков с конспектами
  *   index.html?audit        — то же в браузере + интерфейс «кокпит», цели подсветки всех шагов,
- *                             прохождение всех 22 уроков через пульт и бот по всем 8 сменам
+ *                             прохождение всех 23 уроков через пульт и бот по всем 8 сменам
  *
  * В браузере отчет печатается в консоль и показывается поверх страницы; результат — window.ITPAudit.last.
  * Скрипт ничего не меняет в рабочих файлах; прогресс уроков и смен в localStorage восстанавливается.
@@ -276,6 +276,27 @@
       r.check(G, 'РБ в штатном положении без термодинамики: P21 = 3.50, 40 л воды, ниппель = P21', Math.abs(base.out.P21 - 3.5) < 0.02 && Math.abs(base.state.expWaterVol - 40) < 1 && Math.abs(base.out.P_exp_air - base.out.P21) < 1e-9);
     }
 
+    // 1.7в Погодный регулятор отопления
+    {
+      const sim = fresh(); sim.controls.HEAT_AUTO = true;
+      sim.env.T_out = -20; let mx = 0; run(sim, 400, x => { mx = Math.max(mx, x.out.T11); });
+      const g20 = P.graphT11(-20);
+      r.check(G, 'Регулятор: при −20 °C выводит T11 на график без перерегулирования', Math.abs(sim.out.T11 - g20) < 1 && mx < g20 + 1.5, `T11 ${sim.out.T11.toFixed(1)} °C, график ${g20.toFixed(1)}, максимум ${mx.toFixed(1)}`);
+      sim.env.toutSensor = 'open'; run(sim, 120);
+      const lowSet = sim.out.HC_T11set, kzrLow = sim.controls.KZR;
+      sim.controls.HEAT_AUTO = false; sim.controls.KZRcmd = 55; run(sim, 120);
+      P.replaceToutSensor(sim); sim.controls.HEAT_AUTO = true; mx = 0; run(sim, 200, x => { mx = Math.max(mx, x.out.T11); });
+      r.check(G, 'Регулятор: обрыв Тнв — задание 35 °C; возврат в АВТО после замены без скачка', lowSet === 35 && kzrLow < 15 && mx < g20 + 1.5 && Math.abs(sim.out.T11 - g20) < 1.5,
+        `задание при обрыве ${lowSet.toFixed(0)} °C, КЗР ${kzrLow.toFixed(0)} %, максимум после АВТО ${mx.toFixed(1)} °C`);
+      const s2 = fresh(); Object.assign(s2.controls, { HEAT_AUTO: true, HC_SLOPE: 1.4, HC_T2LIM: false }); run(s2, 300);
+      const hotT2 = s2.out.T2; s2.controls.HC_T2LIM = true; run(s2, 300);
+      r.check(G, 'Регулятор: наклон 1.4 — перетоп, ограничение обратки снижает T2', hotT2 > s2.out.T2_max + 5 && s2.out.T2 < s2.out.T2_max + 3, `T2 ${hotT2.toFixed(1)} → ${s2.out.T2.toFixed(1)} °C при норме ${s2.out.T2_max.toFixed(1)}`);
+      const s3 = fresh(); s3.env.toutSensor = 'short'; run(s3, 1);
+      r.check(G, 'Регулятор: замыкание Тнв — задание 90 °C и предупреждение', s3.out.HC_T11set === 90 && P.diagnose(s3).some(a => a.id === 'hc_sensor_fault'));
+      const s4 = fresh(); const k0 = s4.controls.KZRcmd; run(s4, 60);
+      r.check(G, 'Регулятор в ручном режиме не трогает задание КЗР', s4.controls.KZRcmd === k0);
+    }
+
     // 1.8 Сервисные операции и защита от вскрытия под давлением
     {
       const sim = fresh();
@@ -301,7 +322,7 @@
     const lessonsSrc = fs.readFileSync(path.join(dir, 'lessons.js'), 'utf8');
     const body = lessonsSrc.slice(lessonsSrc.indexOf('const LESSONS = ['), lessonsSrc.indexOf('const notesUrl'));
     const ids = [...body.matchAll(/^ {6}id: '([a-z0-9]+)'/gm)].map(m => m[1]);
-    r.check(G, 'Уроков в lessons.js', ids.length === 22, ids.length);
+    r.check(G, 'Уроков в lessons.js', ids.length === 23, ids.length);
     r.check(G, 'Конспектов в notes-content.js', notes.length === ids.length, notes.length);
     const miss = [];
     ids.forEach((id, i) => {
@@ -310,7 +331,7 @@
       if (!n || n.n !== i + 1) miss.push(`${id}: номер конспекта ${n ? n.n : '—'} ≠ ${i + 1}`);
       if (!fs.existsSync(f) || fs.statSync(f).size < 20000) miss.push(`нет или пустой ${path.basename(f)}`);
     });
-    r.check(G, 'Для каждого урока есть PDF docs/notes/NN-id.pdf с верным номером', miss.length === 0, miss.join('; ') || '01-tour … 22-exptank');
+    r.check(G, 'Для каждого урока есть PDF docs/notes/NN-id.pdf с верным номером', miss.length === 0, miss.join('; ') || '01-tour … 23-weatherctl');
   }
 
   // ---------------------------------------------------------------------------
@@ -372,7 +393,7 @@
       const G = 'Уроки: цели подсветки';
       const T = L._audit.targets;
       const lessons = L.list;
-      r.check(G, 'Уроков в списке', lessons.length === 22 && lessons.every(Boolean), lessons.length);
+      r.check(G, 'Уроков в списке', lessons.length === 23 && lessons.every(Boolean), lessons.length);
       const badKey = [], badSel = [], badXY = [];
       lessons.forEach(l => l.steps.forEach((st, i) => { if (!st.target || !T[st.target]) badKey.push(`${l.id}#${i + 1}: «${st.target}»`); }));
       Object.entries(T).forEach(([k, t]) => {
@@ -444,7 +465,7 @@
       L.exit();
     }
 
-    // ----- 3.4 Прохождение всех 22 уроков через пульт -----
+    // ----- 3.4 Прохождение всех 23 уроков через пульт -----
     {
       const G = 'Уроки: прохождение через пульт';
       document.querySelector('[data-cfg="dhwScheme"][data-val="2stage"]').click();
@@ -480,7 +501,8 @@
         burst() { q('pumpBtn').click(); setR('KZRcmd', 0); run(15, () => c().KZR <= 1); run(0.5); q('houseSupBtn').click(); q('houseRetBtn').click(); q('houseDrainBtn').click(); q('houseVentBtn').click(); run(150, () => S().env.burst === 0); run(1); q('houseDrainBtn').click(); q('houseRetBtn').click(); q('houseSupBtn').click(); setR('MAKEUP', 100); run(400, () => o().houseFill >= 0.999); run(0.5); q('houseVentBtn').click(); run(60, () => o().P21 >= 3.45); setR('MAKEUP', 0); run(1); q('pumpBtn').click(); setR('KZRcmd', 48); run(20); },
         kzrbypass() { setR('KZR_BYPASS', 30); run(150); q('kzrIsoBtn').click(); setR('KZR_BYPASS', 48); run(150); q('repairKzrBtn').click(); run(1); q('kzrIsoBtn').click(); setR('KZRcmd', 48); setR('KZR_BYPASS', 0); run(200); },
         uute() { ack(); q('btnServiceTP2').click(); run(1); setR('MAKEUP', 0); run(5); setR('KZRcmd', 0); run(40, () => c().KZR <= 0); q('gateBtnV1').click(); run(10); q('gateBtnV2').click(); run(10); q('pumpBtn').click(); run(1); q('netVentBtn').click(); q('netDrainBtn').click(); run(60, () => S().state.nodes[4] < 0.1); run(1); q('btnCleanPR2').click(); run(1); q('netDrainBtn').click(); run(0.3); q('gateBtnV2').click(); run(120, () => mf() >= 0.999 && c().V2 >= 100); q('netVentBtn').click(); run(0.3); q('gateBtnV1').click(); run(10); q('pumpBtn').click(); setR('KZRcmd', 48); run(200); },
-        exptank() { ack(); q('btnExpIso').click(); run(1); q('btnExpDrain').click(); run(30, () => S().state.expWaterVol < 1); run(0.5); q('btnPumpExpNominal').click(); run(0.5); q('btnExpDrain').click(); run(0.5); q('btnExpIso').click(); run(1); setR('MAKEUP', 15); run(60, () => o().P21 >= 3.6); setR('MAKEUP', 0); run(6); }
+        exptank() { ack(); q('btnExpIso').click(); run(1); q('btnExpDrain').click(); run(30, () => S().state.expWaterVol < 1); run(0.5); q('btnPumpExpNominal').click(); run(0.5); q('btnExpDrain').click(); run(0.5); q('btnExpIso').click(); run(1); setR('MAKEUP', 15); run(60, () => o().P21 >= 3.6); setR('MAKEUP', 0); run(6); },
+        weatherctl() { const sl = q('hcSlope'); ack(); sl.value = 1; sl.dispatchEvent(new Event('input')); q('hcT2limBtn').click(); run(200); run(200); q('hcAutoBtn').click(); run(1); setR('KZRcmd', 55); run(200); q('btnReplaceTout').click(); run(1); q('hcAutoBtn').click(); run(200); }
       };
       let passed = 0;
       for (const l of L.list) {

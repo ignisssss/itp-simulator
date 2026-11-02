@@ -86,6 +86,20 @@
   // Справочник «Зачем нужен этот элемент?»
   // ---------------------------------------------------------------------------
   const INFO = {
+    hc: {
+      icon: 'gauge', title: 'Погодный регулятор отопления',
+      body: `<p><b>Погодный регулятор</b> (контроллер теплового пункта) сам держит температуру подачи в дом T11 по
+        <b>отопительному графику</b>: чем холоднее на улице, тем горячее подача. Наружную температуру он измеряет датчиком
+        <b>Тнв</b> на северной стене дома, T11 — датчиком на подаче, и ПИ-регулятором двигает задание клапана КЗР.</p>
+        <p class="mt-2"><b>Настройки:</b> <b>наклон</b> — во сколько раз крутизна графика отличается от расчетной 75/45 °C (наклон больше —
+        сильнее прибавляет в мороз); <b>смещение</b> — одинаковая прибавка ко всему графику; <b>ограничение обратки</b> — если обратка T2
+        горячее графика теплосети, регулятор снижает задание на 2 °C за каждый лишний градус; <b>эконом</b> — ночное снижение на 8 °C.
+        Задание ограничено 35…90 °C.</p>
+        <p class="mt-2"><b>Отказы датчика Тнв:</b> обрыв (сопротивление бесконечно) регулятор читает как +50 °C и почти закрывает КЗР —
+        дом остывает; замыкание — как −50 °C, и регулятор гонит T11 к 90 °C — перетоп. Признак — показание Тнв на табло не совпадает
+        с погодой. Действия: перевести регулятор в ручной режим, держать T11 по графику клапаном, заменить датчик.</p>
+        <p class="mt-2">Если КЗР на штурвале или привод не отвечает, регулятор в АВТО ничего не сделает: задание не доходит до клапана.</p>`
+    },
     expTank: {
       icon: 'gauge', title: 'Мембранный расширительный бак (РБ)',
       body: `<p>Вода при нагреве расширяется: 10 м³ системы отопления от 20 до 60 °C прибавляют ≈ 135 л. Закрытый контур почти несжимаем,
@@ -149,8 +163,8 @@
       body: `<p><b>Главный рабочий орган регулирования мощности ИТП.</b> Меняет расход греющей сетевой воды через ПТО.</p>
         <p class="mt-2">Больше открыт → больше расход G1 → выше T11 в доме, но и выше температура обратки T2 (штраф теплосети).
         Меньше открыт → недотоп.</p>
-        <p class="mt-2">В реальном ИТП им управляет погодный контроллер по датчику наружного воздуха и T11. Здесь вы — контроллер:
-        рабочая зона около 45…50 %.</p>
+        <p class="mt-2">Задание клапану дает <b>погодный регулятор ТР</b> (кнопка «ТР: АВТО») по датчику наружного воздуха и T11,
+        а в ручном режиме регулятора — оператор ползунком. Рабочая зона при −10 °C около 45…50 %.</p>
         <p class="mt-2">Положение клапана меняет <b>электропривод</b> (буква M на схеме). Если привод отказал (!), клапан стоит в последнем положении —
         тогда включают <b>ручной режим</b> (Р) и крутят клапан штурвалом. Штурвалом клапан движется медленнее.</p>`
     },
@@ -403,7 +417,7 @@
     p21Cock: 'protect', house: 'house', building: 'house', dhwKzr: 'dhwKzr', dhwHex: 'dhw', dhw2stage: 'dhw',
     dhwValves: 'dhw', dhwFilters: 'dhw', dhwRelief: 'dhw', dhwPump: 'dhw', service: 'kzrBypass',
     // панели, которые открываются кнопками пульта
-    protect: 'protect', dhw: 'dhw', uute: 'uute', expTank: 'expTank'
+    protect: 'protect', dhw: 'dhw', uute: 'uute', expTank: 'expTank', hc: 'hc'
   };
   const PANEL_INFO = { protect: 'hydrotest', dhw: 'dhwHex', makeup: 'makeup' };
   // Краны на схеме: id символа → орган управления (gate — задвижка с приводом хода)
@@ -447,7 +461,7 @@
     renderInspector();
   });
   const PANEL_DOCK = { valves: 'inlet', strainer: 'inlet', kzr: 'kzr', kzrBypass: 'kzr', pump: 'pumps', makeup: 'makeup', protect: 'makeup',
-    netdrain: 'house', house: 'house', hex: 'house', dhwKzr: 'dhw', dhw: 'dhw', uute: 'inlet', expTank: 'makeup' };
+    netdrain: 'house', house: 'house', hex: 'house', dhwKzr: 'dhw', dhw: 'dhw', uute: 'inlet', expTank: 'makeup', hc: 'kzr' };
   let inspPanel = null;
   let inspAuto = false;     // открыт уроком, а не оператором
 
@@ -801,6 +815,13 @@
       render();
     });
   });
+  // Погодный регулятор: наклон, смещение, замена датчика Тнв
+  $('hcSlope').addEventListener('input', e => { sim.controls.HC_SLOPE = Number(e.target.value); renderHc(sim.out, true); });
+  $('hcSlope').addEventListener('change', () => log(`Оператор: наклон графика регулятора ${sim.controls.HC_SLOPE.toFixed(2)}`, 'op'));
+  $('hcShift').addEventListener('input', e => { sim.controls.HC_SHIFT = Number(e.target.value); renderHc(sim.out, true); });
+  $('hcShift').addEventListener('change', () => log(`Оператор: смещение графика регулятора ${sim.controls.HC_SHIFT > 0 ? '+' : ''}${sim.controls.HC_SHIFT} °C`, 'op'));
+  $('btnReplaceTout').addEventListener('click', () => { const r = P.replaceToutSensor(sim); log(r.msg, r.level); render(); });
+
   // Расширительный бак: компрессор и замена мембраны
   const expSvc = r => { log(r.msg, r.level); if (window.ITPLessons && window.ITPLessons.onService) window.ITPLessons.onService('exp', r); render(); };
   $('sliderExpPrecharge').addEventListener('input', e => { $('expPrechargeVal').textContent = Number(e.target.value).toFixed(1) + ' бар'; });
@@ -1049,7 +1070,9 @@
     T1: { get: () => sim.env.T1 !== null, set: v => { sim.env.T1 = v ? P.graphT1(sim.env.T_out) - 15 : null; }, name: 'недодача температуры сети' },
     pr2Fouling: { get: () => (sim.env.pr2Fouling || 0) > 0, set: v => { sim.env.pr2Fouling = v ? 0.10 : 0; }, name: 'магнетитовые отложения на электродах ПР2 (−10 %)' },
     tp2Drift: { get: () => (sim.env.tp2Drift || 0) !== 0, set: v => { sim.env.tp2Drift = v ? -4.5 : 0; }, name: 'высохла термопаста в гильзе ТП2 (−4.5 °C)' },
-    expBurst: { get: () => !!sim.env.expMembraneBurst, set: v => { sim.env.expMembraneBurst = v; }, name: 'разрыв мембраны расширительного бака РБ' }
+    expBurst: { get: () => !!sim.env.expMembraneBurst, set: v => { sim.env.expMembraneBurst = v; }, name: 'разрыв мембраны расширительного бака РБ' },
+    toutOpen: { get: () => sim.env.toutSensor === 'open', set: v => { sim.env.toutSensor = v ? 'open' : null; }, name: 'обрыв датчика наружного воздуха Тнв' },
+    toutShort: { get: () => sim.env.toutSensor === 'short', set: v => { sim.env.toutSensor = v ? 'short' : null; }, name: 'замыкание датчика наружного воздуха Тнв' }
   };
   $('envExpLowBtn').addEventListener('click', () => { sim.state.expPrecharge = 1.0; log('Инструктор: из воздушной камеры РБ стравлен воздух до 1.0 бар', 'op'); });
   $('envExpHighBtn').addEventListener('click', () => { sim.state.expPrecharge = 4.5; log('Инструктор: воздушная камера РБ перекачана до 4.5 бар', 'op'); });
@@ -1107,6 +1130,63 @@
   // ---------------------------------------------------------------------------
   // Расширительный бак: разрез на схеме и табло пульта
   // ---------------------------------------------------------------------------
+  function renderHc(o, force) {
+    if (o.HC_T11set === undefined) return;
+    const c = sim.controls, auto = c.HEAT_AUTO, fault = o.toutSensor;
+    const sg = v => (v > 0 ? '+' : v < 0 ? '−' : '') + Math.abs(v).toFixed(1);
+    $('txtHcTout').textContent = fault ? (fault === 'open' ? 'ОБРЫВ' : 'КЗ') : sg(o.T_out_meas);
+    $('txtHcTout').style.fill = fault ? '#B91C1C' : '#0F172A';
+    $('txtHcSet').textContent = o.HC_T11set.toFixed(1);
+    const blocked = auto && (c.KZR_MANUAL || o.kzrFail);
+    $('txtHcMode').textContent = !auto ? 'РУЧНОЙ · ЗАДАНИЕ ОТ ОПЕРАТОРА' : blocked ? 'АВТО · КЛАПАН НЕ ПОДЧИНЯЕТСЯ' : (c.HC_ECO ? 'АВТО · ЭКОНОМ −8 °C' : 'АВТО · ПО ГРАФИКУ');
+    $('hcLamp').setAttribute('fill', !auto ? '#F1F5F9' : (blocked || fault) ? '#FEE2E2' : '#DCFCE7');
+    $('txtHcMode').style.fill = !auto ? '#475569' : (blocked || fault) ? '#991B1B' : '#166534';
+    $('toutSensorDot').setAttribute('fill', fault ? '#FCA5A5' : '#FFFFFF');
+    // в автомате ползунок КЗР показывает задание, которое выставляет регулятор
+    if (auto && !c.KZR_MANUAL) {
+      const row = document.querySelector('[data-ctl="KZRcmd"]');
+      if (document.activeElement !== row.querySelector('input')) {
+        row.querySelector('input').value = c.KZRcmd;
+        row.querySelector('[data-val]').textContent = Math.round(c.KZRcmd) + '%';
+      }
+    }
+    if (inspPanel !== 'hc' || $('inspector').hidden) return;
+    if (force || document.activeElement !== $('hcSlope')) $('hcSlope').value = c.HC_SLOPE;
+    if (force || document.activeElement !== $('hcShift')) $('hcShift').value = c.HC_SHIFT;
+    $('hcSlopeVal').textContent = Number(c.HC_SLOPE).toFixed(2);
+    $('hcShiftVal').textContent = (c.HC_SHIFT > 0 ? '+' : c.HC_SHIFT < 0 ? '−' : '') + Math.abs(c.HC_SHIFT) + ' °C';
+    const st = $('hcStatus');
+    const txt = fault ? (fault === 'open' ? 'ДАТЧИК Тнв: ОБРЫВ' : 'ДАТЧИК Тнв: ЗАМЫКАНИЕ') : !auto ? 'РУЧНОЙ РЕЖИМ: КЗР ЗАДАЕТ ОПЕРАТОР' : blocked ? 'АВТО, НО КЛАПАН НЕ ПОДЧИНЯЕТСЯ' : 'АВТО: T11 ПО ГРАФИКУ';
+    if (st.textContent !== txt) st.textContent = txt;
+    st.className = 'uute-badge ' + ((fault || blocked) ? 'ns' : 'ok');
+    const rows = [
+      ['Тнв · регулятор', fault ? (fault === 'open' ? 'ОБРЫВ (+50 °C)' : 'КЗ (−50 °C)') : `${sg(o.T_out_meas)} °C`, !!fault],
+      ['T11 задание / факт', `${o.HC_T11set.toFixed(1)} / ${fmt(o.T11, 1)} °C`, Math.abs(o.HC_T11set - o.T11) > 3],
+      ['T11 по расчетному графику', `${fmt(o.T11_target, 1)} °C`],
+      ['T2 / предел обратки', `${fmt(o.T2, 1)} / ${o.HC_T2lim.toFixed(1)} °C`, o.HC_limiting],
+      ['КЗР задание / положение', `${Math.round(c.KZRcmd)} / ${Math.round(c.KZR)} %`],
+      ['Ограничение обратки', c.HC_T2LIM === false ? 'выключено' : o.HC_limiting ? 'СНИЖАЕТ ЗАДАНИЕ' : 'включено']
+    ];
+    $('hcBoard').innerHTML = rows.map(([k, v, b]) => `<span class="k">${k}</span><span class="v${b ? ' bad' : ''}">${v}</span>`).join('');
+    // график: задание T11 от Тнв (−30…+10 °C) — расчетный пунктиром, настроенный сплошной
+    const X = t => 30 + (t + 30) / 40 * 220, Y = v => 110 - (v - 20) / 80 * 100;
+    const pts = f => { const a = []; for (let t = -30; t <= 10; t += 2) a.push(`${X(t).toFixed(1)},${Y(f(t)).toFixed(1)}`); return a.join(' '); };
+    const slope = Number(c.HC_SLOPE), shift = Number(c.HC_SHIFT);
+    const tuned = t => Math.min(90, Math.max(35, 20 + slope * (P.graphT11(t) - 20) + shift - (c.HC_ECO ? 8 : 0)));
+    const design = t => P.graphT11(t);
+    const grid = [20, 40, 60, 80, 100].map(v => `<line x1="30" x2="250" y1="${Y(v)}" y2="${Y(v)}" stroke="#E2E8F0" stroke-width="0.6"/><text x="26" y="${Y(v) + 3}" text-anchor="end" font-size="7" fill="#64748B" font-family="var(--mono)">${v}</text>`).join('')
+      + [-30, -20, -10, 0, 10].map(t => `<text x="${X(t)}" y="119" text-anchor="middle" font-size="7" fill="#64748B" font-family="var(--mono)">${t}</text>`).join('');
+    const tNow = Math.max(-30, Math.min(10, o.T_out));
+    $('hcChart').innerHTML = grid
+      + `<polyline points="${pts(design)}" fill="none" stroke="#94A3B8" stroke-width="1.2" stroke-dasharray="3 2"/>`
+      + `<polyline points="${pts(tuned)}" fill="none" stroke="#C2410C" stroke-width="1.8"/>`
+      + `<circle cx="${X(tNow)}" cy="${Y(Math.max(20, Math.min(100, o.T11)))}" r="3.2" fill="#0284C7" stroke="#fff" stroke-width="1"/>`
+      + `<text x="4" y="9" font-size="7" fill="#475569">T11, °C</text><text x="250" y="109" text-anchor="end" font-size="7" fill="#475569">Тнв, °C</text>`
+      + `<line x1="120" x2="134" y1="7" y2="7" stroke="#94A3B8" stroke-width="1.2" stroke-dasharray="3 2"/><text x="137" y="9.5" font-size="7" fill="#475569">расчет</text>`
+      + `<line x1="166" x2="180" y1="7" y2="7" stroke="#C2410C" stroke-width="1.8"/><text x="183" y="9.5" font-size="7" fill="#475569">настройка</text>`
+      + `<circle cx="226" cy="7" r="2.6" fill="#0284C7"/><text x="231" y="9.5" font-size="7" fill="#475569">факт</text>`;
+  }
+
   function renderExp(o) {
     if (o.expWaterVol === undefined) return;
     const c = sim.controls, burst = o.expMembraneBurst;
@@ -1413,6 +1493,7 @@
     $('hexScaleVal').textContent = Math.round(100 * (o.hexScaling || 0)) + '%';
     renderUute(o);
     renderExp(o);
+    renderHc(o);
     const cockBtn = $('p21CockBtn');
     const cockZero = c.P21_COCK === 'zero';
     const cockLbl = cockZero ? 'Кран P21: ПРОВЕРКА НУЛЯ' : 'Кран P21: РАБОТА';
