@@ -76,8 +76,10 @@
     HC_KP: 1.5,            // %/°C, пропорциональная часть ПИ-регулятора T11
     HC_KI: 0.08,           // %/(°C·с), интегральная часть
     HC_T11_MIN: 35,        // °C, нижнее ограничение задания T11
-    HC_T11_MAX: 90,        // °C, верхнее ограничение задания T11
-    HC_T2LIM_K: 2.0,       // °C задания на 1 °C превышения обратки над графиком
+    HC_T11_MAX: 95,        // °C, верхнее ограничение задания T11 (норма для двухтрубных систем жилых домов)
+    HC_T2LIM_K: 2.0,       // °C задания на 1 °C превышения обратки (пропорциональная часть ограничения)
+    HC_T2LIM_KI: 0.05,     // °C задания в секунду на 1 °C превышения (интегральная часть: дожимает обратку до нормы)
+    HC_T2LIM_MARGIN: 0.3,  // °C, ограничение держит обратку чуть ниже графика теплосети
     HC_ECO_DROP: 8,        // °C, снижение задания в экономичном (ночном) режиме
     HC_TOUT_OPEN: 50,      // °C, что «видит» регулятор при обрыве датчика Тнв (сопротивление → ∞)
     HC_TOUT_SHORT: -50,    // °C, при коротком замыкании датчика Тнв (сопротивление → 0)
@@ -169,7 +171,9 @@
     return 20 + 55 * Math.pow(Math.max(0, (20 - tOut) / 30), 0.8);
   }
   function graphT2max(tOut) {     // наибольшая допустимая обратка в теплосеть
-    return 55 - 0.8 * (tOut + 10);
+    // Выше −5 °C график положе (0.7 °C на 1 °C): дом, отапливаемый точно по графику T11, возвращает воду
+    // не горячее нормы. При прежнем наклоне 0.8 точный график давал «завышение обратки» на 0.1…0.4 °C.
+    return tOut <= -5 ? 55 - 0.8 * (tOut + 10) : 51 - 0.7 * (tOut + 5);
   }
 
   // Номинальная нагрузка дома при −10 °C и параметры здания
@@ -216,17 +220,19 @@
     const slope = c.HC_SLOPE === undefined ? 1 : c.HC_SLOPE;
     const curve = 20 + slope * (graphT11(tm) - 20) + (c.HC_SHIFT || 0) - (c.HC_ECO ? C.HC_ECO_DROP : 0);
     const T2lim = Math.min(70, Math.max(35, graphT2max(tm)));
-    let set = Math.min(C.HC_T11_MAX, Math.max(C.HC_T11_MIN, curve));
-    const limiting = c.HC_T2LIM !== false && s.T2 > T2lim;
-    if (limiting) set = Math.max(C.HC_T11_MIN, set - C.HC_T2LIM_K * (s.T2 - T2lim));
-    return { T11set: set, curve, T2lim, Tout_meas: tm, limiting };
+    const base = Math.min(C.HC_T11_MAX, Math.max(C.HC_T11_MIN, curve));
+    const on = c.HC_T2LIM !== false;
+    const excess = s.T2 - (T2lim - C.HC_T2LIM_MARGIN);
+    const red = on ? C.HC_T2LIM_K * Math.max(0, excess) + (s.hcLimRed || 0) : 0;
+    const set = Math.max(C.HC_T11_MIN, base - red);
+    return { T11set: set, base, curve, T2lim, excess, Tout_meas: tm, limiting: on && set < base - 0.05 };
   }
 
   // ---------------------------------------------------------------------------
   // Расширительный бак: изотерма Бойля-Мариотта и тепловое расширение воды
   // ---------------------------------------------------------------------------
-  /** Относительное расширение воды от 20 °C. */
-  const eTherm = T => Math.max(0, 0.00021 * (T - 20) + 0.0000032 * Math.pow(Math.max(0, T - 20), 2));
+  /** Относительное расширение воды от 20 °C по таблице плотности (40 °C — 0.60 %, 60 °C — 1.53 %, 80 °C — 2.72 %, 90 °C — 3.41 %). */
+  const eTherm = T => Math.max(0, 0.000226 * (T - 20) + 0.0000038 * Math.pow(Math.max(0, T - 20), 2));
   /** Объем воды в исправном баке при давлении P (изотерма газовой камеры), л. */
   const expBoyle = (P, P0) => Math.min(C.EXP_VW_MAX, Math.max(0, C.EXP_V_RB * (1 - (P0 + 1) / (Math.max(0.1, P) + 1))));
   /** Податливость бака dV/dP в рабочем диапазоне, л/бар. */
@@ -407,7 +413,7 @@
       Q_acc_Gcal: 0, M1_acc_t: 0, M2_acc_t: 0, nsTime_s: 0, pr2Cleaned: false, tp2Serviced: false,
       expPrecharge: C.EXP_P0, expWaterVol: 40.0, expMembraneReplaced: false, expIsoPrev: true, expIsoP: C.P21_DEFAULT,
       T_w: C.T11_TARGET - C.BUILDING_DT / 2, expThermL: 0, expPrechargeBlockedUntil: -1,
-      hcT11prev: C.T11_TARGET, toutReplaced: false,
+      hcT11prev: C.T11_TARGET, hcLimRed: 0, toutReplaced: false,
       serviceAlarmUntil: -1, serviceAlarmText: ''
     };
     applyConfig(sim);
@@ -776,11 +782,16 @@
     const hc = heatingSetpoint(sim);
     // Пропорциональная часть — по изменению измеренной T11 (а не ошибки): смена задания, настроек
     // или переход из ручного режима в АВТО не дает рывка клапана, задание отрабатывает интегральная часть.
+    // Интегральная часть ограничения обратки копится только тогда, когда регулятор реально ведет клапан
+    if (c.HEAT_AUTO && !c.KZR_MANUAL && !env.kzrFail && c.HC_T2LIM !== false && (!sim.out || sim.out.G2 > 0))
+      s.hcLimRed = Math.min(Math.max(0, hc.base - C.HC_T11_MIN), Math.max(0, (s.hcLimRed || 0) + C.HC_T2LIM_KI * hc.excess * dt));
+    else s.hcLimRed = 0;
     if (c.HEAT_AUTO && !c.KZR_MANUAL) {
       const circ = !sim.out || sim.out.G2 > 0;
       const e = hc.T11set - s.T11;
       const dT11 = s.hcT11prev === undefined ? 0 : s.T11 - s.hcT11prev;
       if (!circ) c.KZRcmd = 0;   // нет циркуляции — регулятор закрывает клапан, чтобы не «запарить» ПТО
+      else if (env.kzrFail) c.KZRcmd = c.KZR;   // привод не отвечает: команды «открыть/закрыть» не копятся, после ремонта клапан идет от того места, где стоял
       else c.KZRcmd = Math.min(100, Math.max(0, c.KZRcmd - C.HC_KP * dT11 + C.HC_KI * e * dt));
     }
     s.hcT11prev = s.T11;
@@ -1365,7 +1376,7 @@
     if (c.HEAT_AUTO && (c.KZR_MANUAL || sim.env.kzrFail)) list.push({
       id: 'hc_auto_blocked', level: 'info',
       title: 'Погодный регулятор в АВТО, но клапан КЗР ему не подчиняется',
-      text: c.KZR_MANUAL ? 'КЗР на штурвале: задание регулятора не доходит до клапана.' : 'Привод КЗР не отвечает: регулятор двигает задание, а клапан стоит.',
+      text: c.KZR_MANUAL ? 'КЗР на штурвале: задание регулятора не доходит до клапана.' : 'Привод КЗР не отвечает: регулятор подает команды, а клапан стоит.',
       detail: `Задание T11 ${f1(o.HC_T11set)} °C, факт ${f1(o.T11)} °C`
     });
 
@@ -1391,6 +1402,23 @@
         detail: `Предзакачка ${f2(s.expPrecharge)} бар, P21 = ${f2(o.P21)} бар, вода в баке ${Math.round(s.expWaterVol)} л`
       });
     }
+    // Запас бака на сезон: 600 л при предзакачке 3.2 бар принимают ≈ 110 л до порога ПК, а вода 10 м³ между оттепелью и морозом
+    // меняет объем на ≈ 160 л. Поэтому в оттепель бак пустеет, в мороз — переполняется, и давление поправляют подпиткой или дренажом.
+    const expWorking = o.expThermal && c.EXP_ISO !== false && !sim.env.expMembraneBurst && s.houseFill >= 0.999 &&
+      s.expPrecharge >= 2.2 && s.expPrecharge <= 3.8;
+    const rdAuto = o.makeupType === 'pumped' && c.MAKEUP_AUTO && !o.mpTrip;   // реле давления РД подпитает само
+    if (expWorking && !rdAuto && s.expWaterVol < 3 && o.P21 < s.expPrecharge + 0.05 && o.P21 >= C.P21_CAVITATION) list.push({
+      id: 'exp_reserve_low', level: 'warn',
+      title: 'Расширительный бак пуст: давление в контуре падает',
+      text: 'Вода в системе остыла и сжалась, запас воды в баке кончился. Дальше контур жесткий: каждый градус остывания снимает ≈ 0.5 бар, до срыва насоса считанные минуты. Подпитайте контур до 3.4…3.6 бар.',
+      detail: `P21 = ${f2(o.P21)} бар, предзакачка ${f2(s.expPrecharge)} бар, средняя температура воды СО ${f1(s.T_w)} °C`
+    });
+    if (expWorking && !o.reliefOpen && o.P11 >= C.RELIEF_SET - 0.25) list.push({
+      id: 'exp_reserve_high', level: 'warn',
+      title: 'Давление близко к срабатыванию предохранительного клапана',
+      text: 'Вода нагрелась и расширилась, бак почти исчерпал запас. Еще немного нагрева — и откроется ПК. Приспустите давление дренажом ИТП до 3.6…3.8 бар.',
+      detail: `P после насоса ${f2(o.P11)} бар (ПК ${f1(C.RELIEF_SET)} бар), P21 = ${f2(o.P21)} бар, вода в баке ${Math.round(s.expWaterVol)} л`
+    });
     if (c.EXP_ISO === false && o.G1 > 0.1 && !c.PRESS_PUMP) list.push({
       id: 'exp_isolated', level: 'warn',
       title: 'Отсечен расширительный бак РБ!',

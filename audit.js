@@ -273,6 +273,18 @@
       res = P.replaceExpMembrane(sim);
       r.check(G, 'РБ: на отсеченном слитом баке ниппель показывает предзакачку, мембрана меняется', Math.abs(air - 3.2) < 0.01 && res.ok && sim.state.expPrecharge === 1.5, `ниппель ${air.toFixed(2)} бар`);
       const base = fresh(); P.settle(base, 60);
+      // сезон: в оттепель бак пустеет — предупреждение раньше срыва насоса; оператор подпитывает и держит давление
+      {
+        const x = hot(); x.env.T_out = 5; let warnT = null, cavT = null;
+        run(x, 1500, y => { const d = P.diagnose(y); if (warnT === null && d.some(a => a.id === 'exp_reserve_low')) warnT = y.out.time; if (cavT === null && y.out.cavitation) cavT = y.out.time; return false; });
+        const y = hot(); y.env.T_out = 5; let pmin = 9;
+        run(y, 1500, z => { const w = P.diagnose(z).some(a => a.id === 'exp_reserve_low'); if (w) z.controls.MAKEUP = 10; else if (z.out.P21 > 3.5) z.controls.MAKEUP = 0; pmin = Math.min(pmin, z.out.P21); return false; });
+        r.check(G, 'РБ: в оттепель вода сжимается — «бак пуст» загорается раньше срыва насоса, подпитка по сигналу держит давление', warnT !== null && (cavT === null || cavT - warnT > 30) && pmin > 3.0,
+          `предупреждение ${warnT === null ? 'нет' : warnT.toFixed(0) + ' с'}, срыв без подпитки ${cavT === null ? 'нет' : cavT.toFixed(0) + ' с'}, с подпиткой P21 ≥ ${pmin.toFixed(2)} бар`);
+        const z = hot(); z.env.T_out = -25; z.controls.HEAT_AUTO = true; let rel = false, warnHi = false;
+        run(z, 2500, q => { rel = rel || q.out.reliefOpen; warnHi = warnHi || P.diagnose(q).some(a => a.id === 'exp_reserve_high'); return false; });
+        r.check(G, 'РБ: в мороз −25 °C по графику ПК не срабатывает, давление у порога — предупреждение', !rel && warnHi && z.out.P21 < 4.2, `P21 ${z.out.P21.toFixed(2)} бар, T_w ${z.out.T_w.toFixed(1)} °C`);
+      }
       r.check(G, 'РБ в штатном положении без термодинамики: P21 = 3.50, 40 л воды, ниппель = P21', Math.abs(base.out.P21 - 3.5) < 0.02 && Math.abs(base.state.expWaterVol - 40) < 1 && Math.abs(base.out.P_exp_air - base.out.P21) < 1e-9);
     }
 
@@ -290,11 +302,23 @@
         `задание при обрыве ${lowSet.toFixed(0)} °C, КЗР ${kzrLow.toFixed(0)} %, максимум после АВТО ${mx.toFixed(1)} °C`);
       const s2 = fresh(); Object.assign(s2.controls, { HEAT_AUTO: true, HC_SLOPE: 1.4, HC_T2LIM: false }); run(s2, 300);
       const hotT2 = s2.out.T2; s2.controls.HC_T2LIM = true; run(s2, 300);
-      r.check(G, 'Регулятор: наклон 1.4 — перетоп, ограничение обратки снижает T2', hotT2 > s2.out.T2_max + 5 && s2.out.T2 < s2.out.T2_max + 3, `T2 ${hotT2.toFixed(1)} → ${s2.out.T2.toFixed(1)} °C при норме ${s2.out.T2_max.toFixed(1)}`);
+      r.check(G, 'Регулятор: наклон 1.4 — перетоп, ограничение обратки доводит T2 до нормы', hotT2 > s2.out.T2_max + 5 && s2.out.T2 <= s2.out.T2_max, `T2 ${hotT2.toFixed(1)} → ${s2.out.T2.toFixed(1)} °C при норме ${s2.out.T2_max.toFixed(1)}`);
       const s3 = fresh(); s3.env.toutSensor = 'short'; run(s3, 1);
-      r.check(G, 'Регулятор: замыкание Тнв — задание 90 °C и предупреждение', s3.out.HC_T11set === 90 && P.diagnose(s3).some(a => a.id === 'hc_sensor_fault'));
+      r.check(G, 'Регулятор: замыкание Тнв — задание 95 °C и предупреждение', s3.out.HC_T11set === 95 && P.diagnose(s3).some(a => a.id === 'hc_sensor_fault'));
       const s4 = fresh(); const k0 = s4.controls.KZRcmd; run(s4, 60);
       r.check(G, 'Регулятор в ручном режиме не трогает задание КЗР', s4.controls.KZRcmd === k0);
+      // точный график при любой погоде: обратка не выше нормы, в мороз до −25 °C в квартирах не холодно
+      let worst = -99, coldRoom = 99;
+      for (const t of [-25, -20, -10, -5, 0, 5, 10]) {
+        const x = fresh(); x.env.T_out = t; x.controls.HEAT_AUTO = true; run(x, 2500);
+        worst = Math.max(worst, x.out.T2 - x.out.T2_max); coldRoom = Math.min(coldRoom, x.out.T_room);
+      }
+      r.check(G, 'Регулятор на точном графике от −25 до +10 °C: обратка не выше нормы, в квартирах ≥ 18 °C', worst <= 0 && coldRoom >= 18,
+        `T2 − норма не более ${worst.toFixed(2)} °C, минимум в квартирах ${coldRoom.toFixed(1)} °C`);
+      const s5 = fresh(); s5.controls.HEAT_AUTO = true; run(s5, 100); s5.env.kzrFail = true; s5.env.T_out = -20; run(s5, 600);
+      s5.env.kzrFail = false; mx = 0; run(s5, 600, x => { mx = Math.max(mx, x.out.T11); });
+      r.check(G, 'Регулятор: при отказе привода команды не копятся, после ремонта нет выброса T11', mx < s5.out.HC_T11set + 1.5,
+        `максимум T11 ${mx.toFixed(1)} °C при задании ${s5.out.HC_T11set.toFixed(1)} °C`);
     }
 
     // 1.8 Сервисные операции и защита от вскрытия под давлением
